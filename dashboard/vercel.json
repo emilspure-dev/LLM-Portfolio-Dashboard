@@ -6,11 +6,7 @@
       "destination": "/api/shim"
     },
     {
-      "source": "/api/",
-      "destination": "/api/shim?p="
-    },
-    {
-      "source": "/api/(?!shim(?:/|$))(.*)",
+      "source": "/api/(.*)",
       "destination": "/api/shim?p=$1"
     },
     {

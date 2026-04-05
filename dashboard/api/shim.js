@@ -1,6 +1,6 @@
 /**
- * Vercel matches `api/[...slug].js` for only one path segment, so `/api/meta/current` never
- * invoked the handler. All `/api/*` traffic is rewritten here (see vercel.json).
+ * All browser `/api/*` requests are rewritten here (see vercel.json). The previous rewrite
+ * used a regex negative lookahead that Vercel did not apply, so every `/api/*` route 404’d.
  */
 export default async function handler(req, res) {
   const base = (process.env.BACKEND_API_ORIGIN || "http://204.168.227.31").replace(

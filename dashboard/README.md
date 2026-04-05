@@ -29,7 +29,7 @@ If the API is reverse-proxied under the same domain, `NEXT_PUBLIC_API_BASE_URL=h
 
 **Root Directory** in the Vercel project must match where `vercel.json` lives:
 
-- **`dashboard`** (recommended): uses `dashboard/vercel.json` and `dashboard/api/shim.js`. Rewrites map every `/api/*` path into `shim` (Vercel’s `api/[...slug].js` only matched a single segment, so `/api/meta/current` used to 404). SPA rewrites skip `/api/*` via a negative lookahead.
+- **`dashboard`** (recommended): uses `dashboard/vercel.json` and `dashboard/api/shim.js`. Rewrites send `/api` and `/api/(.*)` to `shim?p=$1` so multi-segment paths work; avoid unsupported lookahead patterns in `source` or Vercel may drop the rules and return 404 for all `/api/*`. SPA rewrites skip `/api/*` via a negative lookahead on non-API paths only.
 - **Repository root** (`.`): uses the root `vercel.json` (builds `dashboard/` into `dashboard/dist`) and root `api/shim.js`.
 
 Set `NEXT_PUBLIC_API_BASE_URL` in the frontend deployment so the browser knows where to fetch JSON from.

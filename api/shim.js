@@ -1,5 +1,6 @@
 /**
  * Same as dashboard/api/shim.js when Vercel Root Directory is the repo root.
+ * Rewrites must stay path-to-regexp–friendly (no fragile lookaheads).
  */
 module.exports = async function handler(req, res) {
   const base = (process.env.BACKEND_API_ORIGIN || "http://204.168.227.31").replace(
