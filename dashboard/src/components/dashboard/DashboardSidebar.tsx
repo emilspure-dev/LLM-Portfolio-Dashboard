@@ -64,7 +64,7 @@ export function DashboardSidebar({
           <div>
             <p className="dashboard-label">Workspace</p>
             <span className="mt-1 block text-[15px] font-semibold tracking-[-0.03em] text-[#5f5955]">
-              LLM Portfolio Eval
+              LLM Portfolio
             </span>
           </div>
         </div>
