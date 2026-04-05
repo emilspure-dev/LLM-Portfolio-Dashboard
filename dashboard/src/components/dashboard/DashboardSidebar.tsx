@@ -9,7 +9,8 @@ interface DashboardSidebarProps {
   data: EvaluationData | null;
   meta: MetaCurrentResponse | undefined;
   health: HealthResponse | undefined;
-  isLoading: boolean;
+  /** True only until /api/health returns — avoids showing "Connecting" while meta/dashboard load */
+  apiHealthPending: boolean;
   marketFilter: string;
   selectedExperimentId: string | undefined;
   onMarketFilterChange: (value: string) => void;
@@ -38,7 +39,7 @@ export function DashboardSidebar({
   data,
   meta,
   health,
-  isLoading,
+  apiHealthPending,
   marketFilter,
   selectedExperimentId,
   onMarketFilterChange,
@@ -77,11 +78,13 @@ export function DashboardSidebar({
             <Database className="mt-0.5 h-4 w-4 text-[#b39a91]" />
             <div className="min-w-0 flex-1">
               <p className="text-[12px] font-medium text-[#6f6863]">
-                {isLoading
+                {apiHealthPending
                   ? "Connecting to API"
                   : health?.db_available
                     ? "Connected to read-only API"
-                    : "API unavailable"}
+                    : health
+                      ? "API unavailable"
+                      : "Could not reach API"}
               </p>
               <p className="mt-1 break-all text-[11px] leading-5 text-[#9d958d]">
                 {getApiBaseUrl()}

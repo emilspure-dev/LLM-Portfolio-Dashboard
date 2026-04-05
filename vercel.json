@@ -5,6 +5,18 @@
   "outputDirectory": "dashboard/dist",
   "rewrites": [
     {
+      "source": "/api",
+      "destination": "/api/shim"
+    },
+    {
+      "source": "/api/",
+      "destination": "/api/shim?p="
+    },
+    {
+      "source": "/api/(?!shim(?:/|$))(.*)",
+      "destination": "/api/shim?p=$1"
+    },
+    {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }

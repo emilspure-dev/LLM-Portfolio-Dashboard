@@ -1,7 +1,6 @@
 /**
- * Proxies /api/* to the real dashboard API (Node SQLite server).
- * Set BACKEND_API_ORIGIN in Vercel → Environment Variables (e.g. http://204.168.227.31 — no trailing slash).
- * Keeps the browser on same-origin /api so the SPA does not need VITE_API_BASE_URL.
+ * Vercel matches `api/[...slug].js` for only one path segment, so `/api/meta/current` never
+ * invoked the handler. All `/api/*` traffic is rewritten here (see vercel.json).
  */
 export default async function handler(req, res) {
   const base = (process.env.BACKEND_API_ORIGIN || "http://204.168.227.31").replace(
@@ -11,10 +10,12 @@ export default async function handler(req, res) {
 
   const host = req.headers.host || "localhost";
   const incoming = new URL(req.url || "/", `http://${host}`);
-  // Do not rebuild the path from req.query.slug — on Vercel it is often missing/wrong for
-  // catch-all routes, which produced upstream GET /api instead of /api/health.
-  const pathname = incoming.pathname || "/api";
-  const target = `${base}${pathname}${incoming.search}`;
+  const subPath = (incoming.searchParams.get("p") ?? "").replace(/^\/+/, "");
+  incoming.searchParams.delete("p");
+  const qs = incoming.searchParams.toString();
+  const search = qs ? `?${qs}` : "";
+  const pathname = subPath ? `/api/${subPath}` : "/api";
+  const target = `${base}${pathname}${search}`;
 
   try {
     const upstream = await fetch(target, {

@@ -1,6 +1,5 @@
 /**
- * Same-origin /api proxy when Vercel **Root Directory** is the repo root (`.`).
- * If Root Directory is `dashboard`, use `dashboard/api/[...slug].js` instead.
+ * Same as dashboard/api/shim.js when Vercel Root Directory is the repo root.
  */
 module.exports = async function handler(req, res) {
   const base = (process.env.BACKEND_API_ORIGIN || "http://204.168.227.31").replace(
@@ -10,9 +9,12 @@ module.exports = async function handler(req, res) {
 
   const host = req.headers.host || "localhost";
   const incoming = new URL(req.url || "/", `http://${host}`);
-  // Path must come from the URL, not req.query.slug (unreliable for Vercel catch-alls).
-  const pathname = incoming.pathname || "/api";
-  const target = `${base}${pathname}${incoming.search}`;
+  const subPath = (incoming.searchParams.get("p") ?? "").replace(/^\/+/, "");
+  incoming.searchParams.delete("p");
+  const qs = incoming.searchParams.toString();
+  const search = qs ? `?${qs}` : "";
+  const pathname = subPath ? `/api/${subPath}` : "/api";
+  const target = `${base}${pathname}${search}`;
 
   try {
     const upstream = await fetch(target, {

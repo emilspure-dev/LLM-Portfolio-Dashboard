@@ -194,7 +194,7 @@ export default function Index() {
           data={data}
           meta={metaQuery.data}
           health={healthQuery.data}
-          isLoading={isLoading}
+          apiHealthPending={healthQuery.isPending && !healthQuery.data}
           marketFilter={marketFilter}
           selectedExperimentId={selectedExperimentId}
           onMarketFilterChange={setMarketFilter}
