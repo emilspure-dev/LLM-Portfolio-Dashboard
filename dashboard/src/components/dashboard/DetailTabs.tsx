@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Area,
@@ -236,6 +236,33 @@ function asNumber(value: unknown): number | null {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function getRunExplorerKey(run: RunRow): string {
+  if (run.path_id != null && String(run.path_id).length > 0) {
+    return `path:${String(run.path_id)}`;
+  }
+  if (run.run_id != null && String(run.run_id).length > 0) {
+    return `run:${String(run.run_id)}:${run.strategy_key ?? ""}:${run.market ?? ""}:${run.period ?? ""}:${run.model ?? ""}`;
+  }
+  return `row:${run.strategy_key ?? ""}-${run.market ?? ""}-${run.period ?? ""}-${run.model ?? ""}-${run.prompt_type ?? ""}`;
+}
+
+function singlePathEquitySeries(rows: StrategyDailyRow[]) {
+  const sorted = [...rows].sort((left, right) => left.date.localeCompare(right.date));
+  const firstValue = sorted.find((row) => row.portfolio_value != null)?.portfolio_value ?? null;
+
+  return sorted.map((row) => ({
+    date: row.date,
+    portfolioValue: row.portfolio_value,
+    drawdown: row.drawdown,
+    dailyReturn: row.daily_return,
+    activeHoldings: row.active_holdings,
+    indexBase100:
+      firstValue != null && row.portfolio_value != null && firstValue !== 0
+        ? (row.portfolio_value / firstValue) * 100
+        : null,
+  }));
 }
 
 function mean(values: number[]) {
@@ -1271,6 +1298,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
   const [modelFilter, setModelFilter] = useState("All");
   const [periodFilter, setPeriodFilter] = useState("All");
   const [page, setPage] = useState(1);
+  const [selectedRunKey, setSelectedRunKey] = useState<string | null>(null);
 
   useEffect(() => {
     setPage(1);
@@ -1286,7 +1314,96 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
   }, [runs, strategyFilter, promptFilter, modelFilter, periodFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRuns.length / 12));
-  const pageRows = filteredRuns.slice((page - 1) * 12, page * 12);
+  const pageRows = useMemo(
+    () => filteredRuns.slice((page - 1) * 12, page * 12),
+    [filteredRuns, page]
+  );
+
+  useEffect(() => {
+    if (filteredRuns.length === 0) {
+      setSelectedRunKey(null);
+      return;
+    }
+    setSelectedRunKey((previous) => {
+      if (previous != null && filteredRuns.some((row) => getRunExplorerKey(row) === previous)) {
+        return previous;
+      }
+      const defaultRow = pageRows[0] ?? filteredRuns[0];
+      return getRunExplorerKey(defaultRow);
+    });
+  }, [filteredRuns, pageRows]);
+
+  const selectedRun = useMemo(() => {
+    if (!selectedRunKey) {
+      return null;
+    }
+    return filteredRuns.find((row) => getRunExplorerKey(row) === selectedRunKey) ?? null;
+  }, [filteredRuns, selectedRunKey]);
+
+  const pathIdForCharts =
+    selectedRun?.path_id != null && String(selectedRun.path_id).length > 0
+      ? String(selectedRun.path_id)
+      : null;
+
+  const runEquityQuery = useQuery({
+    queryKey: ["run-explorer-equity", data.active_experiment_id, pathIdForCharts],
+    queryFn: () =>
+      getEquityChart({
+        experiment_id: data.active_experiment_id,
+        path_id: pathIdForCharts ?? undefined,
+      }),
+    enabled: Boolean(data.active_experiment_id && pathIdForCharts),
+    staleTime: 60_000,
+  });
+
+  const runFactorsQuery = useQuery({
+    queryKey: ["run-explorer-factors", data.active_experiment_id, pathIdForCharts],
+    queryFn: () =>
+      getFactorExposureChart({
+        experiment_id: data.active_experiment_id,
+        path_id: pathIdForCharts ?? undefined,
+      }),
+    enabled: Boolean(data.active_experiment_id && pathIdForCharts),
+    staleTime: 60_000,
+  });
+
+  const runCurveRows = useMemo(
+    () => singlePathEquitySeries(runEquityQuery.data ?? []),
+    [runEquityQuery.data]
+  );
+
+  const runFactorRows = useMemo(
+    () => aggregateFactorRows(runFactorsQuery.data ?? []),
+    [runFactorsQuery.data]
+  );
+
+  const pageComparisonData = useMemo(
+    () =>
+      pageRows.map((run, index) => ({
+        key: getRunExplorerKey(run),
+        label:
+          run.run_id != null
+            ? `#${run.run_id}`
+            : `${(page - 1) * 12 + index + 1}`,
+        sharpe: asNumber(run.sharpe_ratio),
+        periodReturn: asNumber(run.period_return ?? run.net_return ?? run.period_return_net),
+        strategyKey: run.strategy_key ?? "",
+      })),
+    [pageRows, page]
+  );
+
+  const runFactorSeries = [
+    { key: "size", label: "Size", color: CHART_COLORS[0] },
+    { key: "value", label: "Value", color: CHART_COLORS[1] },
+    { key: "momentum", label: "Momentum", color: CHART_COLORS[2] },
+    { key: "lowRisk", label: "Low risk", color: CHART_COLORS[3] },
+    { key: "quality", label: "Quality", color: CHART_COLORS[4] },
+  ].filter((series) =>
+    runFactorRows.some((row) => asNumber(row[series.key as keyof typeof row]) != null)
+  );
+
+  const drawdownGradientId = useId().replace(/:/g, "");
+
   const validShare =
     filteredRuns.length > 0
       ? (filteredRuns.filter((run) => run.valid !== false && run.valid !== 0).length /
@@ -1346,6 +1463,255 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
         <EmptyState title="No runs match the current filters" body="Try widening the prompt, model, or period filters to inspect the full experiment run set." />
       ) : (
         <>
+          <SectionHeader>Performance charts</SectionHeader>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <Panel>
+              <p className="dashboard-label mb-4">This page — Sharpe by run</p>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={pageComparisonData} margin={{ top: 6, right: 12, left: 12, bottom: 36 }}>
+                  <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "#8f8780" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    {...tooltipStyle}
+                    formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")}
+                    labelFormatter={(_, payload) => {
+                      const row = payload?.[0]?.payload as (typeof pageComparisonData)[0] | undefined;
+                      return row ? `Run ${row.label}` : "";
+                    }}
+                  />
+                  <ReferenceLine y={0} stroke="rgba(192, 180, 170, 0.9)" strokeDasharray="3 6" />
+                  <Bar dataKey="sharpe" radius={[8, 8, 0, 0]}>
+                    {pageComparisonData.map((row) => (
+                      <Cell key={row.key} fill={getStrategyColor(row.strategyKey)} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+              <p className="mt-2 text-[10px] text-[#aaa29a]">Runs on the current table page; color follows strategy.</p>
+            </Panel>
+            <Panel>
+              <p className="dashboard-label mb-4">This page — Net period return</p>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={pageComparisonData} margin={{ top: 6, right: 12, left: 12, bottom: 36 }}>
+                  <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 10, fill: "#8f8780" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: "#aca49d" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => `${(v * 100).toFixed(0)}%`}
+                  />
+                  <Tooltip
+                    {...tooltipStyle}
+                    formatter={(value: number | null) => formatPctFromRatio(value, 2)}
+                    labelFormatter={(_, payload) => {
+                      const row = payload?.[0]?.payload as (typeof pageComparisonData)[0] | undefined;
+                      return row ? `Run ${row.label}` : "";
+                    }}
+                  />
+                  <ReferenceLine y={0} stroke="rgba(192, 180, 170, 0.9)" strokeDasharray="3 6" />
+                  <Bar dataKey="periodReturn" radius={[8, 8, 0, 0]}>
+                    {pageComparisonData.map((row) => (
+                      <Cell
+                        key={row.key}
+                        fill={
+                          row.periodReturn != null && row.periodReturn >= 0 ? COLORS.green : COLORS.red
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </Panel>
+          </div>
+
+          <SectionHeader>Selected run — daily path</SectionHeader>
+          {selectedRun && (
+            <Panel className="rounded-[20px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.72)] p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="dashboard-label">Selected</p>
+                  <p className="mt-1 text-[13px] font-semibold text-[#5f5955]">
+                    {formatStrategyLabel(selectedRun.strategy ?? selectedRun.strategy_key ?? "—")} ·{" "}
+                    {MARKET_LABELS[selectedRun.market ?? ""] ?? selectedRun.market ?? "—"}
+                  </p>
+                  <p className="mt-1 text-[11px] text-[#9b938b]">
+                    {selectedRun.period ?? "—"} · {selectedRun.prompt_type ?? "—"} · {selectedRun.model ?? "—"}
+                    {selectedRun.run_id != null && <span className="ml-1">· run {selectedRun.run_id}</span>}
+                    {pathIdForCharts && <span className="ml-1 font-mono text-[10px]">· path {pathIdForCharts}</span>}
+                  </p>
+                </div>
+                <div className="grid min-w-0 grid-cols-2 gap-2 sm:max-w-md">
+                  <KpiCard
+                    label="Sharpe"
+                    value={selectedRun.sharpe_ratio != null ? selectedRun.sharpe_ratio.toFixed(2) : "—"}
+                    color={sharpeColor(selectedRun.sharpe_ratio)}
+                    sub="From run_results"
+                  />
+                  <KpiCard
+                    label="Return"
+                    value={formatPctFromRatio(
+                      asNumber(selectedRun.period_return ?? selectedRun.net_return ?? selectedRun.period_return_net),
+                      1
+                    )}
+                    color={
+                      asNumber(selectedRun.period_return ?? selectedRun.net_return ?? selectedRun.period_return_net) !=
+                        null &&
+                      (asNumber(selectedRun.period_return ?? selectedRun.net_return ?? selectedRun.period_return_net) ??
+                        0) >= 0
+                        ? COLORS.green
+                        : COLORS.red
+                    }
+                    sub="Net period"
+                  />
+                </div>
+              </div>
+            </Panel>
+          )}
+
+          {!pathIdForCharts ? (
+            <EmptyState
+              title="Daily charts need a path id"
+              body="This run has no path_id in run_results, so equity and factor series cannot be loaded. Other rows may still have charts."
+            />
+          ) : runEquityQuery.isLoading ? (
+            <LoadingState title="Loading daily series for selected run" />
+          ) : runCurveRows.length === 0 ? (
+            <EmptyState
+              title="No daily series for this path"
+              body="The strategy_daily view has no rows for this path. Benchmark and some strategy paths usually have series; check the Equity Curves tab for coverage."
+            />
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                <Panel>
+                  <p className="dashboard-label mb-4">Portfolio value (indexed to 100 at start)</p>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={runCurveRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
+                      <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                      <XAxis
+                        dataKey="date"
+                        tickFormatter={formatDateLabel}
+                        minTickGap={28}
+                        tick={{ fontSize: 10, fill: "#aca49d" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        {...tooltipStyle}
+                        labelFormatter={(value) => formatDateLabel(String(value))}
+                        formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="indexBase100"
+                        stroke={getStrategyColor(selectedRun?.strategy_key ?? "")}
+                        strokeWidth={2.5}
+                        dot={false}
+                        name="Index (start = 100)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </Panel>
+                <Panel>
+                  <p className="dashboard-label mb-4">Drawdown</p>
+                  <ResponsiveContainer width="100%" height={280}>
+                    <AreaChart data={runCurveRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
+                      <defs>
+                        <linearGradient id={drawdownGradientId} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={COLORS.red} stopOpacity={0.35} />
+                          <stop offset="100%" stopColor={COLORS.red} stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                      <XAxis
+                        dataKey="date"
+                        tickFormatter={formatDateLabel}
+                        minTickGap={28}
+                        tick={{ fontSize: 10, fill: "#aca49d" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: "#aca49d" }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => `${(v * 100).toFixed(0)}%`}
+                      />
+                      <Tooltip
+                        {...tooltipStyle}
+                        labelFormatter={(value) => formatDateLabel(String(value))}
+                        formatter={(value: number | null) => formatPctFromRatio(value, 2)}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="drawdown"
+                        stroke={COLORS.red}
+                        strokeWidth={1.5}
+                        fill={`url(#${drawdownGradientId})`}
+                        name="Drawdown"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </Panel>
+              </div>
+
+              {runFactorsQuery.isLoading ? (
+                <LoadingState title="Loading factor exposures" />
+              ) : (
+                runFactorSeries.length > 0 && (
+                  <Panel>
+                    <p className="dashboard-label mb-4">Factor exposures (daily)</p>
+                    <ResponsiveContainer width="100%" height={280}>
+                      <LineChart data={runFactorRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
+                        <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                        <XAxis
+                          dataKey="date"
+                          tickFormatter={formatDateLabel}
+                          minTickGap={28}
+                          tick={{ fontSize: 10, fill: "#aca49d" }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                        <Tooltip
+                          {...tooltipStyle}
+                          labelFormatter={(value) => formatDateLabel(String(value))}
+                          formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")}
+                        />
+                        <Legend />
+                        {runFactorSeries.map((series) => (
+                          <Line
+                            key={series.key}
+                            type="monotone"
+                            dataKey={series.key}
+                            stroke={series.color}
+                            strokeWidth={2}
+                            dot={false}
+                            name={series.label}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </Panel>
+                )
+              )}
+            </>
+          )}
+
+          <SectionHeader>Run table</SectionHeader>
           <Panel className="overflow-x-auto p-0">
             <table className="w-full min-w-[1120px] text-[11px]">
               <thead>
@@ -1361,14 +1727,24 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                 </tr>
               </thead>
               <tbody>
-                {pageRows.map((run) => (
+                {pageRows.map((run) => {
+                  const rowKey = getRunExplorerKey(run);
+                  const isSelected = selectedRunKey === rowKey;
+                  return (
                   <tr
-                    key={String(
-                      run.path_id ??
-                        run.run_id ??
-                        `${run.strategy_key ?? "strategy"}-${run.market ?? "market"}-${run.period ?? "period"}-${run.model ?? "model"}`
-                    )}
-                    className="border-b border-[rgba(227,220,214,0.8)] last:border-0 align-top"
+                    key={rowKey}
+                    className={`cursor-pointer border-b border-[rgba(227,220,214,0.8)] align-top transition-colors last:border-0 hover:bg-[rgba(250,247,243,0.72)] ${
+                      isSelected ? "bg-[rgba(244,236,228,0.92)]" : ""
+                    }`}
+                    onClick={() => setSelectedRunKey(rowKey)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedRunKey(rowKey);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="row"
                   >
                     <td className="px-3 py-2.5 font-medium text-[#5e5955]">{formatStrategyLabel(run.strategy ?? run.strategy_key ?? "—")}</td>
                     <td className="px-3 py-2.5 text-[#8d857f]">
@@ -1394,7 +1770,8 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </Panel>

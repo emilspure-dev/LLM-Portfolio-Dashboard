@@ -25,6 +25,7 @@ export interface StrategyRow {
 }
 
 export interface RunRow extends RunResultRow {
+  path_id?: string | number | null;
   market?: string | null;
   period?: string | null;
   prompt_type?: string | null;
