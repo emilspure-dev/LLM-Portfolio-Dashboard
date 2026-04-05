@@ -8,13 +8,10 @@ module.exports = async function handler(req, res) {
     ""
   );
 
-  const slug = req.query.slug;
-  const parts = !slug ? [] : Array.isArray(slug) ? slug : [slug];
-  const suffix = parts.length ? `/${parts.join("/")}` : "";
-  const pathname = `/api${suffix}`;
-
   const host = req.headers.host || "localhost";
   const incoming = new URL(req.url || "/", `http://${host}`);
+  // Path must come from the URL, not req.query.slug (unreliable for Vercel catch-alls).
+  const pathname = incoming.pathname || "/api";
   const target = `${base}${pathname}${incoming.search}`;
 
   try {
