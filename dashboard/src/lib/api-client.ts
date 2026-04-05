@@ -98,6 +98,20 @@ async function requestJson<T>(path: string, query?: Record<string, QueryValue>):
     throw new Error(message);
   }
 
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    const bodyPreview = await response.text().catch(() => "");
+    const normalizedPreview = bodyPreview.trim().slice(0, 120).toLowerCase();
+
+    if (normalizedPreview.startsWith("<!doctype") || normalizedPreview.startsWith("<html")) {
+      throw new Error(
+        `API at ${requestUrl} returned HTML instead of JSON. Check the deployed /api proxy configuration.`
+      );
+    }
+
+    throw new Error(`API at ${requestUrl} returned an unexpected response type: ${contentType || "unknown"}.`);
+  }
+
   return (await response.json()) as T;
 }
 
