@@ -21,7 +21,10 @@ import {
 import { AlertCircle, ChevronLeft, ChevronRight, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getDailyHoldings, getEquityChart, getFactorExposureChart, getRegimeChart } from "@/lib/api-client";
-import { buildStrategySummaryWithRunSharpe } from "@/lib/data-loader";
+import {
+  buildStrategySummaryWithRunSharpe,
+  collectPathIdsForStrategyMarket,
+} from "@/lib/data-loader";
 import { CHART_COLORS, COLORS, MARKET_LABELS, getStrategyColor, sharpeColor } from "@/lib/constants";
 import type {
   FactorExposureRow,
@@ -949,10 +952,93 @@ export function SharpeReturnsTab({ data }: BaseTabProps) {
   );
 }
 
-export function EquityCurvesTab({ data, marketFilter }: BaseTabProps) {
+const EQUITY_PATH_BATCH = 12;
+
+async function fetchEquitySeriesWithPathFallback(
+  experimentId: string,
+  market: string,
+  strategyKey: string,
+  runs: RunRow[]
+): Promise<StrategyDailyRow[]> {
+  const direct = await getEquityChart({
+    experiment_id: experimentId,
+    market,
+    strategy_key: strategyKey,
+  });
+  if (direct.length > 0) {
+    return direct;
+  }
+
+  const pathIds = collectPathIdsForStrategyMarket(runs, market, strategyKey);
+  if (pathIds.length === 0) {
+    return [];
+  }
+
+  const merged: StrategyDailyRow[] = [];
+  for (let i = 0; i < pathIds.length; i += EQUITY_PATH_BATCH) {
+    const batch = pathIds.slice(i, i + EQUITY_PATH_BATCH);
+    const results = await Promise.all(
+      batch.map((path_id) =>
+        getEquityChart({ experiment_id: experimentId, market, path_id })
+      )
+    );
+    for (const chunk of results) {
+      merged.push(...chunk);
+    }
+  }
+  return merged;
+}
+
+async function fetchFactorExposuresWithPathFallback(
+  experimentId: string,
+  market: string,
+  strategyKey: string,
+  runs: RunRow[]
+): Promise<FactorExposureRow[]> {
+  const direct = await getFactorExposureChart({
+    experiment_id: experimentId,
+    market,
+    strategy_key: strategyKey,
+  });
+  if (direct.length > 0) {
+    return direct;
+  }
+
+  const pathIds = collectPathIdsForStrategyMarket(runs, market, strategyKey);
+  if (pathIds.length === 0) {
+    return [];
+  }
+
+  const merged: FactorExposureRow[] = [];
+  for (let i = 0; i < pathIds.length; i += EQUITY_PATH_BATCH) {
+    const batch = pathIds.slice(i, i + EQUITY_PATH_BATCH);
+    const results = await Promise.all(
+      batch.map((path_id) =>
+        getFactorExposureChart({ experiment_id: experimentId, market, path_id })
+      )
+    );
+    for (const chunk of results) {
+      merged.push(...chunk);
+    }
+  }
+  return merged;
+}
+
+export function EquityCurvesTab({ data, runs: _sidebarRuns, marketFilter }: BaseTabProps) {
+  void _sidebarRuns;
   const selection = useDailySelection(data, marketFilter);
   const selectedStrategy = selection.strategyOptions.find(
     (option) => option.strategy_key === selection.selectedStrategyKey
+  );
+
+  const pathIdsCacheKey = useMemo(
+    () =>
+      collectPathIdsForStrategyMarket(
+        data.runs,
+        selection.selectedMarket,
+        selection.selectedStrategyKey
+      ).join("|"),
+    [data.runs, selection.selectedMarket, selection.selectedStrategyKey]
   );
 
   const equityQuery = useQuery({
@@ -961,13 +1047,15 @@ export function EquityCurvesTab({ data, marketFilter }: BaseTabProps) {
       data.active_experiment_id,
       selection.selectedMarket,
       selection.selectedStrategyKey,
+      pathIdsCacheKey,
     ],
     queryFn: () =>
-      getEquityChart({
-        experiment_id: data.active_experiment_id,
-        market: selection.selectedMarket,
-        strategy_key: selection.selectedStrategyKey,
-      }),
+      fetchEquitySeriesWithPathFallback(
+        data.active_experiment_id,
+        selection.selectedMarket,
+        selection.selectedStrategyKey,
+        data.runs
+      ),
     enabled: Boolean(selection.selectedMarket && selection.selectedStrategyKey),
     staleTime: 60_000,
   });
@@ -978,13 +1066,15 @@ export function EquityCurvesTab({ data, marketFilter }: BaseTabProps) {
       data.active_experiment_id,
       selection.selectedMarket,
       selection.selectedStrategyKey,
+      pathIdsCacheKey,
     ],
     queryFn: () =>
-      getFactorExposureChart({
-        experiment_id: data.active_experiment_id,
-        market: selection.selectedMarket,
-        strategy_key: selection.selectedStrategyKey,
-      }),
+      fetchFactorExposuresWithPathFallback(
+        data.active_experiment_id,
+        selection.selectedMarket,
+        selection.selectedStrategyKey,
+        data.runs
+      ),
     enabled: Boolean(selection.selectedMarket && selection.selectedStrategyKey),
     staleTime: 60_000,
   });
@@ -1053,7 +1143,8 @@ export function EquityCurvesTab({ data, marketFilter }: BaseTabProps) {
               {selectedStrategy?.source_type === "benchmark" ? "Benchmark daily view" : "Strategy daily view"}
             </p>
             <p className="mt-1 text-[11px] text-[#9b938b]">
-              The chart uses the live `vw_strategy_daily` / factor views.
+              Uses `vw_strategy_daily` (and factor view). If strategy_key returns no rows, paths
+              from loaded runs are queried by `path_id` (up to 48 paths, batched).
             </p>
           </div>
           <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
@@ -1070,10 +1161,15 @@ export function EquityCurvesTab({ data, marketFilter }: BaseTabProps) {
 
       {equityQuery.isLoading || factorsQuery.isLoading ? (
         <LoadingState title="Loading equity and exposure series" />
+      ) : equityQuery.isError ? (
+        <EmptyState
+          title="Could not load equity series"
+          body={String((equityQuery.error as Error)?.message ?? equityQuery.error)}
+        />
       ) : curveRows.length === 0 ? (
         <EmptyState
           title="No daily series for this selection"
-          body="The live database currently exposes daily chart views only for the benchmark paths. Choose a benchmark strategy such as Index, 1/N, 60/40, Mean-variance, or Fama-French to inspect live curves."
+          body="The API returned no rows for this market and strategy, and no path_id on loaded runs matched (or path-level requests were also empty). Confirm run_results include path_id for GPT runs and that vw_strategy_daily has rows for those paths. Benchmarks often work with strategy_key alone; LLM curves may require populated daily series per path."
         />
       ) : (
         <>

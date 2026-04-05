@@ -196,6 +196,46 @@ function canonicalStrategyKey(key: string | null | undefined): string {
 }
 
 /**
+ * Distinct path_ids from runs for a market + strategy, for chart APIs when filtering by
+ * strategy_key alone returns no rows (some DB builds only join daily series by path).
+ */
+export function collectPathIdsForStrategyMarket(
+  runs: RunRow[],
+  market: string,
+  strategyKey: string,
+  maxPaths = 48
+): string[] {
+  const target = canonicalStrategyKey(strategyKey);
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  for (const r of runs) {
+    if (r.valid === false) {
+      continue;
+    }
+    if (r.market !== market) {
+      continue;
+    }
+    if (canonicalStrategyKey(r.strategy_key) !== target) {
+      continue;
+    }
+    const pid = r.path_id;
+    if (pid == null || !String(pid).trim()) {
+      continue;
+    }
+    const s = String(pid);
+    if (seen.has(s)) {
+      continue;
+    }
+    seen.add(s);
+    ordered.push(s);
+    if (ordered.length >= maxPaths) {
+      break;
+    }
+  }
+  return ordered;
+}
+
+/**
  * When vw_strategy_summary omits mean_sharpe (common for some benchmarks), fill from
  * run-level sharpe_ratio so heatmaps and KPIs match run_results.
  */
