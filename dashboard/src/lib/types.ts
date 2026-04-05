@@ -1,4 +1,5 @@
 import type {
+  FactorStyleSummaryRow,
   FiltersResponse,
   MetaCurrentResponse,
   PeriodRow,
@@ -61,6 +62,7 @@ export interface EvaluationData {
   active_experiment_id: string;
   summary_rows: StrategySummaryApiRow[];
   summary: StrategyRow[];
+  factor_style_rows: FactorStyleSummaryRow[];
   runs: RunRow[];
   behavior: BehaviorRow[];
   run_quality: RunQualityRow[];

@@ -69,6 +69,12 @@ Strategy summary:
 curl -sS "$API_BASE_URL/api/summary/strategies?experiment_id=$EXPERIMENT_ID"
 ```
 
+Mean factor exposures by strategy (path-averaged, from `vw_factor_exposure_daily`):
+
+```bash
+curl -sS "$API_BASE_URL/api/summary/factor-style?experiment_id=$EXPERIMENT_ID"
+```
+
 Run quality summary:
 
 ```bash

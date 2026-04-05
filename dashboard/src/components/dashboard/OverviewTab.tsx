@@ -1,22 +1,53 @@
 import { useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  ReferenceLine, Cell, CartesianGrid,
+  ReferenceLine, Cell, CartesianGrid, Legend,
 } from "recharts";
 import { KpiCard } from "./KpiCard";
 import { InsightCard } from "./InsightCard";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import {
-  COLORS, getStrategyColor, sharpeColor, fmt, fmtp,
+  CHART_COLORS, COLORS, getStrategyColor, MARKET_LABELS, sharpeColor, fmt, fmtp,
 } from "@/lib/constants";
+import type { FactorStyleSummaryRow } from "@/lib/api-types";
 import type { EvaluationData, RunRow, Insight } from "@/lib/types";
+
+const FACTOR_STYLE_ORDER = [
+  "gpt_retail",
+  "gpt_advanced",
+  "mean_variance",
+  "equal_weight",
+  "sixty_forty",
+  "index",
+  "fama_french",
+] as const;
+
+function factorStyleSortKey(strategyKey: string): number {
+  const i = (FACTOR_STYLE_ORDER as readonly string[]).indexOf(strategyKey);
+  return i === -1 ? 50 : i;
+}
+
+function buildFactorStyleLabel(row: FactorStyleSummaryRow): string {
+  const m = MARKET_LABELS[row.market] ?? row.market;
+  let base = row.strategy
+    .replace("GPT (", "")
+    .replace(")", "")
+    .replace(" (market-matched)", "")
+    .replace(" (buy-and-hold)", "")
+    .trim();
+  if (row.prompt_type) {
+    base = `${base} (${row.prompt_type})`;
+  }
+  return `${base} · ${m}`;
+}
 
 interface OverviewTabProps {
   data: EvaluationData;
   runs: RunRow[];
+  marketFilter: string;
 }
 
-export function OverviewTab({ data, runs }: OverviewTabProps) {
+export function OverviewTab({ data, runs, marketFilter }: OverviewTabProps) {
   const { summary } = data;
   const nRuns = runs.filter((r) => r.valid !== false).length;
   const nMarkets = new Set(runs.map((r) => r.market).filter(Boolean)).size;
@@ -73,6 +104,40 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         color: getStrategyColor(s.strategy_key),
       }));
   }, [summary]);
+
+  const factorStyleFiltered = useMemo(() => {
+    const rows = data.factor_style_rows ?? [];
+    const scoped =
+      marketFilter === "All" ? rows : rows.filter((r) => r.market === marketFilter);
+    return [...scoped].sort((a, b) => {
+      const sk = factorStyleSortKey(a.strategy_key) - factorStyleSortKey(b.strategy_key);
+      if (sk !== 0) return sk;
+      return (a.prompt_type ?? "").localeCompare(b.prompt_type ?? "");
+    });
+  }, [data.factor_style_rows, marketFilter]);
+
+  const factorBarChartData = useMemo(() => {
+    return factorStyleFiltered
+      .filter((r) =>
+        [
+          r.mean_size_exposure,
+          r.mean_value_exposure,
+          r.mean_momentum_exposure,
+          r.mean_low_risk_exposure,
+          r.mean_quality_exposure,
+        ].some((v) => v != null && !Number.isNaN(v))
+      )
+      .map((r) => ({
+        label: buildFactorStyleLabel(r),
+        strategy_key: r.strategy_key,
+        path_count: r.path_count,
+        Size: r.mean_size_exposure ?? 0,
+        Value: r.mean_value_exposure ?? 0,
+        Momentum: r.mean_momentum_exposure ?? 0,
+        "Low risk": r.mean_low_risk_exposure ?? 0,
+        Quality: r.mean_quality_exposure ?? 0,
+      }));
+  }, [factorStyleFiltered]);
 
   // Insights
   const insights = useMemo(() => {
@@ -188,6 +253,80 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
             })}
           </div>
         </>
+      )}
+
+      <SoftHr />
+
+      <SectionHeader>Portfolio style vs benchmarks</SectionHeader>
+      <p className="mb-3 max-w-3xl text-[11px] leading-5 text-[#9d958d]">
+        Mean portfolio factor exposures (size, value, momentum, low risk, quality) from{" "}
+        <code className="rounded bg-[rgba(0,0,0,0.04)] px-1 py-0.5 text-[10px]">vw_factor_exposure_daily</code>
+        : averaged over trading days within each portfolio path, then averaged across paths. Compare LLM
+        runs to deterministic benchmarks for the same market.
+      </p>
+      {factorBarChartData.length > 0 ? (
+        <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+          <ResponsiveContainer
+            width="100%"
+            height={Math.min(720, Math.max(260, factorBarChartData.length * 44 + 72))}
+          >
+            <BarChart
+              data={factorBarChartData}
+              layout="vertical"
+              margin={{ left: 8, right: 16, top: 8, bottom: 8 }}
+            >
+              <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical strokeDasharray="3 6" />
+              <XAxis
+                type="number"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 10, fill: "#aca49d" }}
+              />
+              <YAxis
+                type="category"
+                dataKey="label"
+                width={168}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 9, fill: "#8f8780" }}
+              />
+              <ReferenceLine x={0} stroke="rgba(192, 180, 170, 0.85)" strokeDasharray="4 4" />
+              <Tooltip
+                {...tooltipStyle}
+                labelFormatter={(label, payload) => {
+                  const row = payload?.[0]?.payload as { path_count?: number } | undefined;
+                  const n = row?.path_count;
+                  return n != null ? `${label} · ${n} paths` : label;
+                }}
+                formatter={(value: number) =>
+                  typeof value === "number" && !Number.isNaN(value) ? value.toFixed(3) : "—"
+                }
+              />
+              <Legend
+                wrapperStyle={{ fontSize: 10, color: "#9b938b", paddingTop: 8 }}
+                iconType="circle"
+                iconSize={8}
+              />
+              <Bar dataKey="Size" fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} barSize={10} />
+              <Bar dataKey="Value" fill={CHART_COLORS[1]} radius={[0, 4, 4, 0]} barSize={10} />
+              <Bar dataKey="Momentum" fill={CHART_COLORS[2]} radius={[0, 4, 4, 0]} barSize={10} />
+              <Bar dataKey="Low risk" fill={CHART_COLORS[3]} radius={[0, 4, 4, 0]} barSize={10} />
+              <Bar dataKey="Quality" fill={CHART_COLORS[4]} radius={[0, 4, 4, 0]} barSize={10} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+          <InsightCard
+            type="info"
+            title="No factor-style aggregates for this view"
+            body={
+              factorStyleFiltered.length === 0
+                ? "The API returned no rows from /summary/factor-style (empty vw_factor_exposure_daily for this experiment, or the endpoint is unavailable until the backend is updated). Benchmark equity paths often have fuller factor series than LLM paths depending on the DB build."
+                : "Factor exposure exists in the database for this experiment, but all mean exposures are missing for the selected market filter."
+            }
+          />
+        </div>
       )}
 
       <SoftHr />

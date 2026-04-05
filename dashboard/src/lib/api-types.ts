@@ -41,6 +41,19 @@ export interface FiltersResponse {
   date_max: string | null;
 }
 
+export interface FactorStyleSummaryRow {
+  strategy_key: string;
+  strategy: string;
+  prompt_type: string | null;
+  market: string;
+  path_count: number;
+  mean_size_exposure: number | null;
+  mean_value_exposure: number | null;
+  mean_momentum_exposure: number | null;
+  mean_low_risk_exposure: number | null;
+  mean_quality_exposure: number | null;
+}
+
 export interface StrategySummaryApiRow {
   experiment_id: string;
   source_type: string;

@@ -1,4 +1,5 @@
 import {
+  getFactorStyleSummary,
   getFilters,
   getPeriods,
   getRunQuality,
@@ -6,6 +7,7 @@ import {
   getStrategySummary,
 } from "./api-client";
 import type {
+  FactorStyleSummaryRow,
   MetaCurrentResponse,
   RunResultRow,
   StrategySummaryApiRow,
@@ -208,9 +210,10 @@ export async function fetchEvaluationData({
   experimentId,
   meta,
 }: FetchEvaluationDataArgs): Promise<EvaluationData> {
-  const [filters, summaryRows, runQuality, periods, runs] = await Promise.all([
+  const [filters, summaryRows, factorStyleRows, runQuality, periods, runs] = await Promise.all([
     getFilters({ experiment_id: experimentId }),
     getStrategySummary({ experiment_id: experimentId }),
+    getFactorStyleSummary({ experiment_id: experimentId }).catch((): FactorStyleSummaryRow[] => []),
     getRunQuality({ experiment_id: experimentId }),
     getPeriods({ experiment_id: experimentId }),
     fetchAllRunResults(experimentId),
@@ -222,6 +225,7 @@ export async function fetchEvaluationData({
     active_experiment_id: experimentId,
     summary_rows: summaryRows,
     summary: buildStrategySummaryView(summaryRows),
+    factor_style_rows: factorStyleRows,
     runs,
     behavior: computeBehavior(runs),
     run_quality: runQuality,

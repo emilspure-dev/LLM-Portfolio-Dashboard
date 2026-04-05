@@ -1,5 +1,6 @@
 import type {
   FactorExposureRow,
+  FactorStyleSummaryRow,
   FiltersResponse,
   HealthResponse,
   HoldingDailyRow,
@@ -133,6 +134,10 @@ export function getFilters(query?: Record<string, QueryValue>) {
 
 export function getStrategySummary(query?: Record<string, QueryValue>) {
   return requestJson<StrategySummaryApiRow[]>("/summary/strategies", query);
+}
+
+export function getFactorStyleSummary(query?: Record<string, QueryValue>) {
+  return requestJson<FactorStyleSummaryRow[]>("/summary/factor-style", query);
 }
 
 export function getRunQuality(query?: Record<string, QueryValue>) {

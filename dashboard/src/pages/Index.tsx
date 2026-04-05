@@ -253,7 +253,9 @@ export default function Index() {
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-6">
-                {activeTab === 0 && <OverviewTab data={visibleData} runs={filteredRuns} />}
+                {activeTab === 0 && (
+                  <OverviewTab data={visibleData} runs={filteredRuns} marketFilter={marketFilter} />
+                )}
                 {activeTab === 1 && (
                   <SharpeReturnsTab
                     data={visibleData}
