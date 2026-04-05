@@ -275,14 +275,21 @@ export async function fetchEvaluationData({
   experimentId,
   meta,
 }: FetchEvaluationDataArgs): Promise<EvaluationData> {
-  const [filters, summaryRows, factorStyleRows, runQuality, periods, runs] = await Promise.all([
+  const [filters, summaryRows, runQuality, periods, runs] = await Promise.all([
     getFilters({ experiment_id: experimentId }),
     getStrategySummary({ experiment_id: experimentId }),
-    getFactorStyleSummary({ experiment_id: experimentId }).catch((): FactorStyleSummaryRow[] => []),
     getRunQuality({ experiment_id: experimentId }),
     getPeriods({ experiment_id: experimentId }),
     fetchAllRunResults(experimentId),
   ]);
+
+  let factorStyleRows: FactorStyleSummaryRow[] = [];
+  let factorStyleError: string | null = null;
+  try {
+    factorStyleRows = await getFactorStyleSummary({ experiment_id: experimentId });
+  } catch (e) {
+    factorStyleError = e instanceof Error ? e.message : String(e);
+  }
 
   return {
     meta,
@@ -291,6 +298,7 @@ export async function fetchEvaluationData({
     summary_rows: summaryRows,
     summary: buildStrategySummaryWithRunSharpe(summaryRows, "All", runs),
     factor_style_rows: factorStyleRows,
+    factor_style_error: factorStyleError,
     runs,
     behavior: computeBehavior(runs),
     run_quality: runQuality,

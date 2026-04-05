@@ -63,6 +63,8 @@ export interface EvaluationData {
   summary_rows: StrategySummaryApiRow[];
   summary: StrategyRow[];
   factor_style_rows: FactorStyleSummaryRow[];
+  /** Set when GET /summary/factor-style fails (e.g. 404 on older backends). */
+  factor_style_error?: string | null;
   runs: RunRow[];
   behavior: BehaviorRow[];
   run_quality: RunQualityRow[];

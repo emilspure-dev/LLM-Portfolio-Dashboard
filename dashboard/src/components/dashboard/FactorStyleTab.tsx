@@ -13,6 +13,7 @@ import {
 import { InsightCard } from "./InsightCard";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import { CHART_COLORS, MARKET_LABELS } from "@/lib/constants";
+import { getApiBaseUrl } from "@/lib/api-client";
 import type { FactorStyleSummaryRow } from "@/lib/api-types";
 import type { EvaluationData } from "@/lib/types";
 
@@ -136,7 +137,17 @@ export function FactorStyleTab({ data, marketFilter }: FactorStyleTabProps) {
 
       <SoftHr />
 
-      {factorBarChartData.length > 0 ? (
+      {data.factor_style_error ? (
+        <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+          <InsightCard
+            type="warn"
+            title="Factor-style request failed"
+            body={`${data.factor_style_error}
+
+The dashboard calls ${getApiBaseUrl()}/summary/factor-style. If you see 404, deploy the backend that defines GET /api/summary/factor-style, or set VITE_API_BASE_URL / NEXT_PUBLIC_API_BASE_URL to that server. If the request succeeds but this tab is still empty, the SQLite view vw_factor_exposure_daily has no rows for this experiment (rebuild the analytics DB / ETL).`}
+          />
+        </div>
+      ) : factorBarChartData.length > 0 ? (
         <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
           <ResponsiveContainer
             width="100%"
@@ -194,8 +205,8 @@ export function FactorStyleTab({ data, marketFilter }: FactorStyleTabProps) {
             title="No factor-style aggregates for this view"
             body={
               factorStyleFiltered.length === 0
-                ? "The API returned no rows from /summary/factor-style (empty vw_factor_exposure_daily for this experiment, or the endpoint is unavailable until the backend is updated). Benchmark equity paths often have fuller factor series than LLM paths depending on the DB build."
-                : "Factor exposure exists in the database for this experiment, but all mean exposures are missing for the selected market filter."
+                ? `The API at ${getApiBaseUrl()} returned an empty array for /summary/factor-style (HTTP 200, zero rows). That usually means vw_factor_exposure_daily has no data for this experiment_id. Fix: load or rebuild the database so daily factor exposures are materialized, or pick an experiment that includes them. If you use a hosted API, confirm it uses the same DB file as your local pipeline.`
+                : "Factor rows exist for this experiment, but every mean exposure is null for the current sidebar market filter—try Market: All."
             }
           />
         </div>
