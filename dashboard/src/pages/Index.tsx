@@ -13,18 +13,20 @@ import {
   RunExplorerTab,
   SharpeReturnsTab,
   StatisticalTestsTab,
+  StrategiesTab,
 } from "@/components/dashboard/DetailTabs";
 import { OverviewTab } from "@/components/dashboard/OverviewTab";
 import { Button } from "@/components/ui/button";
 import { getHealth, getMetaCurrent } from "@/lib/api-client";
 import {
-  buildStrategySummaryView,
+  buildStrategySummaryWithRunSharpe,
   fetchEvaluationData,
 } from "@/lib/data-loader";
 import type { EvaluationData, RunRow } from "@/lib/types";
 
 const TAB_NAMES = [
   "Overview",
+  "Strategies",
   "Factor style",
   "Sharpe & Returns",
   "Equity Curves",
@@ -142,7 +144,11 @@ export default function Index() {
 
     return {
       ...data,
-      summary: buildStrategySummaryView(data.summary_rows, marketFilter),
+      summary: buildStrategySummaryWithRunSharpe(
+        data.summary_rows,
+        marketFilter,
+        data.runs
+      ),
     };
   }, [data, marketFilter]);
 
@@ -257,65 +263,72 @@ export default function Index() {
               <div className="flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-6">
                 {activeTab === 0 && <OverviewTab data={visibleData} runs={filteredRuns} />}
                 {activeTab === 1 && (
-                  <FactorStyleTab data={visibleData} marketFilter={marketFilter} />
+                  <StrategiesTab
+                    data={visibleData}
+                    runs={filteredRuns}
+                    marketFilter={marketFilter}
+                  />
                 )}
                 {activeTab === 2 && (
+                  <FactorStyleTab data={visibleData} marketFilter={marketFilter} />
+                )}
+                {activeTab === 3 && (
                   <SharpeReturnsTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 3 && (
+                {activeTab === 4 && (
                   <EquityCurvesTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 4 && (
+                {activeTab === 5 && (
                   <PortfoliosTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 5 && (
+                {activeTab === 6 && (
                   <RunExplorerTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 6 && (
+                {activeTab === 7 && (
                   <ByMarketTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 7 && (
+                {activeTab === 8 && (
                   <StatisticalTestsTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 8 && (
+                {activeTab === 9 && (
                   <BehaviorTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 9 && (
+                {activeTab === 10 && (
                   <DrawdownsTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 10 && (
+                {activeTab === 11 && (
                   <DataQualityTab
                     data={visibleData}
                     runs={filteredRuns}

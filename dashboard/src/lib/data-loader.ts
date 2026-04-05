@@ -188,6 +188,52 @@ export function buildStrategySummaryView(
   return sortSummaryRows(summaryRows);
 }
 
+/**
+ * When vw_strategy_summary omits mean_sharpe (common for some benchmarks), fill from
+ * run-level sharpe_ratio so heatmaps and KPIs match run_results.
+ */
+export function backfillSummarySharpeFromRuns(
+  summary: StrategyRow[],
+  runs: RunRow[],
+  marketFilter: string
+): StrategyRow[] {
+  const runsScoped = runs.filter((r) => {
+    if (r.valid === false) {
+      return false;
+    }
+    if (marketFilter !== "All" && r.market !== marketFilter) {
+      return false;
+    }
+    return true;
+  });
+
+  return summary.map((row) => {
+    if (row.mean_sharpe != null && Number.isFinite(row.mean_sharpe)) {
+      return row;
+    }
+    const sharpeVals = runsScoped
+      .filter((r) => (r.strategy_key ?? "") === row.strategy_key)
+      .map((r) => r.sharpe_ratio)
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    if (sharpeVals.length === 0) {
+      return row;
+    }
+    const meanFromRuns =
+      sharpeVals.reduce((sum, v) => sum + v, 0) / sharpeVals.length;
+    return { ...row, mean_sharpe: meanFromRuns };
+  });
+}
+
+export function buildStrategySummaryWithRunSharpe(
+  rows: StrategySummaryApiRow[],
+  marketFilter: string,
+  runs: RunRow[]
+): StrategyRow[] {
+  const base = buildStrategySummaryView(rows, marketFilter);
+  const filled = backfillSummarySharpeFromRuns(base, runs, marketFilter);
+  return sortSummaryRows(filled);
+}
+
 async function fetchAllRunResults(experimentId: string): Promise<RunRow[]> {
   const firstPage = await getRunResults({
     experiment_id: experimentId,
@@ -233,7 +279,7 @@ export async function fetchEvaluationData({
     filters,
     active_experiment_id: experimentId,
     summary_rows: summaryRows,
-    summary: buildStrategySummaryView(summaryRows),
+    summary: buildStrategySummaryWithRunSharpe(summaryRows, "All", runs),
     factor_style_rows: factorStyleRows,
     runs,
     behavior: computeBehavior(runs),

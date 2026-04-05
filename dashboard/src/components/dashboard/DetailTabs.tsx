@@ -21,7 +21,7 @@ import {
 import { AlertCircle, ChevronLeft, ChevronRight, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getDailyHoldings, getEquityChart, getFactorExposureChart, getRegimeChart } from "@/lib/api-client";
-import { buildStrategySummaryView } from "@/lib/data-loader";
+import { buildStrategySummaryWithRunSharpe } from "@/lib/data-loader";
 import { CHART_COLORS, COLORS, MARKET_LABELS, getStrategyColor, sharpeColor } from "@/lib/constants";
 import type {
   FactorExposureRow,
@@ -2078,7 +2078,11 @@ export function ByMarketTab({ data, marketFilter }: BaseTabProps) {
   const markets = getMarketOptions(data, marketFilter);
   const perMarketSummary = markets.map((market) => ({
     market,
-    summary: buildStrategySummaryView(data.summary_rows, market),
+    summary: buildStrategySummaryWithRunSharpe(
+      data.summary_rows,
+      market,
+      data.runs
+    ),
   }));
 
   const strategyKeys = Array.from(
@@ -2103,7 +2107,11 @@ export function ByMarketTab({ data, marketFilter }: BaseTabProps) {
           <KpiCard
             key={market}
             label={MARKET_LABELS[market] ?? market}
-            value={row?.mean_sharpe?.toFixed(2) ?? "—"}
+            value={
+              row?.mean_sharpe != null && Number.isFinite(row.mean_sharpe)
+                ? row.mean_sharpe.toFixed(2)
+                : "—"
+            }
             color={sharpeColor(row?.mean_sharpe)}
             sub={row ? `Top strategy: ${formatStrategyLabel(row.Strategy)}` : "No summary rows"}
           />
@@ -2759,3 +2767,4 @@ export function DataQualityTab({ data, marketFilter }: BaseTabProps) {
 }
 
 export { FactorStyleTab } from "./FactorStyleTab";
+export { StrategiesTab } from "./StrategiesTab";
