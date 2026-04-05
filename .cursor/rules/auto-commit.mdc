@@ -1,0 +1,27 @@
+---
+description: After editing project files, commit and push to GitHub from the correct repo
+alwaysApply: true
+---
+
+# Auto-commit and push
+
+When you **finish** a task that changes tracked project files:
+
+1. **Repository**  
+   - Frontend / dashboard code: run Git in `lovable-web/` (remote: `thesis-dashboard-web`).  
+   - If the workspace root `thesis_dashboard/` ever has its own `.git`, use that root for files outside `lovable-web/`.
+
+2. **Commit**  
+   - `git status` → `git add` only paths you changed (or user-requested scope).  
+   - `git commit -m "Short imperative summary of the change"`.  
+   - Do **not** stage `.env`, `.openai_api_key`, or ignored artifacts.
+
+3. **Push**  
+   - After a successful commit, run `git push origin` on the **current branch** so GitHub stays in sync.  
+   - Skip push only if the user asked for local-only work or said not to push.
+
+4. **Failures**  
+   - If there is nothing to commit, or commit/push fails, say so briefly and do not retry blindly.
+
+5. **Safety**  
+   - No `git push --force` or history rewrite unless the user explicitly requests it.
