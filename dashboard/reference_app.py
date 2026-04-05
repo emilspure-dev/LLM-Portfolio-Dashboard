@@ -14,7 +14,7 @@ import streamlit as st
 
 # ── Page config ──
 st.set_page_config(
-    page_title="LLM Portfoplio evaluation dahboard",
+    page_title="LLM Portfolio Evaluation Dashboard",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -1890,7 +1890,7 @@ def build_gpt_equity_curves(dd_df):
 # ══════════════════════════════════════════════════════════════
 
 st.markdown(
-    '<h2 style="margin-bottom:2px; letter-spacing:-0.5px;">LLM Portfoplio evaluation dahboard</h2>',
+    '<h2 style="margin-bottom:2px; letter-spacing:-0.5px;">LLM Portfolio Evaluation Dashboard</h2>',
     unsafe_allow_html=True,
 )
 st.caption(

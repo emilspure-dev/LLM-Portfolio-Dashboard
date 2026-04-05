@@ -202,7 +202,7 @@ export default function Index() {
                 <div>
                   <p className="dashboard-label mb-2">Research Workspace</p>
                   <h1 className="text-[20px] font-semibold tracking-[-0.04em] text-[#5d5754] md:text-[24px]">
-                    LLM Portfoplio evaluation dahboard
+                    LLM Portfolio Evaluation Dashboard
                   </h1>
                   <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[#9d958d] md:text-[13px]">
                     Empirical study of AI-based portfolio construction and rebalancing
