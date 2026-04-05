@@ -1,0 +1,33 @@
+Copy everything below into Lovable chat after you import or recreate this Vite+React project.
+
+---
+I have a thesis portfolio evaluation dashboard originally built in Python Streamlit (heavy: pandas, Plotly, Excel ingestion). This repo folder is the web shell only.
+
+Goals:
+1. Keep Vite + React + TypeScript + Tailwind.
+2. Add Supabase OR Lovable Cloud Postgres OR serverless functions with a SQLite file on persistent storage — pick one and document env vars.
+3. Add routes: Overview (KPI cards), Performance (Sharpe/returns charts), Run explorer (filters + tables), Post-loss analysis (metrics + optional reasoning text from DB).
+4. Replace placeholder /health check with real endpoints: list runs, post-loss summary, regime labels if table exists.
+5. Use Recharts or Plotly.js for charts; match a dark slate/navy dashboard theme.
+6. Never put the SQLite file path or secrets in client code — only server-side.
+
+Constraints:
+- Excel upload can be a future feature; start with API returning JSON from SQL tables.
+- CORS: allow my Lovable preview and production origins.
+
+---
+
+HOW TO GET THIS FOLDER INTO LOVABLE (you do this in the browser):
+
+Option A — GitHub:
+1. Push the `lovable-web` folder to a GitHub repo (root of repo or monorepo subfolder).
+2. In Lovable: New project → Import from GitHub → select repo.
+3. Set build: `npm run build`, output: `dist`, Node 18+.
+
+Option B — Manual:
+1. Create a new Lovable project (empty Vite React).
+2. Copy files from `lovable-web/src`, `index.html`, `vite.config.ts`, `tailwind.config.js`, `postcss.config.js`, `tsconfig*.json`, `package.json` into the Lovable file tree (match paths).
+
+Then paste the prompt block above into Lovable to extend the app.
+
+Step-by-step checklist: see TODO.md in this folder.
