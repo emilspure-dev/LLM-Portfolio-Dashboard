@@ -16,7 +16,7 @@ Writes to **`web-data/`**. Copy into `dashboard/public/data/` if the SPA should 
 
 ## Vercel
 
-Set **`VITE_API_URL`** in project env if the app calls a backend API.
+Set **`NEXT_PUBLIC_API_BASE_URL`** or **`VITE_API_BASE_URL`** in project env if the app calls a backend API.
 
 ## Rename folder `lovable-web` → `web`
 

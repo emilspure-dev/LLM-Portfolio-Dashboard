@@ -1,88 +1,24 @@
-import * as XLSX from "xlsx";
-import type { EvaluationData, StrategyRow, RunRow, BehaviorRow } from "./types";
-import { STRATEGY_KEY_MAP } from "./constants";
-
-function sheetToArray(workbook: XLSX.WorkBook, sheetName: string): any[] {
-  const sheet = workbook.Sheets[sheetName];
-  if (!sheet) return [];
-  return XLSX.utils.sheet_to_json(sheet, { defval: null });
-}
-
-function toStrategyKey(name: string): string {
-  const lower = name.toLowerCase();
-  for (const [pattern, key] of Object.entries(STRATEGY_KEY_MAP)) {
-    if (lower.includes(pattern)) return key;
-  }
-  return "";
-}
-
-function pctMaybeFraction(val: number | null): number | null {
-  if (val == null || isNaN(val)) return null;
-  if (Math.abs(val) <= 1.0) return val * 100;
-  return val;
-}
+import {
+  getFilters,
+  getPeriods,
+  getRunQuality,
+  getRunResults,
+  getStrategySummary,
+} from "./api-client";
+import type {
+  MetaCurrentResponse,
+  RunResultRow,
+  StrategySummaryApiRow,
+} from "./api-types";
+import type {
+  BehaviorRow,
+  EvaluationData,
+  RunRow,
+  StrategyRow,
+} from "./types";
 
 function getReturnCol(row: RunRow): number | null {
-  return row.net_return ?? row.period_return_net ?? row.period_return ?? null;
-}
-
-function parseOverviewSnapshot(workbook: XLSX.WorkBook): StrategyRow[] {
-  const raw = XLSX.utils.sheet_to_json<any[]>(
-    workbook.Sheets["Overview"] ?? {},
-    { header: 1, defval: null }
-  );
-  if (!raw || raw.length === 0) return [];
-
-  let hdrIdx = -1;
-  for (let i = 0; i < raw.length; i++) {
-    const row = raw[i] as any[];
-    if (!row || !row[0]) continue;
-    const v0 = String(row[0]).trim();
-    const rowTxt = row.filter((x: any) => x != null).join(" ");
-    if (v0 === "Strategy" && rowTxt.includes("Mean Sharpe") && rowTxt.includes("Beat")) {
-      hdrIdx = i;
-      break;
-    }
-  }
-  if (hdrIdx === -1) return [];
-
-  const hdr = (raw[hdrIdx] as any[]).map((c: any) => (c != null ? String(c).trim() : ""));
-  const rows: StrategyRow[] = [];
-
-  for (let j = hdrIdx + 1; j < raw.length; j++) {
-    const r = raw[j] as any[];
-    if (!r || r[0] == null || String(r[0]).trim() === "") break;
-
-    const findCol = (substr: string) => hdr.findIndex((h) => h.toLowerCase().includes(substr.toLowerCase()));
-    const stratCol = findCol("strategy");
-    const stratName = String(r[stratCol >= 0 ? stratCol : 0]);
-
-    const msIdx = findCol("mean sharpe");
-    const biIdx = findCol("beat market index");
-    const b60Idx = findCol("beat 60/40") >= 0 ? findCol("beat 60/40") : findCol("beat sixty");
-    const nrIdx = findCol("net return");
-    const obsIdx = findCol("observations");
-
-    rows.push({
-      Strategy: stratName,
-      strategy_key: toStrategyKey(stratName),
-      mean_sharpe: msIdx >= 0 ? Number(r[msIdx]) || 0 : 0,
-      pct_runs_beating_index_sharpe: biIdx >= 0 ? pctMaybeFraction(Number(r[biIdx])) ?? 0 : 0,
-      pct_runs_beating_sixty_forty_sharpe: b60Idx >= 0 ? pctMaybeFraction(Number(r[b60Idx])) ?? 0 : 0,
-      net_return_mean: nrIdx >= 0 ? Number(r[nrIdx]) || 0 : 0,
-      n_observations: obsIdx >= 0 ? Number(r[obsIdx]) || 0 : 0,
-    });
-  }
-  return rows;
-}
-
-function normalizeRuns(rows: RunRow[]): RunRow[] {
-  return rows.map((r) => {
-    if (r.net_return == null && r.period_return_net != null) {
-      r.net_return = r.period_return_net;
-    }
-    return r;
-  });
+  return row.period_return ?? row.net_return ?? row.period_return_net ?? null;
 }
 
 function computeBehavior(runs: RunRow[]): BehaviorRow[] {
@@ -95,93 +31,192 @@ function computeBehavior(runs: RunRow[]): BehaviorRow[] {
     const sub = gptRuns.filter((r) => r.prompt_type === pt);
     if (sub.length === 0) continue;
 
-    const mean = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    const mean = (arr: number[]) =>
+      arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
     const median = (arr: number[]) => {
       if (!arr.length) return 0;
-      const s = [...arr].sort((a, b) => a - b);
-      const mid = Math.floor(s.length / 2);
-      return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2
+        ? sorted[middle]
+        : (sorted[middle - 1] + sorted[middle]) / 2;
     };
 
-    const hhis = sub.map((r) => r.hhi).filter((v): v is number => v != null && !isNaN(v));
-    const effN = sub.map((r) => r.effective_n_holdings).filter((v): v is number => v != null && !isNaN(v));
-    const turns = sub.map((r) => r.turnover).filter((v): v is number => v != null && !isNaN(v));
-    const rets = sub.map((r) => getReturnCol(r)).filter((v): v is number => v != null && !isNaN(v));
+    const hhis = sub
+      .map((r) => r.hhi)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const effectiveN = sub
+      .map((r) => r.effective_n_holdings)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const turnovers = sub
+      .map((r) => r.turnover)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const realizedReturns = sub
+      .map((r) => getReturnCol(r))
+      .filter((value): value is number => value != null && !Number.isNaN(value));
 
     result.push({
       prompt_type: pt,
       mean_hhi: mean(hhis),
-      mean_effective_n_holdings: mean(effN),
-      mean_turnover: mean(turns),
-      median_turnover: median(turns),
+      mean_effective_n_holdings: mean(effectiveN),
+      mean_turnover: mean(turnovers),
+      median_turnover: median(turnovers),
       mean_expected_portfolio_return_6m: 0,
-      mean_realized_net_return: mean(rets),
+      mean_realized_net_return: mean(realizedReturns),
       mean_forecast_bias: 0,
       mean_forecast_abs_error: 0,
     });
   }
+
   return result;
 }
 
-function computeSummaryFromRuns(
-  runs: RunRow[],
-  existingSummary: StrategyRow[]
-): StrategyRow[] {
-  if (existingSummary.length > 0) return existingSummary;
+function weightedAverage(
+  rows: StrategySummaryApiRow[],
+  selector: (row: StrategySummaryApiRow) => number | null
+) {
+  let weightedSum = 0;
+  let weightTotal = 0;
 
-  const gptRuns = runs.filter(
-    (r) => r.prompt_type === "retail" || r.prompt_type === "advanced"
-  );
-  const result: StrategyRow[] = [];
+  for (const row of rows) {
+    const value = selector(row);
+    if (value == null || Number.isNaN(value)) {
+      continue;
+    }
 
-  for (const [pt, label, sk] of [
-    ["retail", "GPT (Retail prompt)", "gpt_retail"],
-    ["advanced", "GPT (Advanced Prompting)", "gpt_advanced"],
-  ] as const) {
-    const sub = gptRuns.filter((r) => r.prompt_type === pt);
-    if (sub.length === 0) continue;
-
-    const sharpes = sub.map((r) => r.sharpe_ratio).filter((v): v is number => v != null);
-    const rets = sub.map((r) => getReturnCol(r)).filter((v): v is number => v != null);
-    const meanSharpe = sharpes.length ? sharpes.reduce((a, b) => a + b, 0) / sharpes.length : 0;
-    const meanRet = rets.length ? rets.reduce((a, b) => a + b, 0) / rets.length : 0;
-
-    result.push({
-      Strategy: label,
-      strategy_key: sk,
-      mean_sharpe: meanSharpe,
-      net_return_mean: meanRet,
-      n_observations: sub.length,
-      pct_runs_beating_index_sharpe: 0,
-      pct_runs_beating_sixty_forty_sharpe: 0,
-    });
+    const weight = row.observations > 0 ? row.observations : 1;
+    weightedSum += value * weight;
+    weightTotal += weight;
   }
-  return result;
+
+  return weightTotal > 0 ? weightedSum / weightTotal : Number.NaN;
 }
 
-export function loadEvaluationData(buffer: ArrayBuffer): EvaluationData {
-  const workbook = XLSX.read(buffer, { type: "array" });
+function sortSummaryRows(rows: StrategyRow[]) {
+  return [...rows].sort((left, right) => {
+    const leftIsGpt = left.strategy_key.startsWith("gpt_");
+    const rightIsGpt = right.strategy_key.startsWith("gpt_");
 
-  const sheetMap: Record<string, string> = {
-    summary: "calc_strategy_summary",
-    runs: "Portfolio runs",
-    behavior: "Portfolio behavior",
-    benchmarks: "Benchmarks",
-    stats: "Stats tests",
-    postloss: "Post-loss rebalance",
-    gpt_cells: "calc_gpt_cells",
-    gpt_drawdowns: "calc_gpt_drawdowns",
-    strategy_paths: "calc_strategy_paths",
-    strategy_cells: "calc_strategy_cells",
-    periods_data: "calc_strategy_periods_data",
-    data_quality: "Data quality",
-    holdings: "Portfolio holdings",
-  };
+    if (leftIsGpt !== rightIsGpt) {
+      return leftIsGpt ? -1 : 1;
+    }
 
-  const data: EvaluationData = {
-    summary: [],
-    runs: [],
-    behavior: [],
+    return (right.mean_sharpe ?? 0) - (left.mean_sharpe ?? 0);
+  });
+}
+
+export function buildStrategySummaryView(
+  rows: StrategySummaryApiRow[],
+  marketFilter = "All"
+): StrategyRow[] {
+  const filteredRows =
+    marketFilter === "All"
+      ? rows
+      : rows.filter((row) => row.market === marketFilter);
+
+  const grouped = new Map<string, StrategySummaryApiRow[]>();
+
+  for (const row of filteredRows) {
+    const key = `${row.strategy_key}::${row.source_type}`;
+    const group = grouped.get(key) ?? [];
+    group.push(row);
+    grouped.set(key, group);
+  }
+
+  const summaryRows = Array.from(grouped.values()).map((group) => {
+    const representative = group[0];
+
+    return {
+      Strategy: representative.strategy,
+      strategy_key: representative.strategy_key,
+      source_type: representative.source_type,
+      mean_sharpe: weightedAverage(group, (row) => row.mean_sharpe),
+      net_return_mean: weightedAverage(group, (row) => row.mean_return),
+      n_observations: group.reduce(
+        (count, row) => count + (row.observations ?? 0),
+        0
+      ),
+      pct_runs_beating_index_sharpe: weightedAverage(
+        group,
+        (row) => row.pct_runs_beating_index_sharpe
+      ),
+      pct_runs_beating_sixty_forty_sharpe: weightedAverage(
+        group,
+        (row) => row.pct_runs_beating_sixty_forty_sharpe
+      ),
+      mean_annualized_return: weightedAverage(
+        group,
+        (row) => row.mean_annualized_return
+      ),
+      mean_volatility: weightedAverage(group, (row) => row.mean_volatility),
+      mean_historical_var_95: weightedAverage(
+        group,
+        (row) => row.mean_historical_var_95
+      ),
+      mean_turnover: weightedAverage(group, (row) => row.mean_turnover),
+      markets: Array.from(new Set(group.map((row) => row.market))),
+      prompt_types: Array.from(
+        new Set(
+          group
+            .map((row) => row.prompt_type)
+            .filter((value): value is string => Boolean(value))
+        )
+      ),
+    };
+  });
+
+  return sortSummaryRows(summaryRows);
+}
+
+async function fetchAllRunResults(experimentId: string): Promise<RunRow[]> {
+  const firstPage = await getRunResults({
+    experiment_id: experimentId,
+    page: 1,
+    page_size: 500,
+  });
+
+  const remainingRequests: Promise<{ items: RunResultRow[] }>[] = [];
+  for (let page = 2; page <= firstPage.total_pages; page += 1) {
+    remainingRequests.push(
+      getRunResults({
+        experiment_id: experimentId,
+        page,
+        page_size: firstPage.page_size,
+      })
+    );
+  }
+
+  const remainingPages = await Promise.all(remainingRequests);
+  return [firstPage, ...remainingPages].flatMap((page) => page.items as RunRow[]);
+}
+
+interface FetchEvaluationDataArgs {
+  experimentId: string;
+  meta: MetaCurrentResponse;
+}
+
+export async function fetchEvaluationData({
+  experimentId,
+  meta,
+}: FetchEvaluationDataArgs): Promise<EvaluationData> {
+  const [filters, summaryRows, runQuality, periods, runs] = await Promise.all([
+    getFilters({ experiment_id: experimentId }),
+    getStrategySummary({ experiment_id: experimentId }),
+    getRunQuality({ experiment_id: experimentId }),
+    getPeriods({ experiment_id: experimentId }),
+    fetchAllRunResults(experimentId),
+  ]);
+
+  return {
+    meta,
+    filters,
+    active_experiment_id: experimentId,
+    summary_rows: summaryRows,
+    summary: buildStrategySummaryView(summaryRows),
+    runs,
+    behavior: computeBehavior(runs),
+    run_quality: runQuality,
+    periods,
     stats: [],
     postloss: [],
     gpt_cells: [],
@@ -194,41 +229,4 @@ export function loadEvaluationData(buffer: ArrayBuffer): EvaluationData {
     holdings: [],
     runs_long: [],
   };
-
-  // Load sheets
-  for (const [key, sheet] of Object.entries(sheetMap)) {
-    const rows = sheetToArray(workbook, sheet);
-    if (key === "summary") {
-      data.summary = rows.map((r) => ({
-        ...r,
-        strategy_key: toStrategyKey(r.Strategy ?? ""),
-      }));
-    } else if (key === "runs") {
-      data.runs = normalizeRuns(rows);
-    } else if (key === "behavior") {
-      data.behavior = rows;
-    } else {
-      (data as any)[key] = rows;
-    }
-  }
-
-  // Augment from Overview if summary is empty
-  if (data.summary.length === 0) {
-    const overviewSummary = parseOverviewSnapshot(workbook);
-    if (overviewSummary.length > 0) {
-      data.summary = overviewSummary;
-    }
-  }
-
-  // Compute summary from runs if still empty
-  if (data.summary.length === 0 && data.runs.length > 0) {
-    data.summary = computeSummaryFromRuns(data.runs, data.summary);
-  }
-
-  // Compute behavior if empty
-  if (data.behavior.length === 0 && data.runs.length > 0) {
-    data.behavior = computeBehavior(data.runs);
-  }
-
-  return data;
 }

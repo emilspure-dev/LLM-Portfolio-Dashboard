@@ -1,30 +1,45 @@
+import type {
+  FiltersResponse,
+  MetaCurrentResponse,
+  PeriodRow,
+  RunQualityRow,
+  RunResultRow,
+  StrategySummaryApiRow,
+} from "./api-types";
+
 export interface StrategyRow {
   Strategy: string;
   strategy_key: string;
+  source_type: string;
   mean_sharpe: number;
   net_return_mean: number;
   n_observations: number;
   pct_runs_beating_index_sharpe: number;
   pct_runs_beating_sixty_forty_sharpe: number;
+  mean_annualized_return: number;
+  mean_volatility: number;
+  mean_historical_var_95: number;
+  mean_turnover: number;
+  markets: string[];
+  prompt_types: string[];
 }
 
-export interface RunRow {
-  [key: string]: any;
-  market?: string;
-  period?: string;
-  prompt_type?: string;
-  model?: string;
-  sharpe_ratio?: number;
-  net_return?: number;
-  period_return_net?: number;
-  period_return?: number;
-  hhi?: number;
-  effective_n_holdings?: number;
-  n_holdings?: number;
-  valid?: boolean;
-  trajectory_id?: string;
-  run_id?: string;
-  turnover?: number;
+export interface RunRow extends RunResultRow {
+  market?: string | null;
+  period?: string | null;
+  prompt_type?: string | null;
+  model?: string | null;
+  sharpe_ratio?: number | null;
+  net_return?: number | null;
+  period_return_net?: number | null;
+  period_return?: number | null;
+  hhi?: number | null;
+  effective_n_holdings?: number | null;
+  n_holdings?: number | null;
+  valid?: boolean | number | null;
+  trajectory_id?: string | null;
+  run_id?: string | number | null;
+  turnover?: number | null;
 }
 
 export interface BehaviorRow {
@@ -40,19 +55,25 @@ export interface BehaviorRow {
 }
 
 export interface EvaluationData {
+  meta: MetaCurrentResponse;
+  filters: FiltersResponse;
+  active_experiment_id: string;
+  summary_rows: StrategySummaryApiRow[];
   summary: StrategyRow[];
   runs: RunRow[];
   behavior: BehaviorRow[];
-  stats: any[];
-  postloss: any[];
-  gpt_cells: any[];
-  gpt_drawdowns: any[];
-  strategy_paths: any[];
-  strategy_cells: any[];
-  periods_data: any[];
-  benchmarks: any[];
-  data_quality: any[];
-  holdings: any[];
+  run_quality: RunQualityRow[];
+  periods: PeriodRow[];
+  stats: unknown[];
+  postloss: unknown[];
+  gpt_cells: unknown[];
+  gpt_drawdowns: unknown[];
+  strategy_paths: unknown[];
+  strategy_cells: unknown[];
+  periods_data: unknown[];
+  benchmarks: unknown[];
+  data_quality: unknown[];
+  holdings: unknown[];
   runs_long: RunRow[];
 }
 
