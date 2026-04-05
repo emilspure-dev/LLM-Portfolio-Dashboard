@@ -1,0 +1,24 @@
+[
+  {
+    "prompt_type": "retail",
+    "mean_hhi": 0.10608443845297036,
+    "mean_effective_n_holdings": 9.683195019137969,
+    "mean_turnover": 0.1362444416666667,
+    "median_turnover": 0.063003,
+    "mean_expected_portfolio_return_6m": 0.07186222222222222,
+    "mean_realized_net_return": 0.07286904628061379,
+    "mean_forecast_bias": -0.001006824058391564,
+    "mean_forecast_abs_error": 0.08426521319439309
+  },
+  {
+    "prompt_type": "advanced",
+    "mean_hhi": 0.10105446230788889,
+    "mean_effective_n_holdings": 11.061147440659767,
+    "mean_turnover": 0.2063270292887029,
+    "median_turnover": 0.102798,
+    "mean_expected_portfolio_return_6m": 0.07476133828996283,
+    "mean_realized_net_return": 0.08686383594902507,
+    "mean_forecast_bias": -0.012478799137261415,
+    "mean_forecast_abs_error": 0.09807908526463498
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "total_runs": 539,
+  "n_markets": 3,
+  "n_periods": 9,
+  "best_sharpe": 1.0759540123743476,
+  "best_strategy": "GPT (Advanced Prompting)",
+  "gpt_beat_rate_pct": 42.67161410018553
+}

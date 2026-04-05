@@ -1,0 +1,650 @@
+[
+  {
+    "strategy_key": "index",
+    "market": "germany",
+    "period": "2021H2",
+    "period_return": -0.0804529395844503
+  },
+  {
+    "strategy_key": "index",
+    "market": "germany",
+    "period": "2022H1",
+    "period_return": -0.0693355986699378
+  },
+  {
+    "strategy_key": "index",
+    "market": "germany",
+    "period": "2022H2",
+    "period_return": 0.2153846098792071
+  },
+  {
+    "strategy_key": "index",
+    "market": "germany",
+    "period": "2023H1",
+    "period_return": 0.0332143315150119
+  },
+  {
+    "strategy_key": "index",
+    "market": "germany",
+    "period": "2023H2",
+    "period_return": 0.1091018354005282
+  },
+  {
+    "strategy_key": "index",
+    "market": "germany",
+    "period": "2024H1",
+    "period_return": 0.0616152057118111
+  },
+  {
+    "strategy_key": "index",
+    "market": "germany",
+    "period": "2024H2",
+    "period_return": 0.1893708903941233
+  },
+  {
+    "strategy_key": "index",
+    "market": "germany",
+    "period": "2025H1",
+    "period_return": 0.028340036080628
+  },
+  {
+    "strategy_key": "index",
+    "market": "germany",
+    "period": "2025H2",
+    "period_return": 0.0500552343976232
+  },
+  {
+    "strategy_key": "index",
+    "market": "japan",
+    "period": "2021H2",
+    "period_return": -0.0622213999940484
+  },
+  {
+    "strategy_key": "index",
+    "market": "japan",
+    "period": "2022H1",
+    "period_return": 0.0623585515223144
+  },
+  {
+    "strategy_key": "index",
+    "market": "japan",
+    "period": "2022H2",
+    "period_return": 0.0014104511242483
+  },
+  {
+    "strategy_key": "index",
+    "market": "japan",
+    "period": "2023H1",
+    "period_return": 0.1880455289722413
+  },
+  {
+    "strategy_key": "index",
+    "market": "japan",
+    "period": "2023H2",
+    "period_return": 0.208197233402561
+  },
+  {
+    "strategy_key": "index",
+    "market": "japan",
+    "period": "2024H1",
+    "period_return": -0.0257732997952125
+  },
+  {
+    "strategy_key": "index",
+    "market": "japan",
+    "period": "2024H2",
+    "period_return": -0.002008050568896
+  },
+  {
+    "strategy_key": "index",
+    "market": "japan",
+    "period": "2025H1",
+    "period_return": 0.1415876741292274
+  },
+  {
+    "strategy_key": "index",
+    "market": "japan",
+    "period": "2025H2",
+    "period_return": 0.4057037718491261
+  },
+  {
+    "strategy_key": "index",
+    "market": "us",
+    "period": "2021H2",
+    "period_return": -0.0245789628169699
+  },
+  {
+    "strategy_key": "index",
+    "market": "us",
+    "period": "2022H1",
+    "period_return": -0.0669969284067489
+  },
+  {
+    "strategy_key": "index",
+    "market": "us",
+    "period": "2022H2",
+    "period_return": 0.012052132657393
+  },
+  {
+    "strategy_key": "index",
+    "market": "us",
+    "period": "2023H1",
+    "period_return": 0.1511702562729138
+  },
+  {
+    "strategy_key": "index",
+    "market": "us",
+    "period": "2023H2",
+    "period_return": 0.1305782815320741
+  },
+  {
+    "strategy_key": "index",
+    "market": "us",
+    "period": "2024H1",
+    "period_return": 0.1060846355815743
+  },
+  {
+    "strategy_key": "index",
+    "market": "us",
+    "period": "2024H2",
+    "period_return": 0.0665477135962797
+  },
+  {
+    "strategy_key": "index",
+    "market": "us",
+    "period": "2025H1",
+    "period_return": 0.1115732692553024
+  },
+  {
+    "strategy_key": "index",
+    "market": "us",
+    "period": "2025H2",
+    "period_return": 0.0887994278241595
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "germany",
+    "period": "2021H2",
+    "period_return": -0.06029761067846946
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "germany",
+    "period": "2022H1",
+    "period_return": -0.07216402728177923
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "germany",
+    "period": "2022H2",
+    "period_return": 0.1082383162483063
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "germany",
+    "period": "2023H1",
+    "period_return": 0.02862373046860554
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "germany",
+    "period": "2023H2",
+    "period_return": 0.07099328630962867
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "germany",
+    "period": "2024H1",
+    "period_return": 0.04643032269817333
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "germany",
+    "period": "2024H2",
+    "period_return": 0.1185479881806288
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "germany",
+    "period": "2025H1",
+    "period_return": 0.01987614967844616
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "germany",
+    "period": "2025H2",
+    "period_return": 0.03471887648415244
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "japan",
+    "period": "2021H2",
+    "period_return": -0.04455420239315452
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "japan",
+    "period": "2022H1",
+    "period_return": 0.03189680610036652
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "japan",
+    "period": "2022H2",
+    "period_return": -0.01010880542852994
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "japan",
+    "period": "2023H1",
+    "period_return": 0.1114278164102245
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "japan",
+    "period": "2023H2",
+    "period_return": 0.1239850005861514
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "japan",
+    "period": "2024H1",
+    "period_return": -0.02268943977432558
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "japan",
+    "period": "2024H2",
+    "period_return": -0.01166070997040388
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "japan",
+    "period": "2025H1",
+    "period_return": 0.07528673161118521
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "japan",
+    "period": "2025H2",
+    "period_return": 0.2361781302010835
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "us",
+    "period": "2021H2",
+    "period_return": -0.03402927118854266
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "us",
+    "period": "2022H1",
+    "period_return": -0.0715067580522053
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "us",
+    "period": "2022H2",
+    "period_return": 0.0007345617839633195
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "us",
+    "period": "2023H1",
+    "period_return": 0.09651200296487555
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "us",
+    "period": "2023H2",
+    "period_return": 0.0890173324924661
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "us",
+    "period": "2024H1",
+    "period_return": 0.0811784463115977
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "us",
+    "period": "2024H2",
+    "period_return": 0.04005536830480562
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "us",
+    "period": "2025H1",
+    "period_return": 0.07479168815481144
+  },
+  {
+    "strategy_key": "sixty_forty",
+    "market": "us",
+    "period": "2025H2",
+    "period_return": 0.06878884468924766
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "germany",
+    "period": "2021H2",
+    "period_return": -0.0324176032635075
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "germany",
+    "period": "2022H1",
+    "period_return": -0.1017081756252416
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "germany",
+    "period": "2022H2",
+    "period_return": 0.1449939196963081
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "germany",
+    "period": "2023H1",
+    "period_return": 0.02410770907383773
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "germany",
+    "period": "2023H2",
+    "period_return": 0.1927872913653804
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "germany",
+    "period": "2024H1",
+    "period_return": 0.05936806424138968
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "germany",
+    "period": "2024H2",
+    "period_return": 0.1303234064103535
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "germany",
+    "period": "2025H1",
+    "period_return": 0.04676709561211614
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "germany",
+    "period": "2025H2",
+    "period_return": 0.07393304147237652
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "japan",
+    "period": "2021H2",
+    "period_return": -0.01306217025998357
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "japan",
+    "period": "2022H1",
+    "period_return": 0.08271098110087115
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "japan",
+    "period": "2022H2",
+    "period_return": 0.0479057448671884
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "japan",
+    "period": "2023H1",
+    "period_return": 0.1725309449367535
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "japan",
+    "period": "2023H2",
+    "period_return": 0.1423258090512274
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "japan",
+    "period": "2024H1",
+    "period_return": 0.0276644057304948
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "japan",
+    "period": "2024H2",
+    "period_return": 0.02148571096593571
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "japan",
+    "period": "2025H1",
+    "period_return": 0.1548923594114936
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "japan",
+    "period": "2025H2",
+    "period_return": 0.4153055088643274
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "us",
+    "period": "2021H2",
+    "period_return": 0.004822772985959419
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "us",
+    "period": "2022H1",
+    "period_return": -0.04017308668155296
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "us",
+    "period": "2022H2",
+    "period_return": 0.05845052053153867
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "us",
+    "period": "2023H1",
+    "period_return": 0.06740048616694025
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "us",
+    "period": "2023H2",
+    "period_return": 0.09835791697022245
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "us",
+    "period": "2024H1",
+    "period_return": 0.08727957280100297
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "us",
+    "period": "2024H2",
+    "period_return": 0.03707575098028949
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "us",
+    "period": "2025H1",
+    "period_return": 0.07093473554158683
+  },
+  {
+    "strategy_key": "equal_weight",
+    "market": "us",
+    "period": "2025H2",
+    "period_return": 0.1019656651333941
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "germany",
+    "period": "2021H2",
+    "period_return": -0.004935033873347171
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "germany",
+    "period": "2022H1",
+    "period_return": 0.02280586829523198
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "germany",
+    "period": "2022H2",
+    "period_return": 0.07462909495631835
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "germany",
+    "period": "2023H1",
+    "period_return": 0.02913175348072557
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "germany",
+    "period": "2023H2",
+    "period_return": 0.1642608669770785
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "germany",
+    "period": "2024H1",
+    "period_return": 0.004954145082596284
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "germany",
+    "period": "2024H2",
+    "period_return": 0.1303234064103535
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "germany",
+    "period": "2025H1",
+    "period_return": 0.1017931693792297
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "germany",
+    "period": "2025H2",
+    "period_return": 0.1154088325625425
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "japan",
+    "period": "2021H2",
+    "period_return": -0.01299666046357161
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "japan",
+    "period": "2022H1",
+    "period_return": 0.05824650295675067
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "japan",
+    "period": "2022H2",
+    "period_return": -0.02142511786567934
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "japan",
+    "period": "2023H1",
+    "period_return": 0.1725309449367535
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "japan",
+    "period": "2023H2",
+    "period_return": 0.1423258090512274
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "japan",
+    "period": "2024H1",
+    "period_return": 0.02766440573049479
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "japan",
+    "period": "2024H2",
+    "period_return": 0.02148571096593571
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "japan",
+    "period": "2025H1",
+    "period_return": 0.1548923594114936
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "japan",
+    "period": "2025H2",
+    "period_return": 0.4164136164087382
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "us",
+    "period": "2021H2",
+    "period_return": 0.004851694428625936
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "us",
+    "period": "2022H1",
+    "period_return": 0.07642195957259372
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "us",
+    "period": "2022H2",
+    "period_return": 0.05813452427391377
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "us",
+    "period": "2023H1",
+    "period_return": 0.06735953944348456
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "us",
+    "period": "2023H2",
+    "period_return": 0.09887665933982007
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "us",
+    "period": "2024H1",
+    "period_return": 0.08812963458799186
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "us",
+    "period": "2024H2",
+    "period_return": 0.03599692550651186
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "us",
+    "period": "2025H1",
+    "period_return": 0.07134459897961265
+  },
+  {
+    "strategy_key": "mean_variance",
+    "market": "us",
+    "period": "2025H2",
+    "period_return": 0.1023871135670357
+  }
+]

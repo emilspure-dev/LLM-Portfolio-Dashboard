@@ -1,0 +1,28 @@
+{
+  "id_col": "trajectory_id",
+  "ret_col": "net_return",
+  "n_loss_periods": 126,
+  "n_after_loss": 126,
+  "recovery_pct": 59.523809523809526,
+  "after_loss_mean_return": 0.04394448767304517,
+  "hhi_after": 0.1046274489078889,
+  "hhi_other": 0.10324745082859421,
+  "hhi_diff": 0.0013799980792946892,
+  "by_prompt": [
+    {
+      "Prompt": "Retail",
+      "After-loss periods": 66,
+      "Recovery %": 62.121212121212125,
+      "Mean return": 0.04172703386392116
+    },
+    {
+      "Prompt": "Advanced",
+      "After-loss periods": 60,
+      "Recovery %": 56.666666666666664,
+      "Mean return": 0.04638368686308162
+    }
+  ],
+  "has_prompt_scope": true,
+  "source": "Portfolio runs column `post_loss_rebalance` (evaluation package)",
+  "flag_column": "post_loss_rebalance"
+}

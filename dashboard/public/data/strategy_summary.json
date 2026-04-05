@@ -1,0 +1,56 @@
+[
+  {
+    "Strategy": "Mean-variance",
+    "mean_sharpe": 0.9276741733266759,
+    "pct_runs_beating_index_sharpe": 55.55555555555556,
+    "pct_runs_beating_sixty_forty_sharpe": 59.25925925925925,
+    "n_observations": 27,
+    "strategy_key": "mean_variance",
+    "net_return_mean": null
+  },
+  {
+    "Strategy": "Equal weight (1/N)",
+    "mean_sharpe": 0.946567933643417,
+    "pct_runs_beating_index_sharpe": 66.66666666666666,
+    "pct_runs_beating_sixty_forty_sharpe": 72.22222222222221,
+    "n_observations": 27,
+    "strategy_key": "equal_weight",
+    "net_return_mean": null
+  },
+  {
+    "Strategy": "60/40 (market-matched)",
+    "mean_sharpe": 0.6700887491422152,
+    "pct_runs_beating_index_sharpe": 18.51851851851852,
+    "pct_runs_beating_sixty_forty_sharpe": null,
+    "n_observations": 27,
+    "strategy_key": "sixty_forty",
+    "net_return_mean": null
+  },
+  {
+    "Strategy": "Market index (buy-and-hold)",
+    "mean_sharpe": 0.8547587985819581,
+    "pct_runs_beating_index_sharpe": null,
+    "pct_runs_beating_sixty_forty_sharpe": 81.48148148148148,
+    "n_observations": 27,
+    "strategy_key": "index",
+    "net_return_mean": null
+  },
+  {
+    "Strategy": "GPT (Retail prompt)",
+    "mean_sharpe": 0.959220048887578,
+    "pct_runs_beating_index_sharpe": 52.22222222222222,
+    "pct_runs_beating_sixty_forty_sharpe": 64.44444444444444,
+    "n_observations": 270,
+    "strategy_key": "gpt_retail",
+    "net_return_mean": 0.07286904628061379
+  },
+  {
+    "Strategy": "GPT (Advanced Prompting)",
+    "mean_sharpe": 1.0759540123743476,
+    "pct_runs_beating_index_sharpe": 56.50557620817844,
+    "pct_runs_beating_sixty_forty_sharpe": 68.02973977695167,
+    "n_observations": 270,
+    "strategy_key": "gpt_advanced",
+    "net_return_mean": 0.08686383594902507
+  }
+]

@@ -11,7 +11,7 @@ export default function Layout({ children, nav }: Props) {
             Thesis portfolio dashboard
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Lovable / React shell — connect a backend + DB for full parity with Streamlit{" "}
+            React shell — connect a backend + DB for full parity with Streamlit{" "}
             <code className="rounded bg-slate-800 px-1">app.py</code>
           </p>
         </div>

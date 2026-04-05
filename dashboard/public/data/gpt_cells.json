@@ -1,0 +1,542 @@
+[
+  {
+    "market": "germany",
+    "period": "2021H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.6011734888568514,
+    "cell_mean_return": -0.05153337953072514,
+    "beat_index_pct": 80.0,
+    "beat_sixty_forty_pct": 90.0
+  },
+  {
+    "market": "germany",
+    "period": "2021H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.35210214913307397,
+    "cell_mean_return": -0.03732945549390754,
+    "beat_index_pct": 100.0,
+    "beat_sixty_forty_pct": 100.0
+  },
+  {
+    "market": "germany",
+    "period": "2022H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.8064954063865413,
+    "cell_mean_return": -0.10075045480072915,
+    "beat_index_pct": 40.0,
+    "beat_sixty_forty_pct": 70.0
+  },
+  {
+    "market": "germany",
+    "period": "2022H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.7765855417430151,
+    "cell_mean_return": -0.09758529934453612,
+    "beat_index_pct": 20.0,
+    "beat_sixty_forty_pct": 80.0
+  },
+  {
+    "market": "germany",
+    "period": "2022H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.9021388982171517,
+    "cell_mean_return": 0.18096623214990265,
+    "beat_index_pct": 10.0,
+    "beat_sixty_forty_pct": 70.0
+  },
+  {
+    "market": "germany",
+    "period": "2022H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.5292830590106674,
+    "cell_mean_return": 0.15392061474875013,
+    "beat_index_pct": 0.0,
+    "beat_sixty_forty_pct": 30.0
+  },
+  {
+    "market": "germany",
+    "period": "2023H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.040929524547468885,
+    "cell_mean_return": 0.019857044169431817,
+    "beat_index_pct": 20.0,
+    "beat_sixty_forty_pct": 30.0
+  },
+  {
+    "market": "germany",
+    "period": "2023H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.134605759141311,
+    "cell_mean_return": 0.014023805935502448,
+    "beat_index_pct": 20.0,
+    "beat_sixty_forty_pct": 20.0
+  },
+  {
+    "market": "germany",
+    "period": "2023H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.7947899877375224,
+    "cell_mean_return": 0.11476555111979694,
+    "beat_index_pct": 60.0,
+    "beat_sixty_forty_pct": 60.0
+  },
+  {
+    "market": "germany",
+    "period": "2023H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.2209321024403905,
+    "cell_mean_return": 0.09323148444329596,
+    "beat_index_pct": 30.0,
+    "beat_sixty_forty_pct": 40.0
+  },
+  {
+    "market": "germany",
+    "period": "2024H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.056819134310175844,
+    "cell_mean_return": 0.03056567920696962,
+    "beat_index_pct": 20.0,
+    "beat_sixty_forty_pct": 20.0
+  },
+  {
+    "market": "germany",
+    "period": "2024H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.44521569527704463,
+    "cell_mean_return": 0.0540888491850679,
+    "beat_index_pct": 50.0,
+    "beat_sixty_forty_pct": 60.0
+  },
+  {
+    "market": "germany",
+    "period": "2024H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 2.7547024309571784,
+    "cell_mean_return": 0.17528755658612988,
+    "beat_index_pct": 50.0,
+    "beat_sixty_forty_pct": 60.0
+  },
+  {
+    "market": "germany",
+    "period": "2024H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 2.1793142776942456,
+    "cell_mean_return": 0.14863140004029277,
+    "beat_index_pct": 40.0,
+    "beat_sixty_forty_pct": 40.0
+  },
+  {
+    "market": "germany",
+    "period": "2025H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.6696798617994332,
+    "cell_mean_return": 0.09120812347276329,
+    "beat_index_pct": 90.0,
+    "beat_sixty_forty_pct": 90.0
+  },
+  {
+    "market": "germany",
+    "period": "2025H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.3449768550172014,
+    "cell_mean_return": 0.05324976006313249,
+    "beat_index_pct": 70.0,
+    "beat_sixty_forty_pct": 80.0
+  },
+  {
+    "market": "germany",
+    "period": "2025H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.4298114686722323,
+    "cell_mean_return": 0.10336394139489828,
+    "beat_index_pct": 90.0,
+    "beat_sixty_forty_pct": 90.0
+  },
+  {
+    "market": "germany",
+    "period": "2025H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.2096078634524186,
+    "cell_mean_return": 0.08473774831279678,
+    "beat_index_pct": 90.0,
+    "beat_sixty_forty_pct": 90.0
+  },
+  {
+    "market": "japan",
+    "period": "2021H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.1457335470532701,
+    "cell_mean_return": 0.011198551823231673,
+    "beat_index_pct": 100.0,
+    "beat_sixty_forty_pct": 100.0
+  },
+  {
+    "market": "japan",
+    "period": "2021H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.5206699501968829,
+    "cell_mean_return": -0.049226785601060016,
+    "beat_index_pct": 50.0,
+    "beat_sixty_forty_pct": 90.0
+  },
+  {
+    "market": "japan",
+    "period": "2022H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.7685315301689299,
+    "cell_mean_return": 0.061341865292895384,
+    "beat_index_pct": 70.0,
+    "beat_sixty_forty_pct": 70.0
+  },
+  {
+    "market": "japan",
+    "period": "2022H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.6801561666734581,
+    "cell_mean_return": 0.04597882080470712,
+    "beat_index_pct": 40.0,
+    "beat_sixty_forty_pct": 40.0
+  },
+  {
+    "market": "japan",
+    "period": "2022H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.6707285616150345,
+    "cell_mean_return": 0.055222805127114326,
+    "beat_index_pct": 90.0,
+    "beat_sixty_forty_pct": 100.0
+  },
+  {
+    "market": "japan",
+    "period": "2022H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.4990148512666064,
+    "cell_mean_return": 0.048901341504773134,
+    "beat_index_pct": 90.0,
+    "beat_sixty_forty_pct": 90.0
+  },
+  {
+    "market": "japan",
+    "period": "2023H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 3.2469421820787,
+    "cell_mean_return": 0.20406766057130094,
+    "beat_index_pct": 80.0,
+    "beat_sixty_forty_pct": 70.0
+  },
+  {
+    "market": "japan",
+    "period": "2023H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 2.9712183521774,
+    "cell_mean_return": 0.19291056597524064,
+    "beat_index_pct": 80.0,
+    "beat_sixty_forty_pct": 80.0
+  },
+  {
+    "market": "japan",
+    "period": "2023H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 2.0195074466440373,
+    "cell_mean_return": 0.14187775171731418,
+    "beat_index_pct": 40.0,
+    "beat_sixty_forty_pct": 40.0
+  },
+  {
+    "market": "japan",
+    "period": "2023H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 2.8706786266714834,
+    "cell_mean_return": 0.19872708388787338,
+    "beat_index_pct": 40.0,
+    "beat_sixty_forty_pct": 40.0
+  },
+  {
+    "market": "japan",
+    "period": "2024H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.152595093299701,
+    "cell_mean_return": 0.04194952898796315,
+    "beat_index_pct": 90.0,
+    "beat_sixty_forty_pct": 100.0
+  },
+  {
+    "market": "japan",
+    "period": "2024H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.09437667224897232,
+    "cell_mean_return": 0.03612700606594147,
+    "beat_index_pct": 80.0,
+    "beat_sixty_forty_pct": 90.0
+  },
+  {
+    "market": "japan",
+    "period": "2024H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.08429464887195032,
+    "cell_mean_return": 0.02805859504872048,
+    "beat_index_pct": 80.0,
+    "beat_sixty_forty_pct": 90.0
+  },
+  {
+    "market": "japan",
+    "period": "2024H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.03839292209320311,
+    "cell_mean_return": 0.020186784073118736,
+    "beat_index_pct": 70.0,
+    "beat_sixty_forty_pct": 80.0
+  },
+  {
+    "market": "japan",
+    "period": "2025H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.5766189373486432,
+    "cell_mean_return": 0.1750242295766674,
+    "beat_index_pct": 60.0,
+    "beat_sixty_forty_pct": 80.0
+  },
+  {
+    "market": "japan",
+    "period": "2025H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.575405374374847,
+    "cell_mean_return": 0.1614774225539336,
+    "beat_index_pct": 80.0,
+    "beat_sixty_forty_pct": 80.0
+  },
+  {
+    "market": "japan",
+    "period": "2025H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 6.210049546922314,
+    "cell_mean_return": 0.4972481326570038,
+    "beat_index_pct": 90.0,
+    "beat_sixty_forty_pct": 70.0
+  },
+  {
+    "market": "japan",
+    "period": "2025H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 4.736878893880752,
+    "cell_mean_return": 0.326884910932011,
+    "beat_index_pct": 70.0,
+    "beat_sixty_forty_pct": 50.0
+  },
+  {
+    "market": "us",
+    "period": "2021H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.46993171669466616,
+    "cell_mean_return": -0.0635450510080357,
+    "beat_index_pct": 30.0,
+    "beat_sixty_forty_pct": 70.0
+  },
+  {
+    "market": "us",
+    "period": "2021H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.20698132097517868,
+    "cell_mean_return": 0.003951247953733999,
+    "beat_index_pct": 70.0,
+    "beat_sixty_forty_pct": 100.0
+  },
+  {
+    "market": "us",
+    "period": "2022H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.6336577741915519,
+    "cell_mean_return": -0.10993957738597562,
+    "beat_index_pct": 20.0,
+    "beat_sixty_forty_pct": 100.0
+  },
+  {
+    "market": "us",
+    "period": "2022H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.7041156630863021,
+    "cell_mean_return": -0.0762996414727419,
+    "beat_index_pct": 20.0,
+    "beat_sixty_forty_pct": 80.0
+  },
+  {
+    "market": "us",
+    "period": "2022H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.21335317925390562,
+    "cell_mean_return": -0.015392952286403411,
+    "beat_index_pct": 30.0,
+    "beat_sixty_forty_pct": 70.0
+  },
+  {
+    "market": "us",
+    "period": "2022H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": -0.32044889335589044,
+    "cell_mean_return": -0.022247558968186063,
+    "beat_index_pct": 20.0,
+    "beat_sixty_forty_pct": 30.0
+  },
+  {
+    "market": "us",
+    "period": "2023H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 3.5072441542207238,
+    "cell_mean_return": 0.2886420376998548,
+    "beat_index_pct": 100.0,
+    "beat_sixty_forty_pct": 100.0
+  },
+  {
+    "market": "us",
+    "period": "2023H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 2.6220116010403816,
+    "cell_mean_return": 0.1746824014676517,
+    "beat_index_pct": 60.0,
+    "beat_sixty_forty_pct": 70.0
+  },
+  {
+    "market": "us",
+    "period": "2023H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.2734181924574421,
+    "cell_mean_return": 0.12171088452437126,
+    "beat_index_pct": 20.0,
+    "beat_sixty_forty_pct": 40.0
+  },
+  {
+    "market": "us",
+    "period": "2023H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.9027823978055173,
+    "cell_mean_return": 0.07785212928735141,
+    "beat_index_pct": 10.0,
+    "beat_sixty_forty_pct": 20.0
+  },
+  {
+    "market": "us",
+    "period": "2024H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.6775282246027468,
+    "cell_mean_return": 0.07519293394933613,
+    "beat_index_pct": 30.0,
+    "beat_sixty_forty_pct": 20.0
+  },
+  {
+    "market": "us",
+    "period": "2024H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.4179450338700808,
+    "cell_mean_return": 0.1003989169530674,
+    "beat_index_pct": 50.0,
+    "beat_sixty_forty_pct": 50.0
+  },
+  {
+    "market": "us",
+    "period": "2024H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.31206450703618616,
+    "cell_mean_return": 0.04782605810710446,
+    "beat_index_pct": 30.0,
+    "beat_sixty_forty_pct": 40.0
+  },
+  {
+    "market": "us",
+    "period": "2024H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.8148724697500365,
+    "cell_mean_return": 0.06567143693987335,
+    "beat_index_pct": 50.0,
+    "beat_sixty_forty_pct": 80.0
+  },
+  {
+    "market": "us",
+    "period": "2025H1",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.5247862535439861,
+    "cell_mean_return": 0.08076242201360936,
+    "beat_index_pct": 30.0,
+    "beat_sixty_forty_pct": 30.0
+  },
+  {
+    "market": "us",
+    "period": "2025H1",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 0.6491927999693263,
+    "cell_mean_return": 0.08631869918602546,
+    "beat_index_pct": 50.0,
+    "beat_sixty_forty_pct": 70.0
+  },
+  {
+    "market": "us",
+    "period": "2025H2",
+    "prompt_type": "advanced",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.8837262435741073,
+    "cell_mean_return": 0.12530651174345975,
+    "beat_index_pct": 70.0,
+    "beat_sixty_forty_pct": 60.0
+  },
+  {
+    "market": "us",
+    "period": "2025H2",
+    "prompt_type": "retail",
+    "valid_run_count": 10.0,
+    "cell_mean_sharpe": 1.7750177851182702,
+    "cell_mean_return": 0.10820056014286283,
+    "beat_index_pct": 60.0,
+    "beat_sixty_forty_pct": 60.0
+  }
+]

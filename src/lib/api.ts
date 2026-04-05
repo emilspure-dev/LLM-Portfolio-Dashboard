@@ -1,6 +1,6 @@
 /**
  * Point this at a FastAPI (or other) service that reads SQLite / Postgres.
- * In Lovable: set VITE_API_URL in project env, or use Lovable Cloud server routes.
+ * Set VITE_API_URL in `.env` / hosting env (e.g. Vercel project settings).
  */
 const base = () => (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
