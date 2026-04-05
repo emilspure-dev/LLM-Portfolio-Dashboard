@@ -142,9 +142,7 @@ export function FactorStyleTab({ data, marketFilter }: FactorStyleTabProps) {
           <InsightCard
             type="warn"
             title="Factor-style request failed"
-            body={`${data.factor_style_error}
-
-The dashboard calls ${getApiBaseUrl()}/summary/factor-style. If you see 404, deploy the backend that defines GET /api/summary/factor-style, or set VITE_API_BASE_URL / NEXT_PUBLIC_API_BASE_URL to that server. If the request succeeds but this tab is still empty, the SQLite view vw_factor_exposure_daily has no rows for this experiment (rebuild the analytics DB / ETL).`}
+            body={`${data.factor_style_error} The dashboard calls ${getApiBaseUrl()}/summary/factor-style. Status 404 usually means the deployed API does not include this route yet—deploy the current backend or point VITE_API_BASE_URL / NEXT_PUBLIC_API_BASE_URL at a server that has GET /api/summary/factor-style.`}
           />
         </div>
       ) : factorBarChartData.length > 0 ? (
