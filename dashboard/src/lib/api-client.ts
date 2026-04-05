@@ -16,10 +16,14 @@ import type {
 
 type QueryValue = string | number | boolean | null | undefined;
 
+function isAbsoluteUrl(value: string) {
+  return /^https?:\/\//i.test(value);
+}
+
 function normalizeApiRoot(rawBaseUrl: string | undefined): string {
   const trimmed = rawBaseUrl?.trim();
   if (!trimmed) {
-    return "http://localhost:3001/api";
+    return "/api";
   }
 
   const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
@@ -32,9 +36,22 @@ const API_ROOT = normalizeApiRoot(
   import.meta.env.NEXT_PUBLIC_API_BASE_URL ?? import.meta.env.VITE_API_BASE_URL
 );
 
+function resolveApiRoot() {
+  if (isAbsoluteUrl(API_ROOT)) {
+    return API_ROOT;
+  }
+
+  if (typeof window !== "undefined") {
+    const normalizedRoot = API_ROOT.startsWith("/") ? API_ROOT : `/${API_ROOT}`;
+    return `${window.location.origin}${normalizedRoot}`;
+  }
+
+  return API_ROOT;
+}
+
 function buildUrl(path: string, query?: Record<string, QueryValue>) {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const url = new URL(`${API_ROOT}${normalizedPath}`);
+  const url = new URL(`${resolveApiRoot()}${normalizedPath}`);
 
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -50,12 +67,21 @@ function buildUrl(path: string, query?: Record<string, QueryValue>) {
 }
 
 async function requestJson<T>(path: string, query?: Record<string, QueryValue>): Promise<T> {
-  const response = await fetch(buildUrl(path, query), {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
-  });
+  const requestUrl = buildUrl(path, query);
+  let response: Response;
+
+  try {
+    response = await fetch(requestUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+  } catch {
+    throw new Error(
+      `Unable to reach API at ${requestUrl}. Start the backend API or set NEXT_PUBLIC_API_BASE_URL.`
+    );
+  }
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
@@ -76,7 +102,7 @@ async function requestJson<T>(path: string, query?: Record<string, QueryValue>):
 }
 
 export function getApiBaseUrl() {
-  return API_ROOT;
+  return resolveApiRoot();
 }
 
 export function getHealth() {
