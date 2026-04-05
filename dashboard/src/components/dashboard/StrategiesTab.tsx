@@ -469,12 +469,22 @@ export function StrategiesTab({ data, runs, marketFilter }: StrategiesTabProps) 
       </Panel>
 
       <SectionHeader>Factor tilts (path-weighted average)</SectionHeader>
-      {factorAgg.length === 0 ? (
+      {data.factor_style_error ? (
+        <Panel>
+          <p className="text-[12px] leading-5 text-[#8b5348]">
+            Factor-style API error: {data.factor_style_error}
+          </p>
+          <p className="mt-2 text-[12px] leading-5 text-[#9b938b]">
+            Open the <strong>Factor style</strong> tab for full troubleshooting notes (backend deploy,
+            API base URL, DB view).
+          </p>
+        </Panel>
+      ) : factorAgg.length === 0 ? (
         <Panel>
           <p className="text-[12px] leading-5 text-[#9b938b]">
-            No factor-style rows for this scope. The Factor style tab uses the same API; ensure{" "}
-            <code className="rounded bg-[rgba(0,0,0,0.04)] px-1">/api/summary/factor-style</code> is
-            available and populated.
+            No factor-style rows for this scope (API returned 200 with an empty list). The view{" "}
+            <code className="rounded bg-[rgba(0,0,0,0.04)] px-1">vw_factor_exposure_daily</code> has
+            no rows for this experiment—rebuild or reload analytics data, or try another experiment.
           </p>
         </Panel>
       ) : (
