@@ -85,7 +85,7 @@ function computeBehavior(runs: RunRow[]): BehaviorRow[] {
 function weightedAverage(
   rows: StrategySummaryApiRow[],
   selector: (row: StrategySummaryApiRow) => number | null
-) {
+): number | null {
   let weightedSum = 0;
   let weightTotal = 0;
 
@@ -100,7 +100,7 @@ function weightedAverage(
     weightTotal += weight;
   }
 
-  return weightTotal > 0 ? weightedSum / weightTotal : Number.NaN;
+  return weightTotal > 0 ? weightedSum / weightTotal : null;
 }
 
 function sortSummaryRows(rows: StrategyRow[]) {
@@ -112,7 +112,16 @@ function sortSummaryRows(rows: StrategyRow[]) {
       return leftIsGpt ? -1 : 1;
     }
 
-    return (right.mean_sharpe ?? 0) - (left.mean_sharpe ?? 0);
+    const lb =
+      left.mean_sharpe != null && Number.isFinite(left.mean_sharpe);
+    const rb =
+      right.mean_sharpe != null && Number.isFinite(right.mean_sharpe);
+    if (lb && rb) {
+      return right.mean_sharpe! - left.mean_sharpe!;
+    }
+    if (lb) return -1;
+    if (rb) return 1;
+    return 0;
   });
 }
 

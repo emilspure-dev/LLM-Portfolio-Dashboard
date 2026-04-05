@@ -8,6 +8,7 @@ import {
   DataQualityTab,
   DrawdownsTab,
   EquityCurvesTab,
+  FactorStyleTab,
   PortfoliosTab,
   RunExplorerTab,
   SharpeReturnsTab,
@@ -24,6 +25,7 @@ import type { EvaluationData, RunRow } from "@/lib/types";
 
 const TAB_NAMES = [
   "Overview",
+  "Factor style",
   "Sharpe & Returns",
   "Equity Curves",
   "Portfolios",
@@ -253,66 +255,67 @@ export default function Index() {
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-6">
-                {activeTab === 0 && (
-                  <OverviewTab data={visibleData} runs={filteredRuns} marketFilter={marketFilter} />
-                )}
+                {activeTab === 0 && <OverviewTab data={visibleData} runs={filteredRuns} />}
                 {activeTab === 1 && (
+                  <FactorStyleTab data={visibleData} marketFilter={marketFilter} />
+                )}
+                {activeTab === 2 && (
                   <SharpeReturnsTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 2 && (
+                {activeTab === 3 && (
                   <EquityCurvesTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 3 && (
+                {activeTab === 4 && (
                   <PortfoliosTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 4 && (
+                {activeTab === 5 && (
                   <RunExplorerTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 5 && (
+                {activeTab === 6 && (
                   <ByMarketTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 6 && (
+                {activeTab === 7 && (
                   <StatisticalTestsTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 7 && (
+                {activeTab === 8 && (
                   <BehaviorTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 8 && (
+                {activeTab === 9 && (
                   <DrawdownsTab
                     data={visibleData}
                     runs={filteredRuns}
                     marketFilter={marketFilter}
                   />
                 )}
-                {activeTab === 9 && (
+                {activeTab === 10 && (
                   <DataQualityTab
                     data={visibleData}
                     runs={filteredRuns}

@@ -12,15 +12,15 @@ export interface StrategyRow {
   Strategy: string;
   strategy_key: string;
   source_type: string;
-  mean_sharpe: number;
-  net_return_mean: number;
+  mean_sharpe: number | null;
+  net_return_mean: number | null;
   n_observations: number;
-  pct_runs_beating_index_sharpe: number;
-  pct_runs_beating_sixty_forty_sharpe: number;
-  mean_annualized_return: number;
-  mean_volatility: number;
-  mean_historical_var_95: number;
-  mean_turnover: number;
+  pct_runs_beating_index_sharpe: number | null;
+  pct_runs_beating_sixty_forty_sharpe: number | null;
+  mean_annualized_return: number | null;
+  mean_volatility: number | null;
+  mean_historical_var_95: number | null;
+  mean_turnover: number | null;
   markets: string[];
   prompt_types: string[];
 }

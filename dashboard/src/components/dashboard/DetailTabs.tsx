@@ -294,12 +294,91 @@ function uniqueStrings(values: Array<string | null | undefined>) {
   );
 }
 
+function normalizePathId(value: string | number | null | undefined): string | null {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  return String(value);
+}
+
+function findRunForPortfolioPath(
+  runs: RunRow[],
+  pathId: string,
+  market: string,
+  strategyKey: string
+): RunRow | null {
+  if (!pathId) {
+    return null;
+  }
+
+  const matchScoped = runs.find(
+    (r) =>
+      normalizePathId(r.path_id) === pathId &&
+      r.market === market &&
+      r.strategy_key === strategyKey
+  );
+  if (matchScoped) {
+    return matchScoped;
+  }
+
+  return runs.find((r) => normalizePathId(r.path_id) === pathId) ?? null;
+}
+
+function optionalRunStringField(run: RunRow, keys: string[]): string | null {
+  const row = run as Record<string, unknown>;
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+const KNOWN_MARKET_ORDER = ["us", "germany", "japan"] as const;
+
+function collectAllMarkets(data: EvaluationData): string[] {
+  const set = new Set<string>();
+  for (const m of data.filters?.markets ?? []) {
+    if (m) set.add(m);
+  }
+  for (const m of data.meta?.available_markets ?? []) {
+    if (m) set.add(m);
+  }
+  for (const run of data.runs ?? []) {
+    if (run.market) set.add(run.market);
+  }
+  for (const row of data.summary_rows ?? []) {
+    if (row.market) set.add(row.market);
+  }
+  for (const row of data.factor_style_rows ?? []) {
+    if (row.market) set.add(row.market);
+  }
+  for (const p of data.periods ?? []) {
+    if (p.market) set.add(p.market);
+  }
+
+  const list = Array.from(set);
+  return list.sort((a, b) => {
+    const ia = (KNOWN_MARKET_ORDER as readonly string[]).indexOf(a);
+    const ib = (KNOWN_MARKET_ORDER as readonly string[]).indexOf(b);
+    const aKnown = ia !== -1;
+    const bKnown = ib !== -1;
+    if (aKnown && bKnown) return ia - ib;
+    if (aKnown) return -1;
+    if (bKnown) return 1;
+    return a.localeCompare(b);
+  });
+}
+
 function getMarketOptions(data: EvaluationData, marketFilter: string) {
-  return marketFilter !== "All"
-    ? [marketFilter]
-    : data.filters.markets.length > 0
-      ? data.filters.markets
-      : data.meta.available_markets;
+  const all = collectAllMarkets(data);
+  if (all.length > 0) {
+    return all;
+  }
+  return marketFilter !== "All" ? [marketFilter] : [];
 }
 
 function strategyOrder(key: string) {
@@ -353,10 +432,16 @@ function useDailySelection(data: EvaluationData, marketFilter: string): Selectio
   const [selectedStrategyKey, setSelectedStrategyKey] = useState("");
 
   useEffect(() => {
-    setSelectedMarket((current) =>
-      marketOptions.includes(current) ? current : marketOptions[0] ?? ""
-    );
-  }, [marketOptions]);
+    setSelectedMarket((current) => {
+      if (marketFilter !== "All" && marketOptions.includes(marketFilter)) {
+        return marketFilter;
+      }
+      if (marketOptions.includes(current)) {
+        return current;
+      }
+      return marketOptions[0] ?? "";
+    });
+  }, [marketOptions, marketFilter]);
 
   const strategyOptions = useMemo(
     () => getStrategyOptions(data, selectedMarket),
@@ -516,6 +601,92 @@ function aggregateRegimeRows(rows: RegimeRow[]) {
     }));
 }
 
+function modeString(labels: string[]): string | null {
+  if (!labels.length) {
+    return null;
+  }
+
+  const counts = new Map<string, number>();
+  for (const label of labels) {
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+
+  let best = labels[0];
+  let bestCount = 0;
+  for (const [label, count] of counts) {
+    if (count > bestCount) {
+      best = label;
+      bestCount = count;
+    }
+  }
+
+  return best;
+}
+
+/** Same shape as aggregateRegimeRows; used when vw_regime_daily has no rows but vw_strategy_daily does (e.g. GPT paths). */
+function aggregateStrategyDailyForDrawdown(rows: StrategyDailyRow[]) {
+  const grouped = new Map<
+    string,
+    {
+      date: string;
+      drawdowns: number[];
+      dailyReturns: number[];
+      regimeLabels: string[];
+    }
+  >();
+
+  for (const row of rows) {
+    const bucket =
+      grouped.get(row.date) ??
+      {
+        date: row.date,
+        drawdowns: [],
+        dailyReturns: [],
+        regimeLabels: [],
+      };
+
+    if (row.drawdown != null) {
+      bucket.drawdowns.push(row.drawdown);
+    }
+    if (row.daily_return != null) {
+      bucket.dailyReturns.push(row.daily_return);
+    }
+    const label = row.market_regime_label?.trim();
+    if (label) {
+      bucket.regimeLabels.push(label);
+    }
+    grouped.set(row.date, bucket);
+  }
+
+  const sorted = Array.from(grouped.values()).sort((left, right) =>
+    left.date.localeCompare(right.date)
+  );
+
+  let prevConsensus: string | null = null;
+  return sorted.map((bucket) => {
+    const marketRegimeLabel = modeString(bucket.regimeLabels);
+    let regimeChangeRate = 0;
+    if (
+      prevConsensus != null &&
+      marketRegimeLabel != null &&
+      prevConsensus !== marketRegimeLabel
+    ) {
+      regimeChangeRate = 1;
+    }
+    if (marketRegimeLabel != null) {
+      prevConsensus = marketRegimeLabel;
+    }
+
+    return {
+      date: bucket.date,
+      drawdown: mean(bucket.drawdowns),
+      dailyReturn: mean(bucket.dailyReturns),
+      regimeChangeRate,
+      marketRegimeLabel,
+    };
+  });
+}
+
 function buildStrategyStats(runs: RunRow[]) {
   const groups = new Map<string, { strategy: string; values: RunRow[] }>();
 
@@ -667,7 +838,9 @@ export function SharpeReturnsTab({ data }: BaseTabProps) {
               <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
               <Tooltip
                 {...tooltipStyle}
-                formatter={(value: number) => value.toFixed(2)}
+                formatter={(value: number | undefined) =>
+                  value != null && Number.isFinite(value) ? value.toFixed(2) : "—"
+                }
                 labelFormatter={(value) => formatStrategyLabel(String(value))}
               />
               <ReferenceLine y={0} stroke="rgba(192, 180, 170, 0.9)" strokeDasharray="3 6" />
@@ -727,7 +900,12 @@ export function SharpeReturnsTab({ data }: BaseTabProps) {
                   <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} />
                   {row.name}
                 </span>
-                <span>Sharpe {row.meanSharpe?.toFixed(2) ?? "—"}</span>
+                <span>
+                  Sharpe{" "}
+                  {row.meanSharpe != null && Number.isFinite(row.meanSharpe)
+                    ? row.meanSharpe.toFixed(2)
+                    : "—"}
+                </span>
               </div>
             ))}
           </div>
@@ -753,7 +931,9 @@ export function SharpeReturnsTab({ data }: BaseTabProps) {
               <tr key={row.strategy_key} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
                 <td className="px-3 py-2.5 font-medium text-[#5e5955]">{row.Strategy}</td>
                 <td className="px-3 py-2.5 text-right font-medium tabular-nums" style={{ color: sharpeColor(row.mean_sharpe) }}>
-                  {row.mean_sharpe?.toFixed(2) ?? "—"}
+                  {row.mean_sharpe != null && Number.isFinite(row.mean_sharpe)
+                    ? row.mean_sharpe.toFixed(2)
+                    : "—"}
                 </td>
                 <td className="px-3 py-2.5 text-right text-[#9f978f]">{formatPctFromRatio(row.mean_annualized_return, 1)}</td>
                 <td className="px-3 py-2.5 text-right text-[#9f978f]">{formatPctFromRatio(row.mean_volatility, 1)}</td>
@@ -1028,7 +1208,8 @@ export function EquityCurvesTab({ data, marketFilter }: BaseTabProps) {
   );
 }
 
-export function PortfoliosTab({ data, runs, marketFilter }: BaseTabProps) {
+export function PortfoliosTab({ data, runs: _sidebarFilteredRuns, marketFilter }: BaseTabProps) {
+  void _sidebarFilteredRuns;
   const selection = useDailySelection(data, marketFilter);
   const [selectedPathId, setSelectedPathId] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
@@ -1037,24 +1218,30 @@ export function PortfoliosTab({ data, runs, marketFilter }: BaseTabProps) {
   const pathOptions = useMemo(() => {
     const seen = new Map<string, { value: string; label: string }>();
 
-    for (const run of runs) {
-      if (run.market !== selection.selectedMarket || run.strategy_key !== selection.selectedStrategyKey || !run.path_id) {
+    for (const run of data.runs) {
+      if (run.market !== selection.selectedMarket || run.strategy_key !== selection.selectedStrategyKey) {
         continue;
       }
 
-      if (!seen.has(run.path_id)) {
-        const runLabel = run.run_id != null ? `Run ${run.run_id}` : run.trajectory_id ?? run.path_id;
-        seen.set(run.path_id, { value: run.path_id, label: runLabel });
+      const pid = normalizePathId(run.path_id);
+      if (!pid) {
+        continue;
+      }
+
+      if (!seen.has(pid)) {
+        const runLabel =
+          run.run_id != null ? `Run ${run.run_id}` : String(run.trajectory_id ?? pid);
+        seen.set(pid, { value: pid, label: String(runLabel) });
       }
     }
 
     return Array.from(seen.values()).sort((left, right) => left.label.localeCompare(right.label));
-  }, [runs, selection.selectedMarket, selection.selectedStrategyKey]);
+  }, [data.runs, selection.selectedMarket, selection.selectedStrategyKey]);
 
   useEffect(() => {
     setSelectedPathId((current) =>
-      pathOptions.some((option) => option.value === current)
-        ? current
+      pathOptions.some((option) => option.value === String(current))
+        ? String(current)
         : pathOptions[0]?.value ?? ""
     );
   }, [pathOptions]);
@@ -1074,17 +1261,32 @@ export function PortfoliosTab({ data, runs, marketFilter }: BaseTabProps) {
       selectedDate,
       page,
     ],
-    queryFn: () =>
-      getDailyHoldings({
+    queryFn: () => {
+      const pathId = selectedPathId ? String(selectedPathId) : "";
+      const base = {
         experiment_id: data.active_experiment_id,
-        market: selection.selectedMarket,
-        strategy_key: selection.selectedStrategyKey,
-        path_id: selectedPathId || undefined,
         date: selectedDate || undefined,
         page,
         page_size: DEFAULT_PAGE_SIZE,
-      }),
-    enabled: Boolean(selection.selectedMarket && selection.selectedStrategyKey),
+      };
+      if (pathId) {
+        return getDailyHoldings({
+          ...base,
+          path_id: pathId,
+        });
+      }
+
+      return getDailyHoldings({
+        ...base,
+        market: selection.selectedMarket,
+        strategy_key: selection.selectedStrategyKey,
+      });
+    },
+    enabled: Boolean(
+      selection.selectedMarket &&
+        selection.selectedStrategyKey &&
+        (pathOptions.length === 0 || Boolean(selectedPathId))
+    ),
     staleTime: 60_000,
   });
 
@@ -1105,6 +1307,32 @@ export function PortfoliosTab({ data, runs, marketFilter }: BaseTabProps) {
   }, [holdingsQuery.data, selectedDate]);
 
   const holdings = holdingsQuery.data?.items ?? [];
+  const selectedRun = useMemo(
+    () =>
+      findRunForPortfolioPath(
+        data.runs,
+        selectedPathId,
+        selection.selectedMarket,
+        selection.selectedStrategyKey
+      ),
+    [data.runs, selectedPathId, selection.selectedMarket, selection.selectedStrategyKey]
+  );
+
+  const promptSnippet = useMemo(() => {
+    if (!selectedRun) {
+      return null;
+    }
+
+    return optionalRunStringField(selectedRun, [
+      "user_prompt",
+      "system_prompt",
+      "prompt_body",
+      "prompt_text",
+      "prompt",
+      "messages",
+    ]);
+  }, [selectedRun]);
+
   const selectedStrategy = selection.strategyOptions.find(
     (option) => option.strategy_key === selection.selectedStrategyKey
   );
@@ -1166,12 +1394,61 @@ export function PortfoliosTab({ data, runs, marketFilter }: BaseTabProps) {
         </div>
       </Panel>
 
+      {selectedPathId && (
+        <Panel>
+          <p className="dashboard-label mb-3">Run and prompt context</p>
+          {selectedRun ? (
+            <>
+              <div className="grid gap-2 text-[11px] leading-5 text-[#6f6863] md:grid-cols-2">
+                <p>
+                  <span className="text-[#b4aca5]">Prompt type</span>{" "}
+                  <span className="font-medium text-[#5e5955]">{selectedRun.prompt_type ?? "—"}</span>
+                </p>
+                <p>
+                  <span className="text-[#b4aca5]">Model</span>{" "}
+                  <span className="font-medium text-[#5e5955]">{selectedRun.model ?? "—"}</span>
+                </p>
+                <p>
+                  <span className="text-[#b4aca5]">Period</span>{" "}
+                  <span className="font-medium text-[#5e5955]">{selectedRun.period ?? "—"}</span>
+                </p>
+                <p>
+                  <span className="text-[#b4aca5]">Run ID</span>{" "}
+                  <span className="font-medium text-[#5e5955]">
+                    {selectedRun.run_id != null ? String(selectedRun.run_id) : "—"}
+                  </span>
+                </p>
+              </div>
+              {promptSnippet ? (
+                <div className="mt-4 rounded-[14px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.72)] p-3">
+                  <p className="dashboard-label mb-2">Prompt excerpt (from run record)</p>
+                  <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-[#5e5955]">
+                    {promptSnippet.length > 4000 ? `${promptSnippet.slice(0, 4000)}…` : promptSnippet}
+                  </pre>
+                </div>
+              ) : (
+                <p className="mt-3 text-[10px] leading-5 text-[#aaa29a]">
+                  Full prompt text is not in the run-results payload; it lives in the experiment bundle (
+                  <code className="rounded bg-[rgba(0,0,0,0.04)] px-1">llm_runs/*.json</code>) on the server.
+                  Holdings below load by <strong>path_id</strong> so retail/advanced portfolios match the equity charts.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-[11px] leading-5 text-[#9d958d]">
+              Path <span className="font-mono text-[#5e5955]">{selectedPathId}</span> — no matching run in the
+              current filtered run list; holdings still load by path_id only.
+            </p>
+          )}
+        </Panel>
+      )}
+
       {holdingsQuery.isLoading ? (
         <LoadingState title="Loading holdings snapshot" />
       ) : holdings.length === 0 ? (
         <EmptyState
           title="No holdings available"
-          body="There is no holdings snapshot for the current strategy / market / path selection. Try a benchmark strategy or switch to a different run path."
+          body="There is no row in daily_holdings for this path. Holdings are loaded by path_id (same as Equity curves). If this persists, the DB may not export holdings for LLM paths yet—check daily_holdings / vw_holdings_daily for this experiment. You can still verify prompt type and model above when a run matches the path."
         />
       ) : (
         <>
@@ -1877,7 +2154,11 @@ export function ByMarketTab({ data, marketFilter }: BaseTabProps) {
                     const row = perMarketSummary
                       .find((entry) => entry.market === market)
                       ?.summary.find((summaryRow) => summaryRow.strategy_key === strategyKey);
-                    const sharpe = row?.mean_sharpe ?? null;
+                    const sharpeRaw = row?.mean_sharpe;
+                    const sharpe =
+                      sharpeRaw != null && Number.isFinite(sharpeRaw)
+                        ? sharpeRaw
+                        : null;
                     const background =
                       sharpe == null
                         ? "transparent"
@@ -2137,30 +2418,50 @@ export function BehaviorTab({ data }: BaseTabProps) {
   );
 }
 
+type DrawdownSeriesPayload =
+  | { source: "vw_regime_daily"; rows: RegimeRow[] }
+  | { source: "vw_strategy_daily"; rows: StrategyDailyRow[] };
+
 export function DrawdownsTab({ data, marketFilter }: BaseTabProps) {
   const selection = useDailySelection(data, marketFilter);
 
-  const regimesQuery = useQuery({
+  const drawdownSeriesQuery = useQuery({
     queryKey: [
-      "drawdown-regimes",
+      "drawdown-series",
       data.active_experiment_id,
       selection.selectedMarket,
       selection.selectedStrategyKey,
     ],
-    queryFn: () =>
-      getRegimeChart({
+    queryFn: async (): Promise<DrawdownSeriesPayload> => {
+      const base = {
         experiment_id: data.active_experiment_id,
         market: selection.selectedMarket,
         strategy_key: selection.selectedStrategyKey,
-      }),
+      };
+      const regimes = await getRegimeChart(base);
+      if (regimes.length > 0) {
+        return { source: "vw_regime_daily", rows: regimes };
+      }
+      const equity = await getEquityChart(base);
+      return { source: "vw_strategy_daily", rows: equity };
+    },
     enabled: Boolean(selection.selectedMarket && selection.selectedStrategyKey),
     staleTime: 60_000,
   });
 
-  const chartRows = useMemo(
-    () => aggregateRegimeRows(regimesQuery.data ?? []),
-    [regimesQuery.data]
-  );
+  const chartRows = useMemo(() => {
+    const payload = drawdownSeriesQuery.data;
+    if (!payload) {
+      return [];
+    }
+    if (payload.source === "vw_regime_daily") {
+      return aggregateRegimeRows(payload.rows);
+    }
+    return aggregateStrategyDailyForDrawdown(payload.rows);
+  }, [drawdownSeriesQuery.data]);
+
+  const rawRowCount = drawdownSeriesQuery.data?.rows.length ?? 0;
+  const dataSourceLabel = drawdownSeriesQuery.data?.source ?? "—";
 
   const maxDrawdown = chartRows.reduce<number | null>((worst, row) => {
     if (row.drawdown == null) {
@@ -2212,25 +2513,25 @@ export function DrawdownsTab({ data, marketFilter }: BaseTabProps) {
           />
           <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
             <p className="dashboard-label">Source</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">`vw_regime_daily`</p>
+            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">{dataSourceLabel}</p>
             <p className="mt-1 text-[11px] text-[#9b938b]">
-              Average path drawdowns and regime switches.
+              Regime view when present; otherwise daily strategy series (same as Equity Curves), averaged across paths.
             </p>
           </div>
           <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
             <p className="dashboard-label">Rows</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">{regimesQuery.data?.length ?? 0}</p>
+            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">{rawRowCount}</p>
             <p className="mt-1 text-[11px] text-[#9b938b]">Loaded from the live view</p>
           </div>
         </div>
       </Panel>
 
-      {regimesQuery.isLoading ? (
+      {drawdownSeriesQuery.isLoading ? (
         <LoadingState title="Loading drawdown series" />
       ) : chartRows.length === 0 ? (
         <EmptyState
           title="No drawdown series for this selection"
-          body="The live database currently exposes drawdown / regime time series only for the benchmark paths. Switch to a benchmark strategy to inspect drawdowns."
+          body="There are no daily rows in vw_regime_daily or vw_strategy_daily for this market and strategy. Try another strategy or confirm the experiment has equity paths loaded."
         />
       ) : (
         <>
@@ -2456,3 +2757,5 @@ export function DataQualityTab({ data, marketFilter }: BaseTabProps) {
     </div>
   );
 }
+
+export { FactorStyleTab } from "./FactorStyleTab";
