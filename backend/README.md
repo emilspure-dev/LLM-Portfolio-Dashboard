@@ -36,6 +36,22 @@ npm run dev
 - CORS is restricted to the origins listed in `DASHBOARD_ALLOWED_ORIGINS`.
 - The holdings endpoint currently preserves the intended `vw_holdings_daily` response shape by selecting from `daily_holdings` with explicit aliases, because the live `vw_holdings_daily` view references non-existent unqualified date columns in the current database build.
 
+### Updating the API after pulling new routes (e.g. `/api/summary/factor-style`)
+
+If the Vercel dashboard proxies to this server but you see `No route matches GET /api/summary/factor-style`, the running Node process is an **older build**. On the VPS:
+
+```bash
+cd /path/to/LLM-Portfolio-Dashboard
+git pull origin main
+cd backend
+npm ci
+# however you run prod, e.g.:
+sudo systemctl restart thesis-dashboard-api
+# or: pm2 restart thesis-dashboard-api
+```
+
+Add **`https://llm-portfolio-dashboard.vercel.app`** (your production dashboard origin) to **`DASHBOARD_ALLOWED_ORIGINS`** if you call the API **directly** from the browser with `VITE_API_BASE_URL`. When using the **Vercel `/api` proxy** (`dashboard/api/[...slug].js`), the browser talks only to `vercel.app`; the proxy server-to-server does not send an `Origin` that triggers your CORS allow-list the same way—keep the proxy as the primary path for production.
+
 ## Example curl requests
 
 Replace `API_BASE_URL` if your API is not running on `http://127.0.0.1:3001`.

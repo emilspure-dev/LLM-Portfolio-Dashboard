@@ -1,16 +1,6 @@
 {
   "rewrites": [
-    {
-      "source": "/api",
-      "destination": "http://204.168.227.31/api"
-    },
-    {
-      "source": "/api/:path*",
-      "destination": "http://204.168.227.31/api/:path*"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "handle": "filesystem" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
