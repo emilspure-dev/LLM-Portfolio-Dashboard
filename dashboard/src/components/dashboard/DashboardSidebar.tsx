@@ -47,20 +47,29 @@ export function DashboardSidebar({
       : 0;
 
   return (
-    <aside className="w-64 shrink-0 border-r border-sidebar-border bg-sidebar p-4 flex flex-col gap-4 overflow-y-auto">
-      <div className="flex items-center gap-2">
-        <BarChart3 className="h-5 w-5 text-primary" />
-        <span className="text-sm font-bold text-foreground">AI Portfolio Eval</span>
+    <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto border-b border-white/45 px-4 py-4 lg:w-[280px] lg:border-b-0 lg:border-r lg:px-5 lg:py-6">
+      <div className="dashboard-panel-strong rounded-[20px] p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[rgba(201,141,134,0.14)]">
+            <BarChart3 className="h-4 w-4 text-[#c0837c]" />
+          </div>
+          <div>
+            <p className="dashboard-label">Workspace</p>
+            <span className="mt-1 block text-[15px] font-semibold tracking-[-0.03em] text-[#5f5955]">
+              AI Portfolio Eval
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* File upload */}
-      <div>
-        <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
+      <div className="dashboard-panel rounded-[18px] p-4">
+        <p className="dashboard-label mb-3">
           Data Source
         </p>
-        <label className="flex items-center gap-2 cursor-pointer rounded-md border border-dashed border-border p-3 hover:border-primary transition-colors">
-          <Upload className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">
+        <label className="flex cursor-pointer items-center gap-3 rounded-[14px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.72)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] transition-colors hover:bg-[rgba(255,255,255,0.9)]">
+          <Upload className="h-4 w-4 text-[#b39a91]" />
+          <span className="text-[12px] font-medium text-[#8f8780]">
             {data ? "Replace file" : "Upload .xlsx"}
           </span>
           <input
@@ -74,14 +83,14 @@ export function DashboardSidebar({
 
       {/* Market filter */}
       {data && markets.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
+        <div className="dashboard-panel rounded-[18px] p-4">
+          <p className="dashboard-label mb-3">
             Market filter
           </p>
           <select
             value={marketFilter}
             onChange={(e) => onMarketFilterChange(e.target.value)}
-            className="w-full rounded-md border border-border bg-secondary px-2 py-1.5 text-xs text-foreground"
+            className="w-full rounded-[14px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-2.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
           >
             <option value="All">All</option>
             {markets.sort().map((m) => (
@@ -95,48 +104,53 @@ export function DashboardSidebar({
 
       {/* Stats badges */}
       {data && (
-        <div className="text-[10px] text-muted-foreground space-y-0.5 border border-border rounded-md p-3">
-          <p>
-            <span className="font-semibold text-foreground">{runs.length}</span> runs
-          </p>
-          <p>
-            <span className="font-semibold text-foreground">{markets.length}</span> markets
-          </p>
-          <p>
-            <span className="font-semibold text-foreground">{periods.length}</span> periods
-            {periods.length > 0 && (
-              <span className="ml-1">
-                ({periods[0]} → {periods[periods.length - 1]})
-              </span>
-            )}
-          </p>
-          {nTickers > 0 && (
+        <div className="dashboard-panel rounded-[18px] p-4">
+          <p className="dashboard-label mb-3">Dataset snapshot</p>
+          <div className="space-y-2 text-[11px] text-[#9b938b]">
             <p>
-              <span className="font-semibold text-foreground">{nTickers}</span> unique tickers
+              <span className="font-semibold text-[#645e5a]">{runs.length}</span> runs
             </p>
-          )}
+            <p>
+              <span className="font-semibold text-[#645e5a]">{markets.length}</span> markets
+            </p>
+            <p>
+              <span className="font-semibold text-[#645e5a]">{periods.length}</span> periods
+              {periods.length > 0 && (
+                <span className="ml-1">
+                  ({periods[0]} → {periods[periods.length - 1]})
+                </span>
+              )}
+            </p>
+            {nTickers > 0 && (
+              <p>
+                <span className="font-semibold text-[#645e5a]">{nTickers}</span> unique tickers
+              </p>
+            )}
+          </div>
         </div>
       )}
 
       {data && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-xs"
-          onClick={onClear}
-        >
-          <X className="h-3 w-3 mr-1" />
-          Clear data
-        </Button>
+        <div className="dashboard-panel rounded-[18px] p-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10 w-full rounded-full border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.7)] text-[11px] font-semibold text-[#6e6762] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] hover:bg-white hover:text-[#5d5754]"
+            onClick={onClear}
+          >
+            <X className="mr-1 h-3 w-3" />
+            Clear data
+          </Button>
+        </div>
       )}
 
       {/* Thesis scope */}
-      <div className="mt-auto pt-4 border-t border-sidebar-border">
-        <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-1">
+      <div className="dashboard-panel mt-auto rounded-[18px] p-4">
+        <p className="dashboard-label mb-3">
           Thesis scope
         </p>
-        <div className="text-[10px] text-muted-foreground leading-relaxed space-y-0.5">
-          <p>Markets: S&P 500, DAX 40, Nikkei 225</p>
+        <div className="space-y-1.5 text-[11px] leading-relaxed text-[#9c948c]">
+          <p>Markets: S&amp;P 500, DAX 40, Nikkei 225</p>
           <p>Prompts: Retail, Advanced</p>
           <p>Benchmarks: MV, 1/N, 60/40, Index, FF</p>
         </div>

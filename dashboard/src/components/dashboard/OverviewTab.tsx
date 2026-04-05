@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  ReferenceLine, Cell,
+  ReferenceLine, Cell, CartesianGrid,
 } from "recharts";
 import { KpiCard } from "./KpiCard";
 import { InsightCard } from "./InsightCard";
@@ -135,18 +135,21 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
 
   const tooltipStyle = {
     contentStyle: {
-      backgroundColor: "#1A2E4A",
-      border: "1px solid #2A3E5A",
-      borderRadius: 6,
-      fontSize: 12,
-      color: "#A0AEBB",
+      backgroundColor: "rgba(255, 255, 252, 0.95)",
+      border: "1px solid rgba(232, 224, 217, 0.96)",
+      borderRadius: 14,
+      boxShadow: "0 12px 24px rgba(121, 101, 79, 0.08)",
+      fontSize: 11,
+      color: "#6f6762",
     },
+    labelStyle: { color: "#9b938b", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" },
+    itemStyle: { color: "#6f6762" },
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4 pb-1">
       {/* Hero KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiCard label="Total Runs" value={String(nRuns)} color={COLORS.accent} sub={`${nMarkets} markets`} />
         <KpiCard label="Periods" value={String(nPeriods)} color={COLORS.cyan} />
         <KpiCard
@@ -195,17 +198,36 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
           <SectionHeader>Beat Rates</SectionHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {beatIndexData.length > 0 && (
-              <div className="rounded-lg border border-border bg-card p-4">
-                <p className="text-xs font-semibold text-muted-foreground mb-3">
+              <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+                <p className="dashboard-label mb-4">
                   % of runs beating market index (Sharpe)
                 </p>
-                <ResponsiveContainer width="100%" height={beatIndexData.length * 44 + 20}>
-                  <BarChart data={beatIndexData} layout="vertical" margin={{ left: 100, right: 40, top: 4, bottom: 4 }}>
-                    <XAxis type="number" domain={[0, 105]} tick={{ fontSize: 10, fill: "#5E7082" }} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: "#A0AEBB" }} width={95} />
+                <ResponsiveContainer width="100%" height={beatIndexData.length * 40 + 36}>
+                  <BarChart data={beatIndexData} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
+                    <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                    <XAxis
+                      type="number"
+                      domain={[0, 105]}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: "#aca49d" }}
+                    />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: "#8f8780" }}
+                      width={100}
+                    />
                     <Tooltip {...tooltipStyle} formatter={(v: number) => `${v}%`} />
-                    <ReferenceLine x={50} stroke="#5E7082" strokeDasharray="4 4" strokeWidth={1} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, fill: "#A0AEBB", formatter: (v: number) => `${v}%` }}>
+                    <ReferenceLine x={50} stroke="rgba(192, 180, 170, 0.9)" strokeDasharray="3 6" strokeWidth={1} />
+                    <Bar
+                      dataKey="value"
+                      radius={[999, 999, 999, 999]}
+                      barSize={12}
+                      label={{ position: "right", fontSize: 10, fill: "#9b938b", formatter: (v: number) => `${v}%` }}
+                    >
                       {beatIndexData.map((d, i) => (
                         <Cell key={i} fill={d.color} />
                       ))}
@@ -216,17 +238,36 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
             )}
 
             {beat60Data.length > 0 && (
-              <div className="rounded-lg border border-border bg-card p-4">
-                <p className="text-xs font-semibold text-muted-foreground mb-3">
+              <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+                <p className="dashboard-label mb-4">
                   % of runs beating 60/40 (Sharpe)
                 </p>
-                <ResponsiveContainer width="100%" height={beat60Data.length * 44 + 20}>
-                  <BarChart data={beat60Data} layout="vertical" margin={{ left: 100, right: 40, top: 4, bottom: 4 }}>
-                    <XAxis type="number" domain={[0, 105]} tick={{ fontSize: 10, fill: "#5E7082" }} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 10, fill: "#A0AEBB" }} width={95} />
+                <ResponsiveContainer width="100%" height={beat60Data.length * 40 + 36}>
+                  <BarChart data={beat60Data} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
+                    <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                    <XAxis
+                      type="number"
+                      domain={[0, 105]}
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: "#aca49d" }}
+                    />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: "#8f8780" }}
+                      width={100}
+                    />
                     <Tooltip {...tooltipStyle} formatter={(v: number) => `${v}%`} />
-                    <ReferenceLine x={50} stroke="#5E7082" strokeDasharray="4 4" strokeWidth={1} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]} label={{ position: "right", fontSize: 10, fill: "#A0AEBB", formatter: (v: number) => `${v}%` }}>
+                    <ReferenceLine x={50} stroke="rgba(192, 180, 170, 0.9)" strokeDasharray="3 6" strokeWidth={1} />
+                    <Bar
+                      dataKey="value"
+                      radius={[999, 999, 999, 999]}
+                      barSize={12}
+                      label={{ position: "right", fontSize: 10, fill: "#9b938b", formatter: (v: number) => `${v}%` }}
+                    >
                       {beat60Data.map((d, i) => (
                         <Cell key={i} fill={d.color} />
                       ))}
@@ -243,39 +284,39 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       {summary.length > 0 && (
         <>
           <SectionHeader>Strategy Summary Table</SectionHeader>
-          <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-xs">
+          <div className="dashboard-panel-strong overflow-hidden rounded-[20px]">
+            <table className="w-full text-[11px]">
               <thead>
-                <tr className="border-b border-border bg-secondary">
-                  <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Strategy</th>
-                  <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Mean Sharpe</th>
-                  <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Beat Index %</th>
-                  <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Beat 60/40 %</th>
-                  <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Mean Return</th>
-                  <th className="text-right px-3 py-2 font-semibold text-muted-foreground">N</th>
+                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Strategy</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Beat Index %</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Beat 60/40 %</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">N</th>
                 </tr>
               </thead>
               <tbody>
                 {summary.map((s, i) => (
-                  <tr key={i} className="border-b border-border last:border-0 hover:bg-secondary/50 transition-colors">
-                    <td className="px-3 py-2 font-medium text-foreground">{s.Strategy}</td>
-                    <td className="px-3 py-2 text-right font-mono" style={{ color: sharpeColor(s.mean_sharpe) }}>
+                  <tr key={i} className="border-b border-[rgba(227,220,214,0.8)] last:border-0 hover:bg-[rgba(214,205,197,0.12)] transition-colors">
+                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{s.Strategy}</td>
+                    <td className="px-3 py-2.5 text-right font-medium tabular-nums" style={{ color: sharpeColor(s.mean_sharpe) }}>
                       {fmt(s.mean_sharpe, 2)}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                    <td className="px-3 py-2.5 text-right font-medium tabular-nums text-[#9f978f]">
                       {s.pct_runs_beating_index_sharpe != null && !isNaN(s.pct_runs_beating_index_sharpe)
                         ? `${s.pct_runs_beating_index_sharpe.toFixed(1)}%`
                         : "—"}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                    <td className="px-3 py-2.5 text-right font-medium tabular-nums text-[#9f978f]">
                       {s.pct_runs_beating_sixty_forty_sharpe != null && !isNaN(s.pct_runs_beating_sixty_forty_sharpe)
                         ? `${s.pct_runs_beating_sixty_forty_sharpe.toFixed(1)}%`
                         : "—"}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                    <td className="px-3 py-2.5 text-right font-medium tabular-nums text-[#9f978f]">
                       {fmt(s.net_return_mean, 4)}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-muted-foreground">
+                    <td className="px-3 py-2.5 text-right font-medium tabular-nums text-[#9f978f]">
                       {s.n_observations}
                     </td>
                   </tr>

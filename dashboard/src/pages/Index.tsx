@@ -41,7 +41,8 @@ export default function Index() {
       : data?.runs ?? [];
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="min-h-screen px-4 py-4 md:px-8 md:py-7">
+      <div className="dashboard-board mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1440px] flex-col overflow-hidden rounded-[28px] lg:h-[calc(100vh-3.5rem)] lg:flex-row">
       <DashboardSidebar
         data={data}
         marketFilter={marketFilter}
@@ -50,72 +51,86 @@ export default function Index() {
         onClear={handleClear}
       />
 
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="shrink-0 border-b border-border px-6 py-4">
-          <h1 className="text-lg font-bold text-foreground">
-            AI Portfolio Evaluation Dashboard
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            Empirical study of AI-based portfolio construction and rebalancing
-            for retail investors
-          </p>
-        </header>
-
-        {!data ? (
-          /* Empty state */
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center space-y-4 animate-fade-in">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-secondary">
-                <Upload className="h-7 w-7 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">
-                  Upload your evaluation package
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Drop your evaluation_package_all_*.xlsx file in the sidebar to
-                  get started.
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Tabs */}
-            <div className="shrink-0 border-b border-border px-6 overflow-x-auto">
-              <div className="flex gap-0">
-                {TAB_NAMES.map((name, i) => (
-                  <button
-                    key={name}
-                    onClick={() => setActiveTab(i)}
-                    className={`px-3 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
-                      activeTab === i
-                        ? "border-primary text-primary"
-                        : "border-transparent text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Tab content */}
-            <div className="flex-1 overflow-y-auto p-6">
-              {activeTab === 0 && (
-                <OverviewTab data={data} runs={filteredRuns} />
-              )}
-              {activeTab > 0 && (
-                <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
-                  {TAB_NAMES[activeTab]} — coming in Phase{" "}
-                  {activeTab <= 2 ? 2 : activeTab <= 4 ? 3 : activeTab <= 8 ? 4 : 5}
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <header className="shrink-0 px-4 pt-4 md:px-6 md:pt-6">
+            <div className="dashboard-panel-strong rounded-[20px] px-4 py-4 md:px-6 md:py-5">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <p className="dashboard-label mb-2">Research Workspace</p>
+                  <h1 className="text-[20px] font-semibold tracking-[-0.04em] text-[#5d5754] md:text-[24px]">
+                    AI Portfolio Evaluation Dashboard
+                  </h1>
+                  <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[#9d958d] md:text-[13px]">
+                    Empirical study of AI-based portfolio construction and rebalancing
+                    for retail investors
+                  </p>
                 </div>
-              )}
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-[#aaa29a]">
+                  <span className="rounded-full border border-white/70 bg-white/40 px-3 py-1.5">
+                    Market: {marketFilter}
+                  </span>
+                  <span className="rounded-full border border-white/70 bg-white/40 px-3 py-1.5">
+                    {data ? `${filteredRuns.length} runs loaded` : "Awaiting file"}
+                  </span>
+                </div>
+              </div>
             </div>
-          </>
-        )}
-      </main>
+          </header>
+
+          {!data ? (
+            <div className="flex-1 px-4 pb-4 pt-4 md:px-6 md:pb-6">
+              <div className="dashboard-panel-strong flex h-full min-h-[360px] items-center justify-center rounded-[22px] p-8">
+                <div className="animate-fade-in space-y-4 text-center">
+                  <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/70 bg-white/50">
+                    <Upload className="h-6 w-6 text-[#b39a91]" />
+                  </div>
+                  <div>
+                    <p className="text-[15px] font-semibold tracking-[-0.03em] text-[#625c58]">
+                      Upload your evaluation package
+                    </p>
+                    <p className="mt-1 text-[12px] leading-5 text-[#a39b93]">
+                      Drop your evaluation_package_all_*.xlsx file in the sidebar to
+                      get started.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="shrink-0 px-4 pb-2 pt-4 md:px-6">
+                <div className="flex flex-wrap gap-2">
+                  {TAB_NAMES.map((name, i) => (
+                    <button
+                      key={name}
+                      onClick={() => setActiveTab(i)}
+                      className={`rounded-full border px-3.5 py-1.5 text-[11px] font-semibold transition-all ${
+                        activeTab === i
+                          ? "border-[#191513] bg-[#191513] text-[#f9f6f1] shadow-[0_8px_18px_rgba(35,28,22,0.18)]"
+                          : "border-[rgba(232,224,217,0.94)] bg-[rgba(255,255,252,0.46)] text-[#b0a8a1] hover:bg-[rgba(255,255,252,0.78)] hover:text-[#7b736e]"
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-6">
+                {activeTab === 0 && (
+                  <OverviewTab data={data} runs={filteredRuns} />
+                )}
+                {activeTab > 0 && (
+                  <div className="dashboard-panel-strong flex h-64 items-center justify-center rounded-[22px] text-sm text-[#9a918a]">
+                    {TAB_NAMES[activeTab]} — coming in Phase{" "}
+                    {activeTab <= 2 ? 2 : activeTab <= 4 ? 3 : activeTab <= 8 ? 4 : 5}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 }

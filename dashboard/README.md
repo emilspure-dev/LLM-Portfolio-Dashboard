@@ -11,7 +11,7 @@ npm run dev
 
 ## Build / Vercel
 
-Root directory for hosting: **`dashboard`** (inside the `web` folder once you rename `lovable-web` → `web`). `vercel.json` includes SPA rewrites.
+Root directory for hosting: **`dashboard`**. The local `vercel.json` includes SPA rewrites.
 
 ## Playwright
 

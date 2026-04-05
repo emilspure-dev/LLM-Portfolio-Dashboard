@@ -1,13 +1,13 @@
 export const COLORS = {
-  accent: "#4C9AFF",
-  green: "#34D399",
-  red: "#F87171",
-  amber: "#FBBF24",
-  cyan: "#22D3EE",
-  purple: "#A78BFA",
-  pink: "#F472B6",
-  orange: "#FB923C",
-  slate: "#5E7082",
+  accent: "#C98D86",
+  green: "#9CC7A4",
+  red: "#D49790",
+  amber: "#D8B692",
+  cyan: "#9CBBC8",
+  purple: "#C0B5D2",
+  pink: "#E1BBC1",
+  orange: "#D7A489",
+  slate: "#B4ACA4",
 } as const;
 
 export const CHART_COLORS = [
