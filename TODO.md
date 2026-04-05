@@ -1,30 +1,29 @@
 # Web dashboard — notes
 
-## Layout
+## App location
 
-- **`dashboard/`** — main Vite + React app (upload `.xlsx`, charts, shadcn UI). Deploy this folder (e.g. Vercel root = `web/dashboard` after you rename `lovable-web` → `web`).
-- **Repo root `src/`** (next to `dashboard/`) — smaller experimental Vite shell; optional.
+All UI code is in **`dashboard/`** (Vite + React, shadcn-style components). Deploy that folder (Vercel root = `lovable-web/dashboard`, or `web/dashboard` if you rename the parent folder).
 
 ## JSON exports
 
-Run from repo root:
+From the **thesis** repo root (`thesis_dashboard/`):
 
 ```powershell
 py export_to_json.py
 ```
 
-Writes to **`web-data/`**. Copy into `dashboard/public/data/` if the SPA should serve bundled JSON.
+Writes to **`web-data/`**. Copy into `dashboard/public/data/` if the SPA should ship bundled JSON.
 
 ## Vercel
 
-Project **root directory**: `lovable-web/dashboard` (or `web/dashboard` after rename). Ensure `VITE_API_URL` is set if you call a backend API.
+Set **`VITE_API_URL`** in project env if the app calls a backend API.
 
 ## Rename folder `lovable-web` → `web`
 
-If Windows reports “access denied”, close Cursor/terminals using that folder, then run:
+If Windows reports “access denied”, close Cursor/terminals using that folder, then:
 
 ```powershell
 Rename-Item -Path "thesis_dashboard\lovable-web" -NewName "web"
 ```
 
-Or use Explorer to rename after closing the workspace.
+Or use Explorer after closing the workspace.

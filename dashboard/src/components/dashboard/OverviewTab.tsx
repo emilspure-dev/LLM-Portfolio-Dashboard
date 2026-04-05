@@ -16,10 +16,6 @@ interface OverviewTabProps {
   runs: RunRow[];
 }
 
-function getReturnVal(r: RunRow): number | null {
-  return r.net_return ?? r.period_return_net ?? r.period_return ?? null;
-}
-
 export function OverviewTab({ data, runs }: OverviewTabProps) {
   const { summary } = data;
   const nRuns = runs.filter((r) => r.valid !== false).length;
