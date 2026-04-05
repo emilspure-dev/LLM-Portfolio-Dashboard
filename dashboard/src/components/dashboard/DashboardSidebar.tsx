@@ -58,8 +58,8 @@ export function DashboardSidebar({
     <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto border-b border-white/45 px-4 py-4 lg:w-[280px] lg:border-b-0 lg:border-r lg:px-5 lg:py-6">
       <div className="dashboard-panel-strong rounded-[20px] p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[rgba(201,141,134,0.14)]">
-            <BarChart3 className="h-4 w-4 text-[#c0837c]" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[hsl(198_26%_42%_/_0.12)]">
+            <BarChart3 className="h-4 w-4 text-[hsl(198_38%_38%)]" />
           </div>
           <div>
             <p className="dashboard-label">Workspace</p>
