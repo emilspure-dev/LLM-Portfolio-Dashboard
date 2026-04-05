@@ -27,7 +27,10 @@ If the API is reverse-proxied under the same domain, `NEXT_PUBLIC_API_BASE_URL=h
 
 ## Build / Vercel
 
-Root directory for hosting: **`dashboard`**. The local `vercel.json` includes SPA rewrites.
+**Root Directory** in the Vercel project must match where `vercel.json` lives:
+
+- **`dashboard`** (recommended): uses `dashboard/vercel.json` and `dashboard/api/[...slug].js`. SPA rewrites skip `/api/*` via a negative lookahead so the serverless proxy is not replaced by `index.html`.
+- **Repository root** (`.`): uses the root `vercel.json` (builds `dashboard/` into `dashboard/dist`) and `api/[...slug].js`. Use this if the project was linked without a subdirectory root—otherwise `/api/*` never hits a function and the UI sees HTML instead of JSON.
 
 Set `NEXT_PUBLIC_API_BASE_URL` in the frontend deployment so the browser knows where to fetch JSON from.
 

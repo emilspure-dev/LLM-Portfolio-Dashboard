@@ -46,6 +46,10 @@ HOST=0.0.0.0
 
 The live database currently points to experiment `20260402_231231`.
 
+## Vercel (dashboard frontend)
+
+In the Vercel project, set **Root Directory** to either **`dashboard`** or leave it at the **repository root**. Each mode has a matching `vercel.json` and `/api` serverless proxy; see [dashboard/README.md](dashboard/README.md). If `/api/health` returns HTML in production, the Root Directory usually does not match where the proxy file was deployed, or the SPA rewrite is still catching `/api/*` (current `vercel.json` uses `/((?!api/).*)` so only non-API paths rewrite to `index.html`).
+
 ## Production wiring
 
 1. Run the backend on the server that can read `/srv/thesis/db/current.sqlite`.

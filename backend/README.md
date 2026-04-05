@@ -50,7 +50,7 @@ sudo systemctl restart thesis-dashboard-api
 # or: pm2 restart thesis-dashboard-api
 ```
 
-Add **`https://llm-portfolio-dashboard.vercel.app`** (your production dashboard origin) to **`DASHBOARD_ALLOWED_ORIGINS`** if you call the API **directly** from the browser with `VITE_API_BASE_URL`. When using the **Vercel `/api` proxy** (`dashboard/api/[...slug].js`), the browser talks only to `vercel.app`; the proxy server-to-server does not send an `Origin` that triggers your CORS allow-list the same way—keep the proxy as the primary path for production.
+Add **`https://llm-portfolio-dashboard.vercel.app`** (your production dashboard origin) to **`DASHBOARD_ALLOWED_ORIGINS`** if you call the API **directly** from the browser with `VITE_API_BASE_URL`. When using the **Vercel `/api` proxy** (`dashboard/api/[...slug].js` or root `api/[...slug].js` depending on Vercel Root Directory), the browser talks only to `vercel.app`; the proxy server-to-server does not send an `Origin` that triggers your CORS allow-list the same way—keep the proxy as the primary path for production.
 
 ## Example curl requests
 
