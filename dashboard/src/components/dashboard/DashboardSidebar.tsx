@@ -203,6 +203,15 @@ export function DashboardSidebar({
           <p>Prompts: Retail, Advanced</p>
           <p>Benchmarks: MV, 1/N, 60/40, Index, FF</p>
         </div>
+        <p className="mt-3 border-t border-[rgba(232,224,217,0.75)] pt-3 text-[10px] leading-4 text-[#c4bcb4]">
+          UI build <span className="font-mono text-[#9a928b]">{__DASHBOARD_BUILD_ID__}</span>
+          {" · "}
+          Latest tabs include <span className="text-[#9a928b]">Strategies</span> and{" "}
+          <span className="text-[#9a928b]">Factor style</span> after Overview. If you do not see them,
+          your browser or host is serving an old bundle—hard-refresh, redeploy, or run{" "}
+          <code className="rounded bg-[rgba(0,0,0,0.04)] px-1">npm run dev</code> from{" "}
+          <code className="rounded bg-[rgba(0,0,0,0.04)] px-1">dashboard/</code>.
+        </p>
       </div>
     </aside>
   );

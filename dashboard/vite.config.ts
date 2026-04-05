@@ -8,8 +8,16 @@ export default defineConfig(({ mode }) => {
   const explicitApiBaseUrl =
     env.NEXT_PUBLIC_API_BASE_URL?.trim() || env.VITE_API_BASE_URL?.trim();
 
+  const dashboardBuildId =
+    env.VITE_DASHBOARD_BUILD_ID?.trim() ||
+    process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
+    "dev";
+
   return {
     envPrefix: ["VITE_", "NEXT_PUBLIC_"],
+    define: {
+      __DASHBOARD_BUILD_ID__: JSON.stringify(dashboardBuildId),
+    },
     server: {
       host: "::",
       port: 8080,
