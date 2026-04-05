@@ -54,6 +54,15 @@ function computeBehavior(runs: RunRow[]): BehaviorRow[] {
     const realizedReturns = sub
       .map((r) => getReturnCol(r))
       .filter((value): value is number => value != null && !Number.isNaN(value));
+    const expectedReturns = sub
+      .map((r) => r.expected_portfolio_return_6m)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const forecastBias = sub
+      .map((r) => r.forecast_bias)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const forecastAbsError = sub
+      .map((r) => r.forecast_abs_error)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
 
     result.push({
       prompt_type: pt,
@@ -61,10 +70,10 @@ function computeBehavior(runs: RunRow[]): BehaviorRow[] {
       mean_effective_n_holdings: mean(effectiveN),
       mean_turnover: mean(turnovers),
       median_turnover: median(turnovers),
-      mean_expected_portfolio_return_6m: 0,
+      mean_expected_portfolio_return_6m: mean(expectedReturns),
       mean_realized_net_return: mean(realizedReturns),
-      mean_forecast_bias: 0,
-      mean_forecast_abs_error: 0,
+      mean_forecast_bias: mean(forecastBias),
+      mean_forecast_abs_error: mean(forecastAbsError),
     });
   }
 

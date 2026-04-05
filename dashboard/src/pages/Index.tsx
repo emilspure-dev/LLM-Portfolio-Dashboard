@@ -2,6 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, RefreshCw, WifiOff } from "lucide-react";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import {
+  BehaviorTab,
+  ByMarketTab,
+  DataQualityTab,
+  DrawdownsTab,
+  EquityCurvesTab,
+  PortfoliosTab,
+  RunExplorerTab,
+  SharpeReturnsTab,
+  StatisticalTestsTab,
+} from "@/components/dashboard/DetailTabs";
 import { OverviewTab } from "@/components/dashboard/OverviewTab";
 import { Button } from "@/components/ui/button";
 import { getHealth, getMetaCurrent } from "@/lib/api-client";
@@ -242,14 +253,69 @@ export default function Index() {
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-6">
-                {activeTab === 0 && (
-                  <OverviewTab data={visibleData} runs={filteredRuns} />
+                {activeTab === 0 && <OverviewTab data={visibleData} runs={filteredRuns} />}
+                {activeTab === 1 && (
+                  <SharpeReturnsTab
+                    data={visibleData}
+                    runs={filteredRuns}
+                    marketFilter={marketFilter}
+                  />
                 )}
-                {activeTab > 0 && (
-                  <div className="dashboard-panel-strong flex h-64 items-center justify-center rounded-[22px] text-sm text-[#9a918a]">
-                    {TAB_NAMES[activeTab]} — existing layout preserved, ready for the
-                    next API-backed phase
-                  </div>
+                {activeTab === 2 && (
+                  <EquityCurvesTab
+                    data={visibleData}
+                    runs={filteredRuns}
+                    marketFilter={marketFilter}
+                  />
+                )}
+                {activeTab === 3 && (
+                  <PortfoliosTab
+                    data={visibleData}
+                    runs={filteredRuns}
+                    marketFilter={marketFilter}
+                  />
+                )}
+                {activeTab === 4 && (
+                  <RunExplorerTab
+                    data={visibleData}
+                    runs={filteredRuns}
+                    marketFilter={marketFilter}
+                  />
+                )}
+                {activeTab === 5 && (
+                  <ByMarketTab
+                    data={visibleData}
+                    runs={filteredRuns}
+                    marketFilter={marketFilter}
+                  />
+                )}
+                {activeTab === 6 && (
+                  <StatisticalTestsTab
+                    data={visibleData}
+                    runs={filteredRuns}
+                    marketFilter={marketFilter}
+                  />
+                )}
+                {activeTab === 7 && (
+                  <BehaviorTab
+                    data={visibleData}
+                    runs={filteredRuns}
+                    marketFilter={marketFilter}
+                  />
+                )}
+                {activeTab === 8 && (
+                  <DrawdownsTab
+                    data={visibleData}
+                    runs={filteredRuns}
+                    marketFilter={marketFilter}
+                  />
+                )}
+                {activeTab === 9 && (
+                  <DataQualityTab
+                    data={visibleData}
+                    runs={filteredRuns}
+                    marketFilter={marketFilter}
+                  />
                 )}
               </div>
             </>
