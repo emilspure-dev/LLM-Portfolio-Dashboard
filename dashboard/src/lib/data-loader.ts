@@ -188,6 +188,13 @@ export function buildStrategySummaryView(
   return sortSummaryRows(summaryRows);
 }
 
+function canonicalStrategyKey(key: string | null | undefined): string {
+  return String(key ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+}
+
 /**
  * When vw_strategy_summary omits mean_sharpe (common for some benchmarks), fill from
  * run-level sharpe_ratio so heatmaps and KPIs match run_results.
@@ -211,8 +218,11 @@ export function backfillSummarySharpeFromRuns(
     if (row.mean_sharpe != null && Number.isFinite(row.mean_sharpe)) {
       return row;
     }
+    const rowCanon = canonicalStrategyKey(row.strategy_key);
     const sharpeVals = runsScoped
-      .filter((r) => (r.strategy_key ?? "") === row.strategy_key)
+      .filter(
+        (r) => canonicalStrategyKey(r.strategy_key) === rowCanon
+      )
       .map((r) => r.sharpe_ratio)
       .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
     if (sharpeVals.length === 0) {
