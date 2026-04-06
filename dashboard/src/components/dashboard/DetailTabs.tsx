@@ -1001,9 +1001,9 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
             <BarChart
               data={sharpeBins}
               margin={{ top: 10, right: 8, left: 4, bottom: 56 }}
-              barCategoryGap="12%"
-              barGap={-24}
-              maxBarSize={44}
+              barCategoryGap={0}
+              barGap={0}
+              barSize={999}
             >
               <CartesianGrid stroke="rgba(200, 192, 184, 0.55)" vertical={false} strokeDasharray="3 6" />
               <XAxis
@@ -1043,15 +1043,15 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
                 name="GPT (Retail)"
                 dataKey="retail"
                 fill={SHARPE_HIST_COLORS.gptRetail}
-                fillOpacity={0.62}
-                radius={[4, 4, 0, 0]}
+                fillOpacity={0.55}
+                radius={0}
               />
               <Bar
                 name="GPT (Advanced)"
                 dataKey="advanced"
                 fill={SHARPE_HIST_COLORS.gptAdvanced}
-                fillOpacity={0.58}
-                radius={[4, 4, 0, 0]}
+                fillOpacity={0.50}
+                radius={0}
               />
               {[...sharpeMeanMarkers]
                 .sort((a, b) => Number(a.dashed) - Number(b.dashed))
