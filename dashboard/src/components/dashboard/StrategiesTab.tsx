@@ -455,24 +455,38 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         </Panel>
       </div>
 
-      {/* Sharpe dispersion — run-level dots per strategy */}
-      {localRuns.some((r) => r.sharpe_ratio != null) && (() => {
-        const strategyOrder = sortedBySharpe.map((s) => s.strategy_key);
-        const dispersionPoints = localRuns
+      {/* Sharpe dispersion — GPT runs only (retail + advanced prompts) */}
+      {(() => {
+        const GPT_DISPERSION_KEYS = ["gpt_advanced", "gpt_retail"] as const;
+        const gptDispersionRuns = localRuns.filter(
+          (r) =>
+            (r.prompt_type === "retail" || r.prompt_type === "advanced") &&
+            r.strategy_key &&
+            (r.strategy_key === "gpt_advanced" || r.strategy_key === "gpt_retail")
+        );
+        const strategyOrder = GPT_DISPERSION_KEYS.filter((k) =>
+          gptDispersionRuns.some((r) => r.strategy_key === k)
+        );
+        if (strategyOrder.length === 0) return null;
+
+        const dispersionPoints = gptDispersionRuns
           .filter((r) => r.sharpe_ratio != null && r.strategy_key)
-          .map((r) => ({
-            strategyIdx: strategyOrder.indexOf(r.strategy_key ?? "") + Math.random() * 0.6 - 0.3,
-            sharpe: r.sharpe_ratio as number,
-            label: formatStrategyLabel(r.strategy ?? r.strategy_key ?? ""),
-            strategyKey: r.strategy_key ?? "",
-          }))
+          .map((r) => {
+            const idx = strategyOrder.indexOf(r.strategy_key as (typeof GPT_DISPERSION_KEYS)[number]);
+            return {
+              strategyIdx: idx + Math.random() * 0.6 - 0.3,
+              sharpe: r.sharpe_ratio as number,
+              label: formatStrategyLabel(r.strategy ?? r.strategy_key ?? ""),
+              strategyKey: r.strategy_key ?? "",
+            };
+          })
           .filter((p) => p.strategyIdx >= 0);
 
         if (dispersionPoints.length < 4) return null;
 
         return (
           <Panel>
-            <p className="dashboard-label mb-4">Sharpe dispersion — all runs</p>
+            <p className="dashboard-label mb-4">Sharpe dispersion — GPT runs (Advanced & Retail)</p>
             <ResponsiveContainer width="100%" height={320}>
               <ScatterChart margin={{ top: 8, right: 12, left: 12, bottom: 36 }}>
                 <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
@@ -483,9 +497,10 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                   ticks={strategyOrder.map((_, i) => i)}
                   tickFormatter={(v: number) => {
                     const idx = Math.round(v);
-                    return idx >= 0 && idx < sortedBySharpe.length
-                      ? formatStrategyLabel(sortedBySharpe[idx].Strategy)
-                      : "";
+                    const key = strategyOrder[idx];
+                    if (!key) return "";
+                    const row = summary.find((s) => s.strategy_key === key);
+                    return row ? formatStrategyLabel(row.Strategy) : formatStrategyLabel(key);
                   }}
                   tick={{ fontSize: 9, fill: "#8f8780" }}
                   axisLine={false}
@@ -532,7 +547,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
               </ScatterChart>
             </ResponsiveContainer>
             <p className="mt-2 text-[10px] text-[#b4aca5]">
-              Each dot is one run. Horizontal spread is jitter for readability. Wide vertical spread = high variance.
+              GPT strategy runs only (retail and advanced prompts). Each dot is one run; horizontal spread is jitter.
             </p>
           </Panel>
         );
