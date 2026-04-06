@@ -1011,31 +1011,23 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
             const markerXs = sharpeMeanMarkers.map((m) => m.value);
             const binMids = sharpeBins.map((b) => b.mid);
             const allXs = [...binMids, ...markerXs];
-            const xMin = Math.min(...allXs) - 0.3;
-            const xMax = Math.max(...allXs) + 0.3;
-            const sortedMarkers = [...sharpeMeanMarkers].sort(
-              (a, b) => a.value - b.value,
-            );
+            const xMin = Math.floor((Math.min(...allXs) - 0.5) * 2) / 2;
+            const xMax = Math.ceil((Math.max(...allXs) + 0.5) * 2) / 2;
             return (
-              <ResponsiveContainer width="100%" height={380}>
+              <ResponsiveContainer width="100%" height={340}>
                 <AreaChart
                   data={sharpeBins}
-                  margin={{ top: 28, right: 12, left: 4, bottom: 24 }}
+                  margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
                 >
                   <CartesianGrid stroke="rgba(200, 192, 184, 0.55)" vertical={false} strokeDasharray="3 6" />
                   <XAxis
                     dataKey="mid"
                     type="number"
                     domain={[xMin, xMax]}
+                    tickFormatter={(v: number) => v.toFixed(1)}
                     tick={{ fontSize: 10, fill: "#7a726c" }}
                     axisLine={{ stroke: "rgba(180, 172, 164, 0.65)" }}
                     tickLine={false}
-                    label={{
-                      value: "Sharpe ratio",
-                      position: "insideBottom",
-                      offset: -16,
-                      style: { fill: "#9b938b", fontSize: 10, fontWeight: 600 },
-                    }}
                   />
                   <YAxis
                     allowDecimals={false}
@@ -1061,7 +1053,11 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
                       `Sharpe ≈ ${typeof mid === "number" ? mid.toFixed(2) : mid}`
                     }
                   />
-                  <Legend wrapperStyle={{ fontSize: 11, color: "#5d5754", paddingTop: 6 }} />
+                  <Legend
+                    verticalAlign="top"
+                    align="right"
+                    wrapperStyle={{ fontSize: 11, color: "#5d5754", paddingBottom: 4 }}
+                  />
                   <Area
                     name="GPT (Retail)"
                     dataKey="retail"
@@ -1071,6 +1067,7 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
                     fill={SHARPE_HIST_COLORS.gptRetail}
                     fillOpacity={0.35}
                     isAnimationActive={false}
+                    legendType="square"
                   />
                   <Area
                     name="GPT (Advanced)"
@@ -1081,8 +1078,9 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
                     fill={SHARPE_HIST_COLORS.gptAdvanced}
                     fillOpacity={0.35}
                     isAnimationActive={false}
+                    legendType="square"
                   />
-                  {sortedMarkers.map((m, idx) => (
+                  {sharpeMeanMarkers.map((m) => (
                     <ReferenceLine
                       key={m.key}
                       x={m.value}
@@ -1090,14 +1088,6 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
                       strokeWidth={2.2}
                       strokeDasharray={m.dashed ? "8 4" : "3 3"}
                       ifOverflow="extendDomain"
-                      label={{
-                        value: `${m.label.replace(" μ", "")} ${m.value.toFixed(2)}`,
-                        position: "insideTopRight",
-                        fill: m.color,
-                        fontSize: 9,
-                        fontWeight: 700,
-                        dy: idx * 11,
-                      }}
                     />
                   ))}
                 </AreaChart>
