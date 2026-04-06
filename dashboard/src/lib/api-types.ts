@@ -2,6 +2,10 @@ export interface HealthResponse {
   status: "ok" | "degraded";
   db_available: boolean;
   current_db_path: string;
+  /** Present on newer APIs; false means the VPS process is an older build (restart after git pull). */
+  routes?: {
+    factor_style: boolean;
+  };
 }
 
 export interface ExperimentOption {
@@ -39,6 +43,19 @@ export interface FiltersResponse {
   regime_labels: string[];
   date_min: string | null;
   date_max: string | null;
+}
+
+export interface FactorStyleSummaryRow {
+  strategy_key: string;
+  strategy: string;
+  prompt_type: string | null;
+  market: string;
+  path_count: number;
+  mean_size_exposure: number | null;
+  mean_value_exposure: number | null;
+  mean_momentum_exposure: number | null;
+  mean_low_risk_exposure: number | null;
+  mean_quality_exposure: number | null;
 }
 
 export interface StrategySummaryApiRow {

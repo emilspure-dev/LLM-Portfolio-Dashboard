@@ -1,4 +1,5 @@
 import {
+  getFactorStyleSummary,
   getFilters,
   getPeriods,
   getRunQuality,
@@ -6,6 +7,7 @@ import {
   getStrategySummary,
 } from "./api-client";
 import type {
+  FactorStyleSummaryRow,
   MetaCurrentResponse,
   RunResultRow,
   StrategySummaryApiRow,
@@ -83,7 +85,7 @@ function computeBehavior(runs: RunRow[]): BehaviorRow[] {
 function weightedAverage(
   rows: StrategySummaryApiRow[],
   selector: (row: StrategySummaryApiRow) => number | null
-) {
+): number | null {
   let weightedSum = 0;
   let weightTotal = 0;
 
@@ -98,7 +100,7 @@ function weightedAverage(
     weightTotal += weight;
   }
 
-  return weightTotal > 0 ? weightedSum / weightTotal : Number.NaN;
+  return weightTotal > 0 ? weightedSum / weightTotal : null;
 }
 
 function sortSummaryRows(rows: StrategyRow[]) {
@@ -110,7 +112,20 @@ function sortSummaryRows(rows: StrategyRow[]) {
       return leftIsGpt ? -1 : 1;
     }
 
-    return (right.mean_sharpe ?? 0) - (left.mean_sharpe ?? 0);
+    // Group same strategy_key together (e.g. all "index" rows together)
+    if (left.strategy_key !== right.strategy_key) {
+      const lb = left.mean_sharpe != null && Number.isFinite(left.mean_sharpe);
+      const rb = right.mean_sharpe != null && Number.isFinite(right.mean_sharpe);
+      if (lb && rb) return right.mean_sharpe! - left.mean_sharpe!;
+      if (lb) return -1;
+      if (rb) return 1;
+      return 0;
+    }
+
+    // Same strategy_key: sort by market label so S&P / DAX / Nikkei appear in stable order
+    const lm = (left.markets?.[0] ?? left.Strategy).toLowerCase();
+    const rm = (right.markets?.[0] ?? right.Strategy).toLowerCase();
+    return lm.localeCompare(rm);
   });
 }
 
@@ -126,7 +141,13 @@ export function buildStrategySummaryView(
   const grouped = new Map<string, StrategySummaryApiRow[]>();
 
   for (const row of filteredRows) {
-    const key = `${row.strategy_key}::${row.source_type}`;
+    // GPT strategies are evaluated across all markets and should be aggregated into one row.
+    // Benchmark strategies are market-specific assets (S&P 500 index ≠ DAX 40 index) and
+    // must be kept separate per market so they show individually in charts and tables.
+    const isGpt = row.strategy_key.startsWith("gpt_");
+    const key = isGpt
+      ? `${row.strategy_key}::${row.source_type}`
+      : `${row.strategy_key}::${row.source_type}::${row.market}`;
     const group = grouped.get(key) ?? [];
     group.push(row);
     grouped.set(key, group);
@@ -177,6 +198,102 @@ export function buildStrategySummaryView(
   return sortSummaryRows(summaryRows);
 }
 
+function canonicalStrategyKey(key: string | null | undefined): string {
+  return String(key ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+}
+
+/**
+ * Distinct path_ids from runs for a market + strategy, for chart APIs when filtering by
+ * strategy_key alone returns no rows (some DB builds only join daily series by path).
+ */
+export function collectPathIdsForStrategyMarket(
+  runs: RunRow[],
+  market: string,
+  strategyKey: string,
+  maxPaths = 48
+): string[] {
+  const target = canonicalStrategyKey(strategyKey);
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  for (const r of runs) {
+    if (r.valid === false) {
+      continue;
+    }
+    if (r.market !== market) {
+      continue;
+    }
+    if (canonicalStrategyKey(r.strategy_key) !== target) {
+      continue;
+    }
+    const pid = r.path_id;
+    if (pid == null || !String(pid).trim()) {
+      continue;
+    }
+    const s = String(pid);
+    if (seen.has(s)) {
+      continue;
+    }
+    seen.add(s);
+    ordered.push(s);
+    if (ordered.length >= maxPaths) {
+      break;
+    }
+  }
+  return ordered;
+}
+
+/**
+ * When strategy summary rows omit mean_sharpe (common for some benchmarks), fill from
+ * run-level sharpe_ratio so heatmaps and KPIs stay aligned with the loaded run metrics.
+ */
+export function backfillSummarySharpeFromRuns(
+  summary: StrategyRow[],
+  runs: RunRow[],
+  marketFilter: string
+): StrategyRow[] {
+  const runsScoped = runs.filter((r) => {
+    if (r.valid === false) {
+      return false;
+    }
+    if (marketFilter !== "All" && r.market !== marketFilter) {
+      return false;
+    }
+    return true;
+  });
+
+  return summary.map((row) => {
+    if (row.mean_sharpe != null && Number.isFinite(row.mean_sharpe)) {
+      return row;
+    }
+    const rowCanon = canonicalStrategyKey(row.strategy_key);
+    const sharpeVals = runsScoped
+      .filter(
+        (r) => canonicalStrategyKey(r.strategy_key) === rowCanon
+      )
+      .map((r) => r.sharpe_ratio)
+      .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    if (sharpeVals.length === 0) {
+      return row;
+    }
+    const meanFromRuns =
+      sharpeVals.reduce((sum, v) => sum + v, 0) / sharpeVals.length;
+    return { ...row, mean_sharpe: meanFromRuns };
+  });
+}
+
+export function buildStrategySummaryWithRunSharpe(
+  rows: StrategySummaryApiRow[],
+  marketFilter: string,
+  runs: RunRow[]
+): StrategyRow[] {
+  const base = buildStrategySummaryView(rows, marketFilter);
+  const filled = backfillSummarySharpeFromRuns(base, runs, marketFilter);
+  return sortSummaryRows(filled);
+}
+
 async function fetchAllRunResults(experimentId: string): Promise<RunRow[]> {
   const firstPage = await getRunResults({
     experiment_id: experimentId,
@@ -216,12 +333,22 @@ export async function fetchEvaluationData({
     fetchAllRunResults(experimentId),
   ]);
 
+  let factorStyleRows: FactorStyleSummaryRow[] = [];
+  let factorStyleError: string | null = null;
+  try {
+    factorStyleRows = await getFactorStyleSummary({ experiment_id: experimentId });
+  } catch (e) {
+    factorStyleError = e instanceof Error ? e.message : String(e);
+  }
+
   return {
     meta,
     filters,
     active_experiment_id: experimentId,
     summary_rows: summaryRows,
-    summary: buildStrategySummaryView(summaryRows),
+    summary: buildStrategySummaryWithRunSharpe(summaryRows, "All", runs),
+    factor_style_rows: factorStyleRows,
+    factor_style_error: factorStyleError,
     runs,
     behavior: computeBehavior(runs),
     run_quality: runQuality,

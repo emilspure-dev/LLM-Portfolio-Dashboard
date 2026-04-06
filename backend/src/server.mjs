@@ -494,6 +494,55 @@ function handleStrategySummary(url) {
   `, params);
 }
 
+function handleFactorStyleSummary(url) {
+  const experimentId = resolveExperimentId(url);
+  const clauses = ["dpm.experiment_id = :experiment_id"];
+  const params = { experiment_id: experimentId };
+
+  addEqualsFilter(clauses, params, "market", cleanString(url.searchParams.get("market")), "p.market");
+
+  const whereClause = buildWhereClause(clauses);
+
+  return queryAll(
+    `
+    WITH path_means AS (
+      SELECT
+        dpm.path_id,
+        p.strategy_key,
+        p.strategy,
+        NULLIF(TRIM(COALESCE(p.prompt_type, '')), '') AS prompt_type,
+        p.market,
+        AVG(dpm.portfolio_size_exposure) AS avg_size,
+        AVG(dpm.portfolio_value_exposure) AS avg_value,
+        AVG(dpm.portfolio_momentum_exposure) AS avg_momentum,
+        AVG(dpm.portfolio_low_risk_exposure) AS avg_low_risk,
+        AVG(dpm.portfolio_quality_exposure) AS avg_quality
+      FROM daily_path_metrics dpm
+      JOIN paths p
+        ON p.experiment_id = dpm.experiment_id
+       AND p.path_id = dpm.path_id
+      ${whereClause}
+      GROUP BY dpm.path_id, p.strategy_key, p.strategy, NULLIF(TRIM(COALESCE(p.prompt_type, '')), ''), p.market
+    )
+    SELECT
+      strategy_key,
+      strategy,
+      prompt_type,
+      market,
+      COUNT(*) AS path_count,
+      AVG(avg_size) AS mean_size_exposure,
+      AVG(avg_value) AS mean_value_exposure,
+      AVG(avg_momentum) AS mean_momentum_exposure,
+      AVG(avg_low_risk) AS mean_low_risk_exposure,
+      AVG(avg_quality) AS mean_quality_exposure
+    FROM path_means
+    GROUP BY strategy_key, strategy, prompt_type, market
+    ORDER BY strategy_key, prompt_type, market
+  `,
+    params
+  );
+}
+
 function handleRunQuality(url) {
   const { clauses, params } = withExperimentFilters(url, {
     experimentId: "rr.experiment_id",
@@ -1073,6 +1122,7 @@ const routes = new Map([
   ["GET /api/meta/current", () => handleMetaCurrent()],
   ["GET /api/filters", ({ url }) => handleFilters(url)],
   ["GET /api/summary/strategies", ({ url }) => handleStrategySummary(url)],
+  ["GET /api/summary/factor-style", ({ url }) => handleFactorStyleSummary(url)],
   ["GET /api/summary/run-quality", ({ url }) => handleRunQuality(url)],
   ["GET /api/charts/equity", ({ url }) => handleEquity(url)],
   ["GET /api/charts/factor-exposures", ({ url }) => handleFactorExposures(url)],
@@ -1109,7 +1159,15 @@ const server = http.createServer((request, response) => {
       throw createHttpError(503, "SQLite database is unavailable");
     }
 
-    const payload = handler({ request, response, url });
+    let payload = handler({ request, response, url });
+    if (url.pathname === "/api/health" && payload && typeof payload === "object") {
+      payload = {
+        ...payload,
+        routes: {
+          factor_style: routes.has("GET /api/summary/factor-style"),
+        },
+      };
+    }
     json(response, 200, payload);
   } catch (error) {
     const statusCode = error.statusCode ?? 500;
