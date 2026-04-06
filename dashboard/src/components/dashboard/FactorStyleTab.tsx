@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -66,10 +66,13 @@ const tooltipStyle = {
 
 interface FactorStyleTabProps {
   data: EvaluationData;
-  marketFilter: string;
+  runs?: unknown;
 }
 
-export function FactorStyleTab({ data, marketFilter }: FactorStyleTabProps) {
+export function FactorStyleTab({ data }: FactorStyleTabProps) {
+  const allMarkets: string[] = data.filters?.markets ?? [];
+  const [marketFilter, setMarketFilter] = useState("All");
+
   const factorStyleFiltered = useMemo(() => {
     const rows = data.factor_style_rows ?? [];
     const scoped =
@@ -112,6 +115,27 @@ export function FactorStyleTab({ data, marketFilter }: FactorStyleTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
+      {allMarkets.length > 0 && (
+        <div className="dashboard-panel rounded-[18px] px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span
+              className="shrink-0 text-[11px] font-bold uppercase tracking-[0.16em] text-[#8f8780]"
+            >
+              Market
+            </span>
+            <select
+              value={marketFilter}
+              onChange={(e) => setMarketFilter(e.target.value)}
+              className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+            >
+              <option value="All">All markets</option>
+              {allMarkets.map((m) => (
+                <option key={m} value={m}>{MARKET_LABELS[m] ?? m}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
       <div>
         <SectionHeader>Portfolio factor style</SectionHeader>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
@@ -119,14 +143,13 @@ export function FactorStyleTab({ data, marketFilter }: FactorStyleTabProps) {
           <strong>momentum</strong>, <strong>low risk</strong>, and <strong>quality</strong> versus
           deterministic benchmarks, using the same exposures as the daily factor series in the API.
         </p>
-        <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#9d958d]">
+        <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#9d958d]">
           Values are means from{" "}
           <code className="rounded bg-[rgba(0,0,0,0.04)] px-1 py-0.5 text-[10px]">
             vw_factor_exposure_daily
           </code>
           : each portfolio path is averaged over trading days, then paths are averaged within each
-          strategy · prompt · market cell. Use the sidebar <strong>Market</strong> filter to narrow
-          the chart.
+          strategy · prompt · market cell.
         </p>
         {nGptPaths > 0 && (
           <p className="mt-2 text-[11px] text-[#9d958d]">
@@ -204,7 +227,7 @@ export function FactorStyleTab({ data, marketFilter }: FactorStyleTabProps) {
             body={
               factorStyleFiltered.length === 0
                 ? `The API at ${getApiBaseUrl()} returned an empty array for /summary/factor-style (HTTP 200, zero rows). That usually means vw_factor_exposure_daily has no data for this experiment_id. Fix: load or rebuild the database so daily factor exposures are materialized, or pick an experiment that includes them. If you use a hosted API, confirm it uses the same DB file as your local pipeline.`
-                : "Factor rows exist for this experiment, but every mean exposure is null for the current sidebar market filter—try Market: All."
+                : "Factor rows exist for this experiment, but every mean exposure is null for the selected market — try All markets."
             }
           />
         </div>

@@ -39,7 +39,6 @@ import { SectionHeader, SoftHr } from "./SectionHeader";
 interface BaseTabProps {
   data: EvaluationData;
   runs: RunRow[];
-  marketFilter: string;
 }
 
 interface SelectionState {
@@ -188,6 +187,37 @@ function FilterSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function TabMarketSelector({
+  markets,
+  value,
+  onChange,
+}: {
+  markets: string[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  if (markets.length === 0) return null;
+  return (
+    <div className="dashboard-panel rounded-[18px] px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="dashboard-label shrink-0">Market</span>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+        >
+          <option value="All">All markets</option>
+          {markets.map((m) => (
+            <option key={m} value={m}>
+              {MARKET_LABELS[m] ?? m}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
   );
 }
 
@@ -441,12 +471,8 @@ function collectAllMarkets(data: EvaluationData): string[] {
   });
 }
 
-function getMarketOptions(data: EvaluationData, marketFilter: string) {
-  const all = collectAllMarkets(data);
-  if (all.length > 0) {
-    return all;
-  }
-  return marketFilter !== "All" ? [marketFilter] : [];
+function getMarketOptions(data: EvaluationData) {
+  return collectAllMarkets(data);
 }
 
 function strategyOrder(key: string) {
@@ -491,25 +517,22 @@ function defaultStrategyKey(options: StrategySelectOption[]) {
   );
 }
 
-function useDailySelection(data: EvaluationData, marketFilter: string): SelectionState {
+function useDailySelection(data: EvaluationData): SelectionState {
   const marketOptions = useMemo(
-    () => getMarketOptions(data, marketFilter),
-    [data, marketFilter]
+    () => getMarketOptions(data),
+    [data]
   );
   const [selectedMarket, setSelectedMarket] = useState("");
   const [selectedStrategyKey, setSelectedStrategyKey] = useState("");
 
   useEffect(() => {
     setSelectedMarket((current) => {
-      if (marketFilter !== "All" && marketOptions.includes(marketFilter)) {
-        return marketFilter;
-      }
       if (marketOptions.includes(current)) {
         return current;
       }
       return marketOptions[0] ?? "";
     });
-  }, [marketOptions, marketFilter]);
+  }, [marketOptions]);
 
   const strategyOptions = useMemo(
     () => getStrategyOptions(data, selectedMarket),
@@ -825,11 +848,21 @@ function buildStrategyStats(runs: RunRow[]) {
     .sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity));
 }
 
-export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
-  const summary = data.summary;
+export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
+  const allMarkets = useMemo(() => getMarketOptions(data), [data]);
+  const [marketFilter, setMarketFilter] = useState("All");
+
+  const localRuns = useMemo(
+    () => filterRunsForMarketFilter(runs, marketFilter),
+    [runs, marketFilter]
+  );
+  const summary = useMemo(
+    () => buildStrategySummaryWithRunSharpe(data.summary_rows, marketFilter, runs),
+    [data.summary_rows, marketFilter, runs]
+  );
 
   const sharpeHistogramModel = useMemo(() => {
-    const scoped = filterRunsForMarketFilter(runs, marketFilter);
+    const scoped = localRuns;
     const retail = runStrategySharpes(scoped, "gpt_retail");
     const advanced = runStrategySharpes(scoped, "gpt_advanced");
     let binWidth = 0.42;
@@ -841,7 +874,7 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
     const retailMean = retail.length ? mean(retail) : null;
     const advancedMean = advanced.length ? mean(advanced) : null;
     const summaryMean = (key: string) => {
-      const row = data.summary.find((s) => s.strategy_key === key);
+      const row = summary.find((s) => s.strategy_key === key);
       return row?.mean_sharpe != null && Number.isFinite(row.mean_sharpe)
         ? row.mean_sharpe
         : null;
@@ -863,7 +896,7 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
       sfMean,
       ffMean,
     };
-  }, [runs, marketFilter, data.summary]);
+  }, [localRuns, summary]);
 
   const {
     retail: retailSharpes,
@@ -944,6 +977,7 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
+      <TabMarketSelector markets={allMarkets} value={marketFilter} onChange={setMarketFilter} />
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <KpiCard
           label="Top Sharpe"
@@ -1326,9 +1360,8 @@ async function fetchFactorExposuresWithPathFallback(
   return merged;
 }
 
-export function EquityCurvesTab({ data, runs: _sidebarRuns, marketFilter }: BaseTabProps) {
-  void _sidebarRuns;
-  const selection = useDailySelection(data, marketFilter);
+export function EquityCurvesTab({ data }: BaseTabProps) {
+  const selection = useDailySelection(data);
   const selectedStrategy = selection.strategyOptions.find(
     (option) => option.strategy_key === selection.selectedStrategyKey
   );
@@ -1606,9 +1639,8 @@ export function EquityCurvesTab({ data, runs: _sidebarRuns, marketFilter }: Base
   );
 }
 
-export function PortfoliosTab({ data, runs: _sidebarFilteredRuns, marketFilter }: BaseTabProps) {
-  void _sidebarFilteredRuns;
-  const selection = useDailySelection(data, marketFilter);
+export function PortfoliosTab({ data }: BaseTabProps) {
+  const selection = useDailySelection(data);
   const [selectedPathId, setSelectedPathId] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [page, setPage] = useState(1);
@@ -1951,12 +1983,14 @@ export function PortfoliosTab({ data, runs: _sidebarFilteredRuns, marketFilter }
 }
 
 export function RunExplorerTab({ data, runs }: BaseTabProps) {
-  const strategyOptions = useMemo(
-    () => uniqueStrings(runs.map((run) => run.strategy)).sort(),
-    [runs]
-  );
-  const promptOptions = useMemo(
-    () => uniqueStrings(runs.map((run) => run.prompt_type)).sort(),
+  const allMarkets = useMemo(() => getMarketOptions(data), [data]);
+
+  // Portfolio options derive from strategy_key for consistent naming across tabs
+  const portfolioOptions = useMemo(
+    () =>
+      Array.from(new Set(runs.map((run) => run.strategy_key).filter(Boolean) as string[])).sort(
+        (a, b) => strategyOrder(a) - strategyOrder(b)
+      ),
     [runs]
   );
   const modelOptions = useMemo(
@@ -1968,8 +2002,8 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
     [runs]
   );
 
-  const [strategyFilter, setStrategyFilter] = useState("All");
-  const [promptFilter, setPromptFilter] = useState("All");
+  const [marketFilter, setMarketFilter] = useState("All");
+  const [portfolioFilter, setPortfolioFilter] = useState("All");
   const [modelFilter, setModelFilter] = useState("All");
   const [periodFilter, setPeriodFilter] = useState("All");
   const [page, setPage] = useState(1);
@@ -1977,16 +2011,16 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
 
   useEffect(() => {
     setPage(1);
-  }, [strategyFilter, promptFilter, modelFilter, periodFilter, runs]);
+  }, [marketFilter, portfolioFilter, modelFilter, periodFilter, runs]);
 
   const filteredRuns = useMemo(() => {
     return runs
-      .filter((run) => strategyFilter === "All" || run.strategy === strategyFilter)
-      .filter((run) => promptFilter === "All" || run.prompt_type === promptFilter)
+      .filter((run) => marketFilter === "All" || run.market === marketFilter)
+      .filter((run) => portfolioFilter === "All" || run.strategy_key === portfolioFilter)
       .filter((run) => modelFilter === "All" || run.model === modelFilter)
       .filter((run) => periodFilter === "All" || run.period === periodFilter)
       .sort((left, right) => (asNumber(right.sharpe_ratio) ?? -Infinity) - (asNumber(left.sharpe_ratio) ?? -Infinity));
-  }, [runs, strategyFilter, promptFilter, modelFilter, periodFilter]);
+  }, [runs, marketFilter, portfolioFilter, modelFilter, periodFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRuns.length / 12));
   const pageRows = useMemo(
@@ -2101,16 +2135,16 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
       <Panel>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
           <FilterSelect
-            label="Strategy"
-            value={strategyFilter}
-            onChange={setStrategyFilter}
-            options={[{ value: "All", label: "All strategies" }, ...strategyOptions.map((value) => ({ value, label: formatStrategyLabel(value) }))]}
+            label="Market"
+            value={marketFilter}
+            onChange={setMarketFilter}
+            options={[{ value: "All", label: "All markets" }, ...allMarkets.map((m) => ({ value: m, label: MARKET_LABELS[m] ?? m }))]}
           />
           <FilterSelect
-            label="Prompt"
-            value={promptFilter}
-            onChange={setPromptFilter}
-            options={[{ value: "All", label: "All prompts" }, ...promptOptions.map((value) => ({ value, label: value }))]}
+            label="Portfolio"
+            value={portfolioFilter}
+            onChange={setPortfolioFilter}
+            options={[{ value: "All", label: "All portfolios" }, ...portfolioOptions.map((key) => ({ value: key, label: formatStrategyLabel(key) }))]}
           />
           <FilterSelect
             label="Model"
@@ -2135,7 +2169,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
       </div>
 
       {pageRows.length === 0 ? (
-        <EmptyState title="No runs match the current filters" body="Try widening the prompt, model, or period filters to inspect the full experiment run set." />
+        <EmptyState title="No runs match the current filters" body="Try widening the market, portfolio, model, or period filters to inspect the full experiment run set." />
       ) : (
         <>
           <SectionHeader>Performance charts</SectionHeader>
@@ -2472,8 +2506,8 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
   );
 }
 
-export function ByMarketTab({ data, marketFilter }: BaseTabProps) {
-  const markets = getMarketOptions(data, marketFilter);
+export function ByMarketTab({ data }: BaseTabProps) {
+  const markets = getMarketOptions(data);
   const perMarketSummary = markets.map((market) => ({
     market,
     summary: buildStrategySummaryWithRunSharpe(
@@ -2828,8 +2862,8 @@ type DrawdownSeriesPayload =
   | { source: "vw_regime_daily"; rows: RegimeRow[] }
   | { source: "vw_strategy_daily"; rows: StrategyDailyRow[] };
 
-export function DrawdownsTab({ data, marketFilter }: BaseTabProps) {
-  const selection = useDailySelection(data, marketFilter);
+export function DrawdownsTab({ data }: BaseTabProps) {
+  const selection = useDailySelection(data);
 
   const drawdownSeriesQuery = useQuery({
     queryKey: [
@@ -3032,7 +3066,9 @@ export function DrawdownsTab({ data, marketFilter }: BaseTabProps) {
   );
 }
 
-export function DataQualityTab({ data, marketFilter }: BaseTabProps) {
+export function DataQualityTab({ data }: BaseTabProps) {
+  const allMarkets = useMemo(() => getMarketOptions(data), [data]);
+  const [marketFilter, setMarketFilter] = useState("All");
   const rows = useMemo(
     () =>
       marketFilter === "All"
@@ -3081,6 +3117,7 @@ export function DataQualityTab({ data, marketFilter }: BaseTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
+      <TabMarketSelector markets={allMarkets} value={marketFilter} onChange={setMarketFilter} />
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <KpiCard label="Rows Audited" value={String(totalRows)} color={COLORS.accent} sub="Across run-quality slices" />
         <KpiCard label="Valid Rows" value={formatPctFromNumber(totalRows > 0 ? (totalValid / totalRows) * 100 : null, 0)} color={COLORS.green} sub={`${totalValid} valid`} />

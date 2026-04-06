@@ -100,7 +100,6 @@ function ErrorPanel({ message, onRetry }: ErrorPanelProps) {
 
 export default function Index() {
   const [selectedExperimentId, setSelectedExperimentId] = useState<string>();
-  const [marketFilter, setMarketFilter] = useState("All");
   const [activeTab, setActiveTab] = useState(0);
 
   const healthQuery = useQuery({
@@ -131,36 +130,27 @@ export default function Index() {
   });
 
   useEffect(() => {
-    setMarketFilter("All");
     setActiveTab(0);
   }, [resolvedExperimentId]);
 
   const data = (dashboardQuery.data ?? null) as EvaluationData | null;
 
+  // Summary and runs are always unfiltered (all markets); each tab manages its own market filter.
   const visibleData = useMemo(() => {
     if (!data) {
       return null;
     }
-
     return {
       ...data,
       summary: buildStrategySummaryWithRunSharpe(
         data.summary_rows,
-        marketFilter,
+        "All",
         data.runs
       ),
     };
-  }, [data, marketFilter]);
+  }, [data]);
 
-  const filteredRuns: RunRow[] = useMemo(() => {
-    if (!data) {
-      return [];
-    }
-
-    return marketFilter !== "All"
-      ? data.runs.filter((run) => run.market === marketFilter)
-      : data.runs;
-  }, [data, marketFilter]);
+  const allRuns: RunRow[] = useMemo(() => data?.runs ?? [], [data]);
 
   const isLoading =
     healthQuery.isLoading ||
@@ -181,7 +171,6 @@ export default function Index() {
 
   const handleReset = () => {
     setSelectedExperimentId(undefined);
-    setMarketFilter("All");
     setActiveTab(0);
     void metaQuery.refetch();
     void dashboardQuery.refetch();
@@ -195,9 +184,7 @@ export default function Index() {
           meta={metaQuery.data}
           health={healthQuery.data}
           apiHealthPending={healthQuery.isPending && !healthQuery.data}
-          marketFilter={marketFilter}
           selectedExperimentId={selectedExperimentId}
-          onMarketFilterChange={setMarketFilter}
           onExperimentChange={setSelectedExperimentId}
           onRefresh={handleRefresh}
           onReset={handleReset}
@@ -219,14 +206,11 @@ export default function Index() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-[#7a726c]">
                   <span className="rounded-full border border-white/50 bg-white/55 px-3 py-1.5 shadow-sm backdrop-blur-sm">
-                    Market: {marketFilter}
-                  </span>
-                  <span className="rounded-full border border-white/50 bg-white/55 px-3 py-1.5 shadow-sm backdrop-blur-sm">
                     Experiment: {resolvedExperimentId ?? "Loading"}
                   </span>
                   <span className="rounded-full border border-white/50 bg-white/55 px-3 py-1.5 shadow-sm backdrop-blur-sm">
                     {data
-                      ? `${filteredRuns.length} runs loaded`
+                      ? `${allRuns.length} runs loaded`
                       : isLoading
                         ? "Loading from API"
                         : "Awaiting API"}
@@ -264,79 +248,39 @@ export default function Index() {
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-6">
-                {activeTab === 0 && <OverviewTab data={visibleData} runs={filteredRuns} />}
+                {activeTab === 0 && <OverviewTab data={visibleData} runs={allRuns} />}
                 {activeTab === 1 && (
-                  <StrategiesTab
-                    data={visibleData}
-                    runs={filteredRuns}
-                    marketFilter={marketFilter}
-                  />
+                  <StrategiesTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 2 && (
-                  <FactorStyleTab data={visibleData} marketFilter={marketFilter} />
+                  <FactorStyleTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 3 && (
-                  <SharpeReturnsTab
-                    data={visibleData}
-                    runs={filteredRuns}
-                    marketFilter={marketFilter}
-                  />
+                  <SharpeReturnsTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 4 && (
-                  <EquityCurvesTab
-                    data={visibleData}
-                    runs={filteredRuns}
-                    marketFilter={marketFilter}
-                  />
+                  <EquityCurvesTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 5 && (
-                  <PortfoliosTab
-                    data={visibleData}
-                    runs={filteredRuns}
-                    marketFilter={marketFilter}
-                  />
+                  <PortfoliosTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 6 && (
-                  <RunExplorerTab
-                    data={visibleData}
-                    runs={filteredRuns}
-                    marketFilter={marketFilter}
-                  />
+                  <RunExplorerTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 7 && (
-                  <ByMarketTab
-                    data={visibleData}
-                    runs={filteredRuns}
-                    marketFilter={marketFilter}
-                  />
+                  <ByMarketTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 8 && (
-                  <StatisticalTestsTab
-                    data={visibleData}
-                    runs={filteredRuns}
-                    marketFilter={marketFilter}
-                  />
+                  <StatisticalTestsTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 9 && (
-                  <BehaviorTab
-                    data={visibleData}
-                    runs={filteredRuns}
-                    marketFilter={marketFilter}
-                  />
+                  <BehaviorTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 10 && (
-                  <DrawdownsTab
-                    data={visibleData}
-                    runs={filteredRuns}
-                    marketFilter={marketFilter}
-                  />
+                  <DrawdownsTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 11 && (
-                  <DataQualityTab
-                    data={visibleData}
-                    runs={filteredRuns}
-                    marketFilter={marketFilter}
-                  />
+                  <DataQualityTab data={visibleData} runs={allRuns} />
                 )}
               </div>
             </>

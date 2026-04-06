@@ -1,6 +1,5 @@
 import { Database, BarChart3, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MARKET_LABELS } from "@/lib/constants";
 import { getApiBaseUrl } from "@/lib/api-client";
 import type { HealthResponse, MetaCurrentResponse } from "@/lib/api-types";
 import type { EvaluationData } from "@/lib/types";
@@ -11,9 +10,7 @@ interface DashboardSidebarProps {
   health: HealthResponse | undefined;
   /** True only until /api/health returns — avoids showing "Connecting" while meta/dashboard load */
   apiHealthPending: boolean;
-  marketFilter: string;
   selectedExperimentId: string | undefined;
-  onMarketFilterChange: (value: string) => void;
   onExperimentChange: (value: string | undefined) => void;
   onRefresh: () => void;
   onReset: () => void;
@@ -40,9 +37,7 @@ export function DashboardSidebar({
   meta,
   health,
   apiHealthPending,
-  marketFilter,
   selectedExperimentId,
-  onMarketFilterChange,
   onExperimentChange,
   onRefresh,
   onReset,
@@ -86,11 +81,11 @@ export function DashboardSidebar({
                       ? "API unavailable"
                       : "Could not reach API"}
               </p>
-              <p className="mt-1 break-all text-[11px] leading-5 text-[#9d958d]">
+              <p className="mt-1 break-all text-[12px] leading-5 text-[#9d958d]">
                 {getApiBaseUrl()}
               </p>
               {resolvedExperimentId && (
-                <p className="mt-1 text-[11px] text-[#9d958d]">
+                <p className="mt-1 text-[12px] text-[#9d958d]">
                   Active experiment:{" "}
                   <span className="font-medium text-[#6f6863]">
                     {resolvedExperimentId}
@@ -98,7 +93,7 @@ export function DashboardSidebar({
                 </p>
               )}
               {health && health.routes?.factor_style !== true && (
-                <p className="mt-2 text-[11px] leading-4 text-[#b45309]">
+                <p className="mt-2 text-[12px] leading-4 text-[#b45309]">
                   Factor-style tab needs API route <span className="font-mono">GET /api/summary/factor-style</span>.
                   This response has no <span className="font-mono">routes.factor_style</span> flag or it is false — on
                   the VPS: <span className="font-mono">git pull</span>, restart the Node API, reload.
@@ -137,7 +132,7 @@ export function DashboardSidebar({
               </option>
             ))}
           </select>
-          <p className="mt-2 text-[11px] leading-5 text-[#9d958d]">
+          <p className="mt-2 text-[12px] leading-5 text-[#9d958d]">
             {formatCompletedAt(
               meta.available_experiments.find(
                 (experiment) => experiment.experiment_id === resolvedExperimentId
@@ -147,28 +142,10 @@ export function DashboardSidebar({
         </div>
       )}
 
-      {data && markets.length > 0 && (
-        <div className="dashboard-panel rounded-[18px] p-4">
-          <p className="dashboard-label mb-3">Market filter</p>
-          <select
-            value={marketFilter}
-            onChange={(event) => onMarketFilterChange(event.target.value)}
-            className="dashboard-glass-inset w-full rounded-[14px] px-3 py-2.5 text-[12px] font-medium text-[#5a544f] outline-none"
-          >
-            <option value="All">All</option>
-            {markets.map((market) => (
-              <option key={market} value={market}>
-                {MARKET_LABELS[market] ?? market}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
       {data && (
         <div className="dashboard-panel rounded-[18px] p-4">
           <p className="dashboard-label mb-3">Dataset snapshot</p>
-          <div className="space-y-2 text-[11px] text-[#9b938b]">
+          <div className="space-y-2 text-[12px] text-[#9b938b]">
             <p>
               <span className="font-semibold text-[#645e5a]">{runs.length}</span> runs
             </p>
@@ -208,7 +185,7 @@ export function DashboardSidebar({
 
       <div className="dashboard-panel mt-auto rounded-[18px] p-4">
         <p className="dashboard-label mb-3">Thesis scope</p>
-        <div className="space-y-1.5 text-[11px] leading-relaxed text-[#9c948c]">
+        <div className="space-y-1.5 text-[12px] leading-relaxed text-[#9c948c]">
           <p>Markets: S&amp;P 500, DAX 40, Nikkei 225</p>
           <p>Prompts: Retail, Advanced</p>
           <p>Benchmarks: MV, 1/N, 60/40, Index, FF</p>

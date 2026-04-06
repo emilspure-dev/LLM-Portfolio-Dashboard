@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -15,7 +15,8 @@ import {
 } from "recharts";
 import { KpiCard } from "./KpiCard";
 import { SectionHeader, SoftHr } from "./SectionHeader";
-import { COLORS, getStrategyColor, sharpeColor } from "@/lib/constants";
+import { COLORS, MARKET_LABELS, getStrategyColor, sharpeColor } from "@/lib/constants";
+import { buildStrategySummaryWithRunSharpe } from "@/lib/data-loader";
 import type { FactorStyleSummaryRow } from "@/lib/api-types";
 import type { EvaluationData, RunRow } from "@/lib/types";
 
@@ -162,12 +163,21 @@ function aggregateFactorTiltsByStrategy(
 interface StrategiesTabProps {
   data: EvaluationData;
   runs: RunRow[];
-  marketFilter: string;
 }
 
-export function StrategiesTab({ data, runs, marketFilter }: StrategiesTabProps) {
-  const summary = data.summary;
-  const runCounts = useMemo(() => runCountByStrategy(runs), [runs]);
+export function StrategiesTab({ data, runs }: StrategiesTabProps) {
+  const allMarkets: string[] = data.filters?.markets ?? [];
+  const [marketFilter, setMarketFilter] = useState("All");
+
+  const summary = useMemo(
+    () => buildStrategySummaryWithRunSharpe(data.summary_rows, marketFilter, runs),
+    [data.summary_rows, marketFilter, runs]
+  );
+  const localRuns = useMemo(
+    () => (marketFilter === "All" ? runs : runs.filter((r) => r.market === marketFilter)),
+    [runs, marketFilter]
+  );
+  const runCounts = useMemo(() => runCountByStrategy(localRuns), [localRuns]);
   const factorAgg = useMemo(
     () => aggregateFactorTiltsByStrategy(data.factor_style_rows ?? [], marketFilter),
     [data.factor_style_rows, marketFilter]
@@ -244,16 +254,32 @@ export function StrategiesTab({ data, runs, marketFilter }: StrategiesTabProps) 
   );
 
   const marketScope =
-    marketFilter === "All" ? "All markets" : `Market: ${marketFilter}`;
+    marketFilter === "All" ? "all markets" : (MARKET_LABELS[marketFilter] ?? marketFilter);
 
   if (!summary.length) {
     return (
       <div className="space-y-4 pb-1">
+        {allMarkets.length > 0 && (
+          <div className="dashboard-panel rounded-[18px] px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="dashboard-label shrink-0">Market</span>
+              <select
+                value={marketFilter}
+                onChange={(e) => setMarketFilter(e.target.value)}
+                className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+              >
+                <option value="All">All markets</option>
+                {allMarkets.map((m) => (
+                  <option key={m} value={m}>{MARKET_LABELS[m] ?? m}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
         <SectionHeader>Strategies</SectionHeader>
         <Panel className="flex min-h-[200px] items-center justify-center">
           <p className="text-center text-[13px] text-[#9b938b]">
-            No strategy summary rows for {marketScope}. Widen the sidebar market filter or check the
-            experiment.
+            No strategy summary rows for {marketScope}. Select a different market or check the experiment.
           </p>
         </Panel>
       </div>
@@ -262,12 +288,28 @@ export function StrategiesTab({ data, runs, marketFilter }: StrategiesTabProps) 
 
   return (
     <div className="space-y-4 pb-1">
+      {allMarkets.length > 0 && (
+        <div className="dashboard-panel rounded-[18px] px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="dashboard-label shrink-0">Market</span>
+            <select
+              value={marketFilter}
+              onChange={(e) => setMarketFilter(e.target.value)}
+              className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+            >
+              <option value="All">All markets</option>
+              {allMarkets.map((m) => (
+                <option key={m} value={m}>{MARKET_LABELS[m] ?? m}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
       <div>
         <SectionHeader>Strategies</SectionHeader>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
-          One place for <strong>aggregated performance</strong>, <strong>risk</strong>,{" "}
-          <strong>run counts</strong>, and <strong>factor tilts</strong> by strategy. Figures respect
-          the sidebar <strong>market</strong> filter ({marketScope}).
+          Aggregated performance, risk, run counts, and factor tilts by strategy — currently showing{" "}
+          <strong>{marketScope}</strong>.
         </p>
       </div>
 
