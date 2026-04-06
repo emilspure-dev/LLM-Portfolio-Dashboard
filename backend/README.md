@@ -34,7 +34,8 @@ npm run dev
 - The browser never connects to SQLite directly.
 - The API process should run on the server and read `/srv/thesis/db/current.sqlite` through `SQLITE_DB_PATH`.
 - CORS is restricted to the origins listed in `DASHBOARD_ALLOWED_ORIGINS`.
-- The holdings endpoint currently preserves the intended `vw_holdings_daily` response shape by selecting from `daily_holdings` with explicit aliases, because the live `vw_holdings_daily` view references non-existent unqualified date columns in the current database build.
+- The backend reads the raw schema-version-2 tables directly (`experiments`, `paths`, `llm_run_results`, `path_period_metrics`, `daily_path_metrics`, `daily_holdings`, `market_periods`, `instrument_periods`, `daily_prices`).
+- `/api/health` reports the connected schema version, but the route layer no longer blocks requests once the live DB has been promoted.
 
 ## Example curl requests
 

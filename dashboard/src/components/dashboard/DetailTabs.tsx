@@ -870,10 +870,10 @@ export function EquityCurvesTab({ data, marketFilter }: BaseTabProps) {
           <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
             <p className="dashboard-label">Series source</p>
             <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">
-              {selectedStrategy?.source_type === "benchmark" ? "Benchmark daily view" : "Strategy daily view"}
+              {selectedStrategy?.source_type === "benchmark" ? "Benchmark path metrics" : "Strategy path metrics"}
             </p>
             <p className="mt-1 text-[11px] text-[#9b938b]">
-              The chart uses the live `vw_strategy_daily` / factor views.
+              The chart is loaded from raw daily path metrics through the backend.
             </p>
           </div>
           <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
@@ -893,7 +893,7 @@ export function EquityCurvesTab({ data, marketFilter }: BaseTabProps) {
       ) : curveRows.length === 0 ? (
         <EmptyState
           title="No daily series for this selection"
-          body="The live database currently exposes daily chart views only for the benchmark paths. Choose a benchmark strategy such as Index, 1/N, 60/40, Mean-variance, or Fama-French to inspect live curves."
+          body="No daily path-metric rows were returned for the current strategy and market selection. Try another strategy, market, or date range."
         />
       ) : (
         <>
@@ -1160,7 +1160,7 @@ export function PortfoliosTab({ data, runs, marketFilter }: BaseTabProps) {
               {selectedDate || "Auto-selecting latest"}
             </p>
             <p className="mt-1 text-[11px] text-[#9b938b]">
-              The table pages through `vw_holdings_daily`.
+              The table pages through raw holdings plus instrument metadata.
             </p>
           </div>
         </div>
@@ -1590,7 +1590,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
           ) : runCurveRows.length === 0 ? (
             <EmptyState
               title="No daily series for this path"
-              body="The strategy_daily view has no rows for this path. Benchmark and some strategy paths usually have series; check the Equity Curves tab for coverage."
+              body="No daily path-metric rows were returned for the selected path. Check the run filters or switch to another path."
             />
           ) : (
             <>
@@ -2212,7 +2212,7 @@ export function DrawdownsTab({ data, marketFilter }: BaseTabProps) {
           />
           <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
             <p className="dashboard-label">Source</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">`vw_regime_daily`</p>
+            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">Raw path + regime metrics</p>
             <p className="mt-1 text-[11px] text-[#9b938b]">
               Average path drawdowns and regime switches.
             </p>
@@ -2230,7 +2230,7 @@ export function DrawdownsTab({ data, marketFilter }: BaseTabProps) {
       ) : chartRows.length === 0 ? (
         <EmptyState
           title="No drawdown series for this selection"
-          body="The live database currently exposes drawdown / regime time series only for the benchmark paths. Switch to a benchmark strategy to inspect drawdowns."
+          body="No drawdown or regime rows were returned for the current strategy and market selection. Try another strategy, market, or date range."
         />
       ) : (
         <>
