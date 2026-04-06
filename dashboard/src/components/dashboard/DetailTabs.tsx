@@ -2194,14 +2194,19 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
   );
 
   const MODEL_COLORS = [CHART_COLORS[0], CHART_COLORS[1], CHART_COLORS[2], CHART_COLORS[3], CHART_COLORS[4], COLORS.accent, COLORS.amber];
+  const gptFilteredRuns = useMemo(
+    () => filteredRuns.filter((r) => r.prompt_type === "retail" || r.prompt_type === "advanced"),
+    [filteredRuns]
+  );
+
   const modelScatterData = useMemo(() => {
-    const models = Array.from(new Set(filteredRuns.map((r) => r.model).filter(Boolean) as string[])).sort();
+    const models = Array.from(new Set(gptFilteredRuns.map((r) => r.model).filter(Boolean) as string[])).sort();
     if (models.length < 2) return null;
     const colorMap = new Map(models.map((m, i) => [m, MODEL_COLORS[i % MODEL_COLORS.length]]));
     return {
       models,
       colorMap,
-      points: filteredRuns
+      points: gptFilteredRuns
         .filter((r) => r.model && asNumber(r.sharpe_ratio) != null)
         .map((r) => ({
           sharpe: asNumber(r.sharpe_ratio)!,
@@ -2210,13 +2215,13 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
           color: colorMap.get(String(r.model)) ?? COLORS.accent,
         })),
     };
-  }, [filteredRuns]);
+  }, [gptFilteredRuns]);
 
   const hhiScatterData = useMemo(() => {
-    const models = Array.from(new Set(filteredRuns.map((r) => r.model).filter(Boolean) as string[])).sort();
+    const models = Array.from(new Set(gptFilteredRuns.map((r) => r.model).filter(Boolean) as string[])).sort();
     if (models.length < 2) return null;
     const colorMap = new Map(models.map((m, i) => [m, MODEL_COLORS[i % MODEL_COLORS.length]]));
-    const points = filteredRuns
+    const points = gptFilteredRuns
       .filter((r) => r.model && asNumber(r.hhi) != null)
       .map((r) => ({
         hhi: asNumber(r.hhi)!,
@@ -2226,7 +2231,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
       }));
     if (points.length < 4) return null;
     return { models, colorMap, points };
-  }, [filteredRuns]);
+  }, [gptFilteredRuns]);
 
   return (
     <div className="space-y-4 pb-1">
