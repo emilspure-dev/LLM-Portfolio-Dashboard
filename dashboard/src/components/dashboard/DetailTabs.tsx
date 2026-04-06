@@ -2788,6 +2788,10 @@ export function StatisticalTestsTab({ runs }: BaseTabProps) {
 
 export function BehaviorTab({ data }: BaseTabProps) {
   const rows = data.behavior;
+  const [reasoningPromptFilter, setReasoningPromptFilter] = useState<"all" | "retail" | "advanced">("all");
+  const [reasoningSearch, setReasoningSearch] = useState("");
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
   const chartData = rows.map((row) => ({
     prompt: row.prompt_type,
     hhi: row.mean_hhi,
@@ -2796,6 +2800,54 @@ export function BehaviorTab({ data }: BaseTabProps) {
     forecastAbsErrorPct: row.mean_forecast_abs_error * 100,
     realizedReturnPct: row.mean_realized_net_return * 100,
   }));
+
+  // Compute post-loss runs: for each (strategy, market, model, prompt_type) group sorted by
+  // period, find runs where the immediately preceding period had a negative return.
+  const postLossRuns = useMemo(() => {
+    const groups = new Map<string, RunRow[]>();
+    for (const run of data.runs) {
+      if (!run.prompt_type) continue;
+      const key = `${run.strategy_key ?? ""}::${run.market ?? ""}::${run.model ?? ""}::${run.prompt_type}`;
+      const group = groups.get(key) ?? [];
+      group.push(run);
+      groups.set(key, group);
+    }
+    const result: Array<{ run: RunRow; priorReturn: number; key: string }> = [];
+    for (const group of groups.values()) {
+      const sorted = [...group].sort((a, b) =>
+        String(a.period ?? "").localeCompare(String(b.period ?? ""))
+      );
+      for (let i = 1; i < sorted.length; i++) {
+        const prior = sorted[i - 1];
+        const priorReturn =
+          (prior.period_return as number | null | undefined) ??
+          (prior.net_return as number | null | undefined) ??
+          (prior.period_return_net as number | null | undefined) ??
+          null;
+        if (priorReturn != null && priorReturn < 0) {
+          const run = sorted[i];
+          result.push({
+            run,
+            priorReturn,
+            key: `${String(run.strategy_key ?? "")}::${String(run.market ?? "")}::${String(run.period ?? "")}::${String(run.prompt_type ?? "")}`,
+          });
+        }
+      }
+    }
+    return result;
+  }, [data.runs]);
+
+  const filteredPostLoss = useMemo(() => {
+    return postLossRuns.filter(({ run }) => {
+      if (reasoningPromptFilter !== "all" && run.prompt_type !== reasoningPromptFilter) return false;
+      if (reasoningSearch.trim()) {
+        const q = reasoningSearch.toLowerCase();
+        const summary = String((run as Record<string, unknown>).reasoning_summary ?? "").toLowerCase();
+        if (!summary.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [postLossRuns, reasoningPromptFilter, reasoningSearch]);
 
   return (
     <div className="space-y-4 pb-1">
@@ -2889,6 +2941,132 @@ export function BehaviorTab({ data }: BaseTabProps) {
               </tbody>
             </table>
           </Panel>
+
+          {/* ── Post-loss reasoning analysis ── */}
+          <SectionHeader>Post-loss reasoning</SectionHeader>
+          <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+            <p className="text-[12px] leading-5 text-[#8f8780]">
+              Reasoning summaries captured for runs that immediately followed a period with a negative return.
+              Use these to understand what arguments the model invokes when recovering from a drawdown.
+            </p>
+          </Panel>
+
+          {postLossRuns.length === 0 ? (
+            <Panel>
+              <p className="py-8 text-center text-[12px] text-[#9b938b]">
+                No post-loss runs found — either no consecutive losing periods in the data or no reasoning summaries are stored for these runs.
+              </p>
+            </Panel>
+          ) : (
+            <>
+              {/* Controls */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex gap-1 rounded-[12px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] p-1">
+                  {(["all", "retail", "advanced"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => setReasoningPromptFilter(opt)}
+                      className={`rounded-[9px] px-3 py-1 text-[11px] font-medium transition-colors ${
+                        reasoningPromptFilter === opt
+                          ? "bg-[rgba(188,160,130,0.28)] text-[#5c534c]"
+                          : "text-[#9b938b] hover:text-[#5c534c]"
+                      }`}
+                    >
+                      {opt === "all" ? `All (${postLossRuns.length})` : opt.charAt(0).toUpperCase() + opt.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search reasoning…"
+                  value={reasoningSearch}
+                  onChange={(e) => setReasoningSearch(e.target.value)}
+                  className="flex-1 rounded-[12px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-3 py-1.5 text-[11px] text-[#5c534c] placeholder-[#b4aca5] outline-none focus:border-[rgba(188,160,130,0.6)]"
+                />
+                <span className="text-[11px] text-[#b4aca5]">{filteredPostLoss.length} shown</span>
+              </div>
+
+              {filteredPostLoss.length === 0 ? (
+                <Panel>
+                  <p className="py-4 text-center text-[12px] text-[#9b938b]">No results match the current filter.</p>
+                </Panel>
+              ) : (
+                <div className="space-y-2">
+                  {filteredPostLoss.map(({ run, priorReturn, key }) => {
+                    const summary = String((run as Record<string, unknown>).reasoning_summary ?? "");
+                    const hasReasoning = summary.length > 0;
+                    const isExpanded = expandedKey === key;
+                    const promptLabel = run.prompt_type === "advanced" ? "Advanced" : "Retail";
+                    const promptColor = run.prompt_type === "advanced" ? COLORS.accent : COLORS.cyan;
+                    return (
+                      <div
+                        key={key}
+                        className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3"
+                      >
+                        {/* Header row */}
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                            <span
+                              className="rounded-[8px] px-2 py-0.5 font-medium"
+                              style={{ backgroundColor: `${promptColor}22`, color: promptColor }}
+                            >
+                              {promptLabel}
+                            </span>
+                            <span className="text-[#5c534c]">
+                              {MARKET_LABELS[run.market ?? ""] ?? run.market ?? "—"}
+                            </span>
+                            <span className="text-[#b4aca5]">·</span>
+                            <span className="text-[#8d857f]">{run.period ?? "—"}</span>
+                            {run.model && (
+                              <>
+                                <span className="text-[#b4aca5]">·</span>
+                                <span className="font-mono text-[10px] text-[#a39a92]">{String(run.model)}</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] text-[#9b938b]">
+                              Prior return:{" "}
+                              <span className="font-semibold text-[#c17070]">
+                                {(priorReturn * 100).toFixed(1)}%
+                              </span>
+                            </span>
+                            {run.sharpe_ratio != null && (
+                              <span className="text-[11px] text-[#9b938b]">
+                                This-period Sharpe:{" "}
+                                <span className="font-semibold" style={{ color: sharpeColor(run.sharpe_ratio as number) }}>
+                                  {(run.sharpe_ratio as number).toFixed(2)}
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Reasoning body */}
+                        {hasReasoning ? (
+                          <div className="mt-2">
+                            <p className={`text-[11px] leading-[1.7] text-[#5c534c] ${isExpanded ? "" : "line-clamp-3"}`}>
+                              {summary}
+                            </p>
+                            {summary.length > 220 && (
+                              <button
+                                onClick={() => setExpandedKey(isExpanded ? null : key)}
+                                className="mt-1 text-[10px] font-medium text-[#a07c5a] hover:text-[#7a5c3c]"
+                              >
+                                {isExpanded ? "Show less" : "Read more"}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-[11px] italic text-[#b4aca5]">No reasoning summary stored for this run.</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
         </>
       )}
     </div>
