@@ -387,7 +387,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             </p>
           ) : (
             <ResponsiveContainer width="100%" height={320}>
-              <ScatterChart margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
+              <ScatterChart margin={{ top: 8, right: 120, left: 8, bottom: 8 }}>
                 <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
                 <XAxis
                   type="number"
@@ -411,13 +411,44 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                 <Tooltip
                   {...tooltipStyle}
                   cursor={{ strokeDasharray: "3 6" }}
-                  formatter={(value: number) => `${value.toFixed(1)}%`}
+                  content={({ payload }) => {
+                    if (!payload?.length) return null;
+                    const d = payload[0].payload as { name: string; volPct: number; retPct: number };
+                    return (
+                      <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
+                        <p style={{ fontWeight: 600, marginBottom: 4, color: "#5c534c" }}>{d.name}</p>
+                        <p style={{ color: "#8f8780" }}>Volatility : {d.volPct.toFixed(1)}%</p>
+                        <p style={{ color: "#8f8780" }}>Ann. return : {d.retPct.toFixed(1)}%</p>
+                      </div>
+                    );
+                  }}
                 />
-                <Scatter data={scatterData} fill={COLORS.accent}>
-                  {scatterData.map((row) => (
-                    <Cell key={row.strategy_key} fill={getStrategyColor(row.strategy_key)} />
-                  ))}
-                </Scatter>
+                <Scatter
+                  data={scatterData}
+                  fill={COLORS.accent}
+                  shape={(props: Record<string, unknown>) => {
+                    const cx = props.cx as number;
+                    const cy = props.cy as number;
+                    const payload = props.payload as { strategy_key: string; name: string };
+                    const color = getStrategyColor(payload.strategy_key);
+                    const r = 6;
+                    return (
+                      <g key={payload.strategy_key}>
+                        <circle cx={cx} cy={cy} r={r} fill={color} stroke="white" strokeWidth={1.5} />
+                        <text
+                          x={cx + r + 5}
+                          y={cy + 4}
+                          fontSize={10}
+                          fill={color}
+                          fontWeight={500}
+                          style={{ userSelect: "none" }}
+                        >
+                          {payload.name}
+                        </text>
+                      </g>
+                    );
+                  }}
+                />
               </ScatterChart>
             </ResponsiveContainer>
           )}
