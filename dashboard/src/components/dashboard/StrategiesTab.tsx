@@ -20,6 +20,17 @@ import { buildStrategySummaryWithRunSharpe } from "@/lib/data-loader";
 import type { FactorStyleSummaryRow } from "@/lib/api-types";
 import type { EvaluationData, RunRow } from "@/lib/types";
 
+/** Stable [0, 1) for jitter so dots don’t jump on re-render. */
+function jitter01(run: RunRow): number {
+  const s = `${run.run_id ?? ""}|${run.strategy_key ?? ""}|${run.market ?? ""}|${run.period ?? ""}|${run.model ?? ""}`;
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967296;
+}
+
 function Panel({
   children,
   className = "",
@@ -473,8 +484,13 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
           .filter((r) => r.sharpe_ratio != null && r.strategy_key)
           .map((r) => {
             const idx = strategyOrder.indexOf(r.strategy_key as (typeof GPT_DISPERSION_KEYS)[number]);
+            // Place each strategy in an equal-width band [idx, idx+1] with jitter around idx+0.5.
+            // (Old layout used domain [-0.5, n-0.5], which made the left half-band only half as wide as
+            // the middle band, so Advanced looked shifted right of its grid line.)
+            const u = jitter01(r);
+            const strategyIdx = idx + 0.15 + u * 0.7;
             return {
-              strategyIdx: idx + Math.random() * 0.6 - 0.3,
+              strategyIdx,
               sharpe: r.sharpe_ratio as number,
               label: formatStrategyLabel(r.strategy ?? r.strategy_key ?? ""),
               strategyKey: r.strategy_key ?? "",
@@ -493,10 +509,13 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                 <XAxis
                   type="number"
                   dataKey="strategyIdx"
-                  domain={[-0.5, strategyOrder.length - 0.5]}
-                  ticks={strategyOrder.map((_, i) => i)}
+                  domain={[0, strategyOrder.length]}
+                  ticks={strategyOrder.map((_, i) => i + 0.5)}
                   tickFormatter={(v: number) => {
-                    const idx = Math.round(v);
+                    const idx = Math.min(
+                      strategyOrder.length - 1,
+                      Math.max(0, Math.round(Number(v) - 0.5))
+                    );
                     const key = strategyOrder[idx];
                     if (!key) return "";
                     const row = summary.find((s) => s.strategy_key === key);
@@ -531,10 +550,10 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                     );
                   }}
                 />
-                {strategyOrder.map((_, i) => (
+                {Array.from({ length: Math.max(0, strategyOrder.length - 1) }, (_, i) => (
                   <ReferenceLine
-                    key={i}
-                    x={i}
+                    key={`sep-${i + 1}`}
+                    x={i + 1}
                     stroke="rgba(220,213,206,0.4)"
                     strokeDasharray="3 6"
                   />
