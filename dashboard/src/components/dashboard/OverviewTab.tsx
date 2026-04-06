@@ -7,8 +7,12 @@ import { KpiCard } from "./KpiCard";
 import { InsightCard } from "./InsightCard";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import {
-  COLORS, getStrategyColor, sharpeColor, fmt, fmtp,
+  COLORS, MARKET_LABELS, getStrategyColor, sharpeColor, fmt, fmtp,
 } from "@/lib/constants";
+
+const MARKET_SHORT: Record<string, string> = Object.fromEntries(
+  Object.entries(MARKET_LABELS).map(([k, v]) => [k, v.replace(/ \(.*\)$/, "")])
+);
 import type { EvaluationData, RunRow, Insight } from "@/lib/types";
 
 interface OverviewTabProps {
@@ -153,6 +157,66 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     return result;
   }, [summary, runs]);
 
+  // Two-tier strategy grouping: one overall entry per strategy_key + per-market breakdown
+  const strategyGroups = useMemo(() => {
+    if (!data.summary_rows?.length) return null;
+
+    const groups = new Map<string, typeof data.summary_rows>();
+    for (const row of data.summary_rows) {
+      const key = `${row.strategy_key}::${row.source_type}`;
+      const group = groups.get(key) ?? [];
+      group.push(row);
+      groups.set(key, group);
+    }
+
+    function wavg(
+      rows: typeof data.summary_rows,
+      get: (r: (typeof data.summary_rows)[0]) => number | null
+    ): number | null {
+      const valid = rows.filter((r) => {
+        const v = get(r);
+        return v != null && Number.isFinite(v);
+      });
+      if (!valid.length) return null;
+      const totalObs = valid.reduce((s, r) => s + (r.observations ?? 1), 0);
+      if (!totalObs) return null;
+      return valid.reduce((s, r) => s + (get(r) as number) * (r.observations ?? 1), 0) / totalObs;
+    }
+
+    const result = Array.from(groups.entries()).map(([key, rows]) => {
+      const rep = rows[0];
+      const totalObs = rows.reduce((s, r) => s + (r.observations ?? 0), 0);
+      const label = rep.strategy
+        .replace("GPT (", "")
+        .replace(")", "")
+        .replace(" (market-matched)", "")
+        .replace(" (buy-and-hold)", "")
+        .trim();
+      const byMarket = rows
+        .map((r) => ({ market: r.market, sharpe: r.mean_sharpe, ret: r.mean_annualized_return }))
+        .sort((a, b) => {
+          const order: Record<string, number> = { us: 0, germany: 1, japan: 2 };
+          return (order[a.market] ?? 99) - (order[b.market] ?? 99);
+        });
+      return {
+        key,
+        label,
+        strategyKey: rep.strategy_key,
+        overallSharpe: wavg(rows, (r) => r.mean_sharpe),
+        overallReturn: wavg(rows, (r) => r.mean_annualized_return),
+        totalObs,
+        byMarket,
+      };
+    });
+
+    return result.sort((a, b) => {
+      const aGpt = a.strategyKey.startsWith("gpt_");
+      const bGpt = b.strategyKey.startsWith("gpt_");
+      if (aGpt !== bGpt) return aGpt ? -1 : 1;
+      return (b.overallSharpe ?? -Infinity) - (a.overallSharpe ?? -Infinity);
+    });
+  }, [data.summary_rows]);
+
   const tooltipStyle = {
     contentStyle: {
       backgroundColor: "rgba(255, 255, 252, 0.95)",
@@ -188,36 +252,89 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
 
       <SoftHr />
 
-      {/* Strategy KPI cards */}
-      {summary.length > 0 && (
+      {/* Strategy KPI cards — two-tier layout */}
+      {(strategyGroups ?? summary).length > 0 && (
         <>
           <SectionHeader>Strategy Performance</SectionHeader>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {summary.map((s) => {
-              const marketSuffix = !s.strategy_key.startsWith("gpt_") && s.markets?.length === 1
-                ? ` · ${s.markets[0]}`
-                : "";
-              const short = s.Strategy
-                .replace("GPT (", "")
-                .replace(")", "")
-                .replace(" (market-matched)", "")
-                .replace(" (buy-and-hold)", "")
-                + marketSuffix;
-              return (
-                <KpiCard
-                  key={`${s.strategy_key}::${s.markets?.[0] ?? ""}`}
-                  label={short}
-                  value={fmt(s.mean_sharpe, 2)}
-                  color={sharpeColor(s.mean_sharpe)}
-                  sub={`Sharpe | ${
-                    s.net_return_mean != null
-                      ? fmtp(s.net_return_mean * 100, 1)
-                      : "—"
-                  } ret | n=${s.n_observations}`}
-                />
-              );
-            })}
-          </div>
+          {strategyGroups ? (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {strategyGroups.map((group) => (
+                <div key={group.key} className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+                  {/* Overall row */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="dashboard-label truncate">{group.label}</p>
+                      <p
+                        className="mt-2 text-[26px] font-semibold leading-none tracking-[-0.05em]"
+                        style={{ color: sharpeColor(group.overallSharpe) }}
+                      >
+                        {fmt(group.overallSharpe, 2)}
+                      </p>
+                      <p className="mt-1.5 text-[11px] text-[#9f978f]">
+                        Sharpe ·{" "}
+                        {group.overallReturn != null
+                          ? fmtp(group.overallReturn * 100, 1)
+                          : "—"}{" "}
+                        ret · n={group.totalObs}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-[8px] bg-[rgba(0,0,0,0.04)] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#b4aca5]">
+                      All mkts
+                    </span>
+                  </div>
+
+                  {/* Per-market chips */}
+                  {group.byMarket.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-[rgba(227,220,214,0.6)] pt-3">
+                      {group.byMarket.map((m) => (
+                        <div
+                          key={m.market}
+                          className="min-w-[90px] flex-1 rounded-[10px] bg-[rgba(0,0,0,0.03)] px-3 py-2"
+                        >
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                            {MARKET_SHORT[m.market] ?? m.market}
+                          </p>
+                          <p
+                            className="mt-1 text-[15px] font-semibold tabular-nums leading-none"
+                            style={{ color: sharpeColor(m.sharpe) }}
+                          >
+                            {m.sharpe != null && Number.isFinite(m.sharpe)
+                              ? m.sharpe.toFixed(2)
+                              : "—"}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-[#9f978f]">
+                            {m.ret != null ? fmtp(m.ret * 100, 1) : "—"} ret
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Fallback: flat grid when summary_rows is unavailable */
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {summary.map((s) => {
+                const short = s.Strategy
+                  .replace("GPT (", "")
+                  .replace(")", "")
+                  .replace(" (market-matched)", "")
+                  .replace(" (buy-and-hold)", "");
+                return (
+                  <KpiCard
+                    key={`${s.strategy_key}::${s.markets?.[0] ?? ""}`}
+                    label={short}
+                    value={fmt(s.mean_sharpe, 2)}
+                    color={sharpeColor(s.mean_sharpe)}
+                    sub={`Sharpe | ${
+                      s.net_return_mean != null ? fmtp(s.net_return_mean * 100, 1) : "—"
+                    } ret | n=${s.n_observations}`}
+                  />
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 
