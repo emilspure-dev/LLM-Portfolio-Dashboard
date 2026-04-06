@@ -2291,6 +2291,51 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
     staleTime: 60_000,
   });
 
+  const runHoldingsQuery = useQuery({
+    queryKey: ["run-explorer-holdings", data.active_experiment_id, pathIdForCharts],
+    queryFn: () =>
+      getDailyHoldings({
+        experiment_id: data.active_experiment_id,
+        path_id: pathIdForCharts!,
+        page: 1,
+        page_size: 500,
+      }),
+    enabled: Boolean(data.active_experiment_id && pathIdForCharts),
+    staleTime: 60_000,
+  });
+
+  const runHoldingsWeightTotals = useMemo(() => {
+    const items = runHoldingsQuery.data?.items ?? [];
+    if (items.length === 0) return null;
+    const dates = Array.from(new Set(items.map((i) => i.date))).sort();
+    const latest = dates[dates.length - 1] ?? "";
+    const slice = latest ? items.filter((i) => i.date === latest) : items;
+    let driftSum = 0;
+    let targetSum = 0;
+    let driftN = 0;
+    let targetN = 0;
+    for (const h of slice) {
+      const dw = asNumber(h.drifted_weight);
+      const tw = asNumber(h.target_weight);
+      if (dw != null && Number.isFinite(dw)) {
+        driftSum += dw;
+        driftN += 1;
+      }
+      if (tw != null && Number.isFinite(tw)) {
+        targetSum += tw;
+        targetN += 1;
+      }
+    }
+    const multiPage = (runHoldingsQuery.data?.total_pages ?? 1) > 1;
+    return {
+      latestDate: latest,
+      driftSum: driftN > 0 ? driftSum : null,
+      targetSum: targetN > 0 ? targetSum : null,
+      positionCount: slice.length,
+      multiPage,
+    };
+  }, [runHoldingsQuery.data]);
+
   const runCurveRows = useMemo(
     () => singlePathEquitySeries(runEquityQuery.data ?? []),
     [runEquityQuery.data]
@@ -2798,7 +2843,10 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                     {pathIdForCharts && <span className="ml-1 font-mono text-[10px]">· path {pathIdForCharts}</span>}
                   </p>
                 </div>
-                <div className="grid min-w-0 grid-cols-2 gap-2 sm:max-w-md">
+                <div
+                  id="run-explorer-portfolio-weights"
+                  className="grid min-w-0 grid-cols-2 gap-2 sm:max-w-4xl sm:grid-cols-4"
+                >
                   <KpiCard
                     label="Sharpe"
                     value={selectedRun.sharpe_ratio != null ? selectedRun.sharpe_ratio.toFixed(2) : "—"}
@@ -2820,6 +2868,42 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                         : COLORS.red
                     }
                     sub="Net period"
+                  />
+                  <KpiCard
+                    label="Σ drifted weight"
+                    value={
+                      !pathIdForCharts
+                        ? "—"
+                        : runHoldingsQuery.isLoading
+                          ? "…"
+                          : runHoldingsWeightTotals?.driftSum != null
+                            ? formatPctFromRatio(runHoldingsWeightTotals.driftSum, 1)
+                            : "—"
+                    }
+                    color={COLORS.accent}
+                    sub={
+                      !pathIdForCharts
+                        ? "Needs path_id on this run"
+                        : runHoldingsQuery.isError
+                          ? "Could not load holdings"
+                          : runHoldingsWeightTotals
+                            ? `Latest snapshot ${formatDateLabel(runHoldingsWeightTotals.latestDate)} · ${runHoldingsWeightTotals.positionCount} line${runHoldingsWeightTotals.positionCount === 1 ? "" : "s"}${runHoldingsWeightTotals.multiPage ? " (holdings are paginated — totals use loaded rows only)" : ""}`
+                            : "No holdings rows for this path"
+                    }
+                  />
+                  <KpiCard
+                    label="Σ target weight"
+                    value={
+                      !pathIdForCharts
+                        ? "—"
+                        : runHoldingsQuery.isLoading
+                          ? "…"
+                          : runHoldingsWeightTotals?.targetSum != null
+                            ? formatPctFromRatio(runHoldingsWeightTotals.targetSum, 1)
+                            : "—"
+                    }
+                    color={COLORS.cyan}
+                    sub="Sum of target weights at same date as drifted"
                   />
                 </div>
               </div>
@@ -3009,8 +3093,20 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                     </td>
                     <td className="px-3 py-2.5 text-right text-[#8d857f]">{run.n_holdings ?? "—"}</td>
                     <td className="px-3 py-2.5 text-[#8d857f]">{run.market_regime_label ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">
-                      <div className="max-w-[320px] whitespace-normal leading-5">
+                    <td
+                      className="px-3 py-2.5 text-[#8d857f]"
+                      title="Click to select this run and scroll to portfolio weight totals (Σ drifted / Σ target)."
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedRunKey(rowKey);
+                        requestAnimationFrame(() => {
+                          document
+                            .getElementById("run-explorer-portfolio-weights")
+                            ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                        });
+                      }}
+                    >
+                      <div className="max-w-[320px] whitespace-normal leading-5 underline decoration-[rgba(180,172,165,0.45)] decoration-dotted underline-offset-2">
                         {asString(run.reasoning_summary).slice(0, 160) || "No reasoning summary stored"}
                         {asString(run.reasoning_summary).length > 160 ? "..." : ""}
                       </div>
