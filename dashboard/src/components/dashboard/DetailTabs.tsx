@@ -2819,14 +2819,29 @@ export function BehaviorTab({ data }: BaseTabProps) {
             <Panel>
               <p className="dashboard-label mb-4">Diversification and turnover</p>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                <BarChart data={chartData} margin={{ top: 8, right: 48, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
                   <XAxis dataKey="prompt" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    yAxisId="left"
+                    tick={{ fontSize: 10, fill: "#aca49d" }}
+                    axisLine={false}
+                    tickLine={false}
+                    label={{ value: "Eff. holdings", angle: -90, position: "insideLeft", offset: 12, style: { fontSize: 9, fill: "#aca49d" } }}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tick={{ fontSize: 10, fill: COLORS.red }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) => v.toFixed(2)}
+                    label={{ value: "HHI", angle: 90, position: "insideRight", offset: 12, style: { fontSize: 9, fill: COLORS.red } }}
+                  />
                   <Tooltip {...tooltipStyle} />
                   <Legend />
-                  <Bar dataKey="effectiveHoldings" fill={COLORS.cyan} radius={[8, 8, 0, 0]} name="Effective holdings" />
-                  <Bar dataKey="hhi" fill={COLORS.red} radius={[8, 8, 0, 0]} name="HHI" />
+                  <Bar yAxisId="left" dataKey="effectiveHoldings" fill={COLORS.cyan} radius={[8, 8, 0, 0]} name="Effective holdings" />
+                  <Bar yAxisId="right" dataKey="hhi" fill={COLORS.red} radius={[8, 8, 0, 0]} name="HHI" />
                 </BarChart>
               </ResponsiveContainer>
             </Panel>
