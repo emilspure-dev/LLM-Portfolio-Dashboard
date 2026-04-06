@@ -2622,11 +2622,13 @@ export function ByMarketTab({ data }: BaseTabProps) {
                     const background =
                       sharpe == null
                         ? "transparent"
-                        : sharpe > 1
-                          ? "rgba(156, 199, 164, 0.2)"
-                          : sharpe > 0.5
-                            ? "rgba(216, 182, 146, 0.18)"
-                            : "rgba(212, 151, 144, 0.18)";
+                        : sharpe > 1.2
+                          ? "rgba(120, 185, 135, 0.55)"
+                          : sharpe > 0.9
+                            ? "rgba(156, 199, 164, 0.42)"
+                            : sharpe > 0.6
+                              ? "rgba(216, 182, 146, 0.40)"
+                              : "rgba(212, 140, 130, 0.42)";
 
                     return (
                       <td key={market} className="px-3 py-2.5 text-center">
