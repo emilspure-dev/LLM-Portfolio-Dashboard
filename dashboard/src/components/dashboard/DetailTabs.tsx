@@ -848,11 +848,17 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
     }
     const retailMean = retail.length ? mean(retail) : null;
     const advancedMean = advanced.length ? mean(advanced) : null;
-    const ewMean = mean(runStrategySharpes(scoped, "equal_weight"));
-    const mvMean = mean(runStrategySharpes(scoped, "mean_variance"));
-    const ixMean = mean(runStrategySharpes(scoped, "index"));
-    const sfMean = mean(runStrategySharpes(scoped, "sixty_forty"));
-    const ffMean = mean(runStrategySharpes(scoped, "fama_french"));
+    const summaryMean = (key: string) => {
+      const row = data.summary.find((s) => s.strategy_key === key);
+      return row?.mean_sharpe != null && Number.isFinite(row.mean_sharpe)
+        ? row.mean_sharpe
+        : null;
+    };
+    const ewMean = summaryMean("equal_weight");
+    const mvMean = summaryMean("mean_variance");
+    const ixMean = summaryMean("index");
+    const sfMean = summaryMean("sixty_forty");
+    const ffMean = summaryMean("fama_french");
     return {
       retail,
       advanced,
@@ -865,7 +871,7 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
       sfMean,
       ffMean,
     };
-  }, [runs, marketFilter]);
+  }, [runs, marketFilter, data.summary]);
 
   const {
     retail: retailSharpes,
