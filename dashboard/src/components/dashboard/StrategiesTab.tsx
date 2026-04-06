@@ -465,7 +465,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             (r.strategy_key === "gpt_advanced" || r.strategy_key === "gpt_retail")
         );
         const strategyOrder = GPT_DISPERSION_KEYS.filter((k) =>
-          gptDispersionRuns.some((r) => r.strategy_key === k)
+          gptDispersionRuns.some((r) => r.strategy_key === k && r.sharpe_ratio != null)
         );
         if (strategyOrder.length === 0) return null;
 
