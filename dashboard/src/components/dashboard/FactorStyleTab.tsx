@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -11,7 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { InsightCard } from "./InsightCard";
-import { LatexFigureCopyButton } from "./LatexFigureCopyButton";
+import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import { CHART_COLORS, MARKET_LABELS } from "@/lib/constants";
 import { getApiBaseUrl } from "@/lib/api-client";
@@ -73,6 +73,7 @@ interface FactorStyleTabProps {
 export function FactorStyleTab({ data }: FactorStyleTabProps) {
   const allMarkets: string[] = data.filters?.markets ?? [];
   const [marketFilter, setMarketFilter] = useState("All");
+  const factorStyleChartRef = useRef<HTMLDivElement>(null);
 
   const factorStyleFiltered = useMemo(() => {
     const rows = data.factor_style_rows ?? [];
@@ -172,17 +173,19 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
       ) : factorBarChartData.length > 0 ? (
         <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
           <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
-            <LatexFigureCopyButton
+            <FigureExportControls
+              captureRef={factorStyleChartRef}
               slug="factor-style-portfolio-tilts"
               caption="Factor style — Portfolio factor tilts (size, value, momentum, low risk, quality)"
               experimentId={data.active_experiment_id}
             />
           </div>
-          <ResponsiveContainer
-            width="100%"
-            height={Math.min(720, Math.max(260, factorBarChartData.length * 44 + 72))}
-          >
-            <BarChart
+          <div ref={factorStyleChartRef} className="min-w-0">
+            <ResponsiveContainer
+              width="100%"
+              height={Math.min(720, Math.max(260, factorBarChartData.length * 44 + 72))}
+            >
+              <BarChart
               data={factorBarChartData}
               layout="vertical"
               margin={{ left: 8, right: 16, top: 8, bottom: 8 }}

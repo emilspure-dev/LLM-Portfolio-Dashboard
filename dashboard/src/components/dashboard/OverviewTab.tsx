@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   ReferenceLine, Cell, CartesianGrid,
 } from "recharts";
 import { KpiCard } from "./KpiCard";
 import { InsightCard } from "./InsightCard";
-import { LatexFigureCopyButton } from "./LatexFigureCopyButton";
+import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import {
   COLORS, MARKET_LABELS, getStrategyColor, sharpeColor, fmt, fmtp,
@@ -23,6 +23,8 @@ interface OverviewTabProps {
 
 export function OverviewTab({ data, runs }: OverviewTabProps) {
   const { summary } = data;
+  const overviewBeatIndexRef = useRef<HTMLDivElement>(null);
+  const overviewBeat6040Ref = useRef<HTMLDivElement>(null);
   const nRuns = runs.filter((r) => r.valid !== false).length;
   const nMarkets = new Set(runs.map((r) => r.market).filter(Boolean)).size;
   const nPeriods = new Set(runs.map((r) => r.period).filter(Boolean)).size;
@@ -379,14 +381,16 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
               <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
                   <p className="dashboard-label">% of runs beating market index (Sharpe)</p>
-                  <LatexFigureCopyButton
+                  <FigureExportControls
+                    captureRef={overviewBeatIndexRef}
                     slug="overview-beat-index-sharpe"
                     caption="Overview — Percent of runs beating market index (Sharpe)"
                     experimentId={data.active_experiment_id}
                   />
                 </div>
-                <ResponsiveContainer width="100%" height={beatIndexData.length * 40 + 36}>
-                  <BarChart data={beatIndexData} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
+                <div ref={overviewBeatIndexRef} className="min-w-0">
+                  <ResponsiveContainer width="100%" height={beatIndexData.length * 40 + 36}>
+                    <BarChart data={beatIndexData} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
                     <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
                     <XAxis
                       type="number"
@@ -416,7 +420,8 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                       ))}
                     </Bar>
                   </BarChart>
-                </ResponsiveContainer>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
 
@@ -424,14 +429,16 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
               <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
                   <p className="dashboard-label">% of runs beating 60/40 (Sharpe)</p>
-                  <LatexFigureCopyButton
+                  <FigureExportControls
+                    captureRef={overviewBeat6040Ref}
                     slug="overview-beat-sixty-forty-sharpe"
                     caption="Overview — Percent of runs beating 60/40 (Sharpe)"
                     experimentId={data.active_experiment_id}
                   />
                 </div>
-                <ResponsiveContainer width="100%" height={beat60Data.length * 40 + 36}>
-                  <BarChart data={beat60Data} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
+                <div ref={overviewBeat6040Ref} className="min-w-0">
+                  <ResponsiveContainer width="100%" height={beat60Data.length * 40 + 36}>
+                    <BarChart data={beat60Data} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
                     <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
                     <XAxis
                       type="number"
@@ -462,6 +469,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
               </div>
             )}
           </div>
