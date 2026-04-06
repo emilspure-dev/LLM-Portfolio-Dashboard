@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { KpiCard } from "./KpiCard";
 import { InsightCard } from "./InsightCard";
+import { LatexFigureCopyButton } from "./LatexFigureCopyButton";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import {
   COLORS, MARKET_LABELS, getStrategyColor, sharpeColor, fmt, fmtp,
@@ -376,9 +377,14 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {beatIndexData.length > 0 && (
               <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
-                <p className="dashboard-label mb-4">
-                  % of runs beating market index (Sharpe)
-                </p>
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                  <p className="dashboard-label">% of runs beating market index (Sharpe)</p>
+                  <LatexFigureCopyButton
+                    slug="overview-beat-index-sharpe"
+                    caption="Overview — Percent of runs beating market index (Sharpe)"
+                    experimentId={data.active_experiment_id}
+                  />
+                </div>
                 <ResponsiveContainer width="100%" height={beatIndexData.length * 40 + 36}>
                   <BarChart data={beatIndexData} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
                     <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -416,9 +422,14 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
 
             {beat60Data.length > 0 && (
               <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
-                <p className="dashboard-label mb-4">
-                  % of runs beating 60/40 (Sharpe)
-                </p>
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                  <p className="dashboard-label">% of runs beating 60/40 (Sharpe)</p>
+                  <LatexFigureCopyButton
+                    slug="overview-beat-sixty-forty-sharpe"
+                    caption="Overview — Percent of runs beating 60/40 (Sharpe)"
+                    experimentId={data.active_experiment_id}
+                  />
+                </div>
                 <ResponsiveContainer width="100%" height={beat60Data.length * 40 + 36}>
                   <BarChart data={beat60Data} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
                     <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />

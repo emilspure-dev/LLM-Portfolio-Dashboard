@@ -37,6 +37,7 @@ import type {
 } from "@/lib/api-types";
 import type { BehaviorRow, EvaluationData, RunRow, StrategyRow } from "@/lib/types";
 import { KpiCard } from "./KpiCard";
+import { LatexFigureCopyButton } from "./LatexFigureCopyButton";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 
 interface BaseTabProps {
@@ -1179,7 +1180,14 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
       <SectionHeader>Sharpe Distribution</SectionHeader>
       {retailSharpes.length > 0 || advancedSharpes.length > 0 ? (
         <Panel>
-          <p className="dashboard-label mb-2">Distribution of period Sharpe ratios</p>
+          <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+            <p className="dashboard-label">Distribution of period Sharpe ratios</p>
+            <LatexFigureCopyButton
+              slug="sharpe-returns-period-distribution"
+              caption="Distribution of period Sharpe ratios (GPT retail and advanced)"
+              experimentId={data.active_experiment_id}
+            />
+          </div>
           <p className="mb-3 text-[11px] leading-5 text-[#8a827a]">
             Overlapping run-level Sharpe counts for GPT portfolios (current market filter).{" "}
             <span className="font-medium text-[#6f6863]">Dashed</span> lines: mean Sharpe for GPT
@@ -1328,7 +1336,14 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <Panel>
-          <p className="dashboard-label mb-4">Mean Sharpe by strategy</p>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <p className="dashboard-label">Mean Sharpe by strategy</p>
+            <LatexFigureCopyButton
+              slug="sharpe-returns-mean-sharpe-by-strategy"
+              caption="Mean Sharpe by strategy"
+              experimentId={data.active_experiment_id}
+            />
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={summary} margin={{ top: 6, right: 12, left: 12, bottom: 30 }}>
               <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -1362,7 +1377,14 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
         </Panel>
 
         <Panel>
-          <p className="dashboard-label mb-4">Risk / return map</p>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <p className="dashboard-label">Risk / return map</p>
+            <LatexFigureCopyButton
+              slug="sharpe-returns-risk-return-map"
+              caption="Risk / return map (summary strategies)"
+              experimentId={data.active_experiment_id}
+            />
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <ScatterChart margin={{ top: 8, right: 12, left: 12, bottom: 20 }}>
               <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
@@ -1724,7 +1746,14 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
             <Panel>
-              <p className="dashboard-label mb-4">Average equity curve</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Average equity curve</p>
+                <LatexFigureCopyButton
+                  slug="equity-curves-average-equity"
+                  caption="Average equity curve"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <ResponsiveContainer width="100%" height={320}>
                 {(() => {
                   const benchMap = new Map(benchmarkRows.map((r) => [r.date, r.portfolioValue]));
@@ -1809,6 +1838,14 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
             <>
               <SectionHeader>Factor Exposures</SectionHeader>
               <Panel>
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                  <p className="dashboard-label">Factor exposures (daily)</p>
+                  <LatexFigureCopyButton
+                    slug="equity-curves-factor-exposures-daily"
+                    caption="Factor exposures (daily)"
+                    experimentId={data.active_experiment_id}
+                  />
+                </div>
                 <ResponsiveContainer width="100%" height={320}>
                   <LineChart data={factorRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
                     <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -2497,7 +2534,14 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
           <SectionHeader>Performance charts</SectionHeader>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <Panel>
-              <p className="dashboard-label mb-4">This page — Sharpe by run</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">This page — Sharpe by run</p>
+                <LatexFigureCopyButton
+                  slug="run-explorer-sharpe-by-run"
+                  caption="Run Explorer — Sharpe by run (current page)"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={pageComparisonData} margin={{ top: 6, right: 12, left: 12, bottom: 36 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -2527,7 +2571,14 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
               <p className="mt-2 text-[10px] text-[#aaa29a]">Runs on the current table page; color follows strategy.</p>
             </Panel>
             <Panel>
-              <p className="dashboard-label mb-4">This page — Net period return</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">This page — Net period return</p>
+                <LatexFigureCopyButton
+                  slug="run-explorer-net-period-return"
+                  caption="Run Explorer — Net period return (current page)"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={pageComparisonData} margin={{ top: 6, right: 12, left: 12, bottom: 36 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -2569,7 +2620,14 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
 
           {modelScatterData && (
             <Panel>
-              <p className="dashboard-label mb-4">Model comparison — Sharpe vs return</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Model comparison — Sharpe vs return</p>
+                <LatexFigureCopyButton
+                  slug="run-explorer-model-scatter-sharpe-return"
+                  caption="Run Explorer — Model comparison (Sharpe vs return)"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <ResponsiveContainer width="100%" height={300}>
                 <ScatterChart margin={{ top: 22, right: 100, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
@@ -2698,7 +2756,14 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
 
           {hhiScatterData && (
             <Panel>
-              <p className="dashboard-label mb-4">Model comparison — Sharpe vs HHI (concentration)</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Model comparison — Sharpe vs HHI (concentration)</p>
+                <LatexFigureCopyButton
+                  slug="run-explorer-model-scatter-sharpe-hhi"
+                  caption="Run Explorer — Model comparison (Sharpe vs HHI)"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <ResponsiveContainer width="100%" height={300}>
                 <ScatterChart margin={{ top: 22, right: 100, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
@@ -2926,7 +2991,14 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
             <>
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
                 <Panel>
-                  <p className="dashboard-label mb-4">Portfolio value (indexed to 100 at start)</p>
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                    <p className="dashboard-label">Portfolio value (indexed to 100 at start)</p>
+                    <LatexFigureCopyButton
+                      slug="run-explorer-portfolio-value-indexed"
+                      caption="Run Explorer — Portfolio value (indexed to 100 at start)"
+                      experimentId={data.active_experiment_id}
+                    />
+                  </div>
                   <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={runCurveRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
                       <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -2956,7 +3028,14 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                   </ResponsiveContainer>
                 </Panel>
                 <Panel>
-                  <p className="dashboard-label mb-4">Drawdown</p>
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                    <p className="dashboard-label">Drawdown</p>
+                    <LatexFigureCopyButton
+                      slug="run-explorer-drawdown-daily"
+                      caption="Run Explorer — Drawdown (daily)"
+                      experimentId={data.active_experiment_id}
+                    />
+                  </div>
                   <ResponsiveContainer width="100%" height={280}>
                     <AreaChart data={runCurveRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
                       <defs>
@@ -3003,7 +3082,14 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
               ) : (
                 runFactorSeries.length > 0 && (
                   <Panel>
-                    <p className="dashboard-label mb-4">Factor exposures (daily)</p>
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                      <p className="dashboard-label">Factor exposures (daily)</p>
+                      <LatexFigureCopyButton
+                        slug="run-explorer-factor-exposures-daily"
+                        caption="Run Explorer — Factor exposures (daily)"
+                        experimentId={data.active_experiment_id}
+                      />
+                    </div>
                     <ResponsiveContainer width="100%" height={280}>
                       <LineChart data={runFactorRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
                         <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -3184,7 +3270,14 @@ export function ByMarketTab({ data }: BaseTabProps) {
       </div>
 
       <Panel>
-        <p className="dashboard-label mb-4">Best strategy by market</p>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+          <p className="dashboard-label">Best strategy by market</p>
+          <LatexFigureCopyButton
+            slug="by-market-best-strategy-sharpe"
+            caption="Best strategy by market (Sharpe)"
+            experimentId={data.active_experiment_id}
+          />
+        </div>
         <ResponsiveContainer width="100%" height={280}>
           <BarChart data={bestRows.map(({ market, row }) => ({
             market: MARKET_LABELS[market] ?? market,
@@ -3206,6 +3299,13 @@ export function ByMarketTab({ data }: BaseTabProps) {
 
       <SectionHeader>Sharpe Heatmap</SectionHeader>
       <Panel className="overflow-x-auto p-0">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+          <LatexFigureCopyButton
+            slug="by-market-sharpe-heatmap"
+            caption="Sharpe heatmap (strategy × market)"
+            experimentId={data.active_experiment_id}
+          />
+        </div>
         <table className="w-full min-w-[760px] text-[11px]">
           <thead>
             <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
@@ -3296,6 +3396,13 @@ export function ByMarketTab({ data }: BaseTabProps) {
               </p>
             </Panel>
             <Panel className="overflow-x-auto p-0">
+              <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+                <LatexFigureCopyButton
+                  slug="by-market-period-consistency"
+                  caption="Period consistency (GPT vs index Sharpe)"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <table className="w-full min-w-[640px] text-[11px]">
                 <thead>
                   <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
@@ -3357,7 +3464,7 @@ export function ByMarketTab({ data }: BaseTabProps) {
   );
 }
 
-export function StatisticalTestsTab({ runs }: BaseTabProps) {
+export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
   const statsRows = useMemo(() => buildStrategyStats(runs), [runs]);
   const strongestEdge = statsRows
     .filter((row) => row.deltaVsIndex != null)
@@ -3408,7 +3515,14 @@ export function StatisticalTestsTab({ runs }: BaseTabProps) {
       ) : (
         <>
           <Panel>
-            <p className="dashboard-label mb-4">Mean Sharpe with approximate confidence band</p>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+              <p className="dashboard-label">Mean Sharpe with approximate confidence band</p>
+              <LatexFigureCopyButton
+                slug="statistical-tests-mean-sharpe-ci"
+                caption="Mean Sharpe with approximate confidence band"
+                experimentId={data.active_experiment_id}
+              />
+            </div>
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={statsRows} margin={{ top: 8, right: 16, left: 8, bottom: 36 }}>
                 <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -3577,7 +3691,14 @@ export function BehaviorTab({ data }: BaseTabProps) {
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <Panel>
-              <p className="dashboard-label mb-4">Diversification and turnover</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Diversification and turnover</p>
+                <LatexFigureCopyButton
+                  slug="behavior-diversification-turnover"
+                  caption="Diversification and turnover"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={chartData} margin={{ top: 8, right: 48, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -3607,7 +3728,14 @@ export function BehaviorTab({ data }: BaseTabProps) {
             </Panel>
 
             <Panel>
-              <p className="dashboard-label mb-4">Forecast error and realized return</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Forecast error and realized return</p>
+                <LatexFigureCopyButton
+                  slug="behavior-forecast-error-realized-return"
+                  caption="Forecast error and realized return"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -3975,7 +4103,14 @@ export function DrawdownsTab({ data }: BaseTabProps) {
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
             <Panel>
-              <p className="dashboard-label mb-4">Drawdown path</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Drawdown path</p>
+                <LatexFigureCopyButton
+                  slug="drawdowns-drawdown-path"
+                  caption="Drawdown path"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <ResponsiveContainer width="100%" height={320}>
                 <AreaChart data={chartRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -4013,7 +4148,14 @@ export function DrawdownsTab({ data }: BaseTabProps) {
             </Panel>
 
             <Panel>
-              <p className="dashboard-label mb-4">Market regime distribution</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Market regime distribution</p>
+                <LatexFigureCopyButton
+                  slug="drawdowns-market-regime-distribution"
+                  caption="Market regime distribution"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart data={regimeCounts}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -4122,7 +4264,14 @@ export function DataQualityTab({ data }: BaseTabProps) {
         <>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
             <Panel>
-              <p className="dashboard-label mb-4">Validation / repair by prompt type</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Validation / repair by prompt type</p>
+                <LatexFigureCopyButton
+                  slug="data-quality-validation-by-prompt"
+                  caption="Validation / repair by prompt type"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={byPrompt} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -4137,7 +4286,14 @@ export function DataQualityTab({ data }: BaseTabProps) {
             </Panel>
 
             <Panel>
-              <p className="dashboard-label mb-4">Failure type volume</p>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Failure type volume</p>
+                <LatexFigureCopyButton
+                  slug="data-quality-failure-type-volume"
+                  caption="Failure type volume"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
               {byFailureType.length === 0 ? (
                 <div className="flex h-[300px] items-center justify-center text-center text-[12px] text-[#9b938b]">
                   No explicit failure types recorded for the current slice.

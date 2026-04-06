@@ -14,6 +14,7 @@ import {
   ZAxis,
 } from "recharts";
 import { KpiCard } from "./KpiCard";
+import { LatexFigureCopyButton } from "./LatexFigureCopyButton";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import { COLORS, MARKET_LABELS, getStrategyColor, sharpeColor } from "@/lib/constants";
 import { buildStrategySummaryWithRunSharpe } from "@/lib/data-loader";
@@ -359,7 +360,14 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Panel>
-          <p className="dashboard-label mb-4">Mean Sharpe by strategy</p>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <p className="dashboard-label">Mean Sharpe by strategy</p>
+            <LatexFigureCopyButton
+              slug="strategies-mean-sharpe-by-strategy"
+              caption="Strategies — Mean Sharpe by strategy"
+              experimentId={data.active_experiment_id}
+            />
+          </div>
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={sharpeBarData} margin={{ top: 6, right: 12, left: 12, bottom: 56 }}>
               <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
@@ -391,7 +399,14 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         </Panel>
 
         <Panel>
-          <p className="dashboard-label mb-4">Risk / return (summary)</p>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <p className="dashboard-label">Risk / return (summary)</p>
+            <LatexFigureCopyButton
+              slug="strategies-risk-return-summary"
+              caption="Strategies — Risk / return (summary)"
+              experimentId={data.active_experiment_id}
+            />
+          </div>
           {scatterData.length === 0 ? (
             <p className="py-16 text-center text-[12px] text-[#9b938b]">
               Need both mean volatility and mean annualized return in the summary for this chart.
@@ -502,7 +517,14 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
 
         return (
           <Panel>
-            <p className="dashboard-label mb-4">Sharpe dispersion — GPT runs (Advanced & Retail)</p>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+              <p className="dashboard-label">Sharpe dispersion — GPT runs (Advanced & Retail)</p>
+              <LatexFigureCopyButton
+                slug="strategies-sharpe-dispersion-gpt"
+                caption="Strategies — Sharpe dispersion (GPT Advanced and Retail)"
+                experimentId={data.active_experiment_id}
+              />
+            </div>
             <ResponsiveContainer width="100%" height={320}>
               <ScatterChart margin={{ top: 8, right: 12, left: 12, bottom: 36 }}>
                 <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />

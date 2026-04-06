@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import { InsightCard } from "./InsightCard";
+import { LatexFigureCopyButton } from "./LatexFigureCopyButton";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import { CHART_COLORS, MARKET_LABELS } from "@/lib/constants";
 import { getApiBaseUrl } from "@/lib/api-client";
@@ -170,6 +171,13 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
         </div>
       ) : factorBarChartData.length > 0 ? (
         <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+          <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
+            <LatexFigureCopyButton
+              slug="factor-style-portfolio-tilts"
+              caption="Factor style — Portfolio factor tilts (size, value, momentum, low risk, quality)"
+              experimentId={data.active_experiment_id}
+            />
+          </div>
           <ResponsiveContainer
             width="100%"
             height={Math.min(720, Math.max(260, factorBarChartData.length * 44 + 72))}
