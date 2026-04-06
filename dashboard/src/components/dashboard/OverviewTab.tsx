@@ -437,6 +437,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
               <thead>
                 <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
                   <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Strategy</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Beat Index %</th>
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Beat 60/40 %</th>
@@ -448,6 +449,11 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                 {summary.map((s, i) => (
                   <tr key={i} className="border-b border-[rgba(227,220,214,0.8)] last:border-0 hover:bg-[rgba(214,205,197,0.12)] transition-colors">
                     <td className="px-3 py-2.5 font-medium text-[#5e5955]">{s.Strategy}</td>
+                    <td className="px-3 py-2.5 text-[#8d857f]">
+                      {s.markets && s.markets.length > 1
+                        ? "All"
+                        : (MARKET_SHORT[s.markets?.[0] ?? ""] ?? s.markets?.[0] ?? "—")}
+                    </td>
                     <td className="px-3 py-2.5 text-right font-medium tabular-nums" style={{ color: sharpeColor(s.mean_sharpe) }}>
                       {fmt(s.mean_sharpe, 2)}
                     </td>
