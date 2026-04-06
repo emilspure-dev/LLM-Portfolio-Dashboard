@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   ReferenceLine, Cell, CartesianGrid,
@@ -487,6 +487,112 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
             ))}
           </div>
         </>
+      )}
+
+      <SoftHr />
+      <SharpeGapDiagnostic summaryRows={data.summary_rows} />
+    </div>
+  );
+}
+
+function SharpeGapDiagnostic({
+  summaryRows,
+}: {
+  summaryRows: { strategy_key: string; strategy: string; market: string; mean_sharpe: number | null; mean_annualized_return: number | null; mean_volatility: number | null; observations: number }[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  const gaps = useMemo(() => {
+    if (!summaryRows?.length) return [];
+    return summaryRows
+      .filter((r) => r.mean_sharpe == null || !Number.isFinite(r.mean_sharpe))
+      .map((r) => ({
+        strategy: r.strategy,
+        strategy_key: r.strategy_key,
+        market: r.market,
+        mean_sharpe: r.mean_sharpe,
+        mean_annualized_return: r.mean_annualized_return,
+        mean_volatility: r.mean_volatility,
+        observations: r.observations,
+        hasReturn: r.mean_annualized_return != null && Number.isFinite(r.mean_annualized_return),
+        hasVol: r.mean_volatility != null && Number.isFinite(r.mean_volatility),
+      }));
+  }, [summaryRows]);
+
+  const allRows = useMemo(() => summaryRows ?? [], [summaryRows]);
+
+  if (!allRows.length) return null;
+
+  return (
+    <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.55)]">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left"
+      >
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#b4aca5]">
+          Sharpe gap diagnostics
+          {gaps.length > 0 && (
+            <span className="ml-2 rounded-full bg-[rgba(212,151,144,0.25)] px-2 py-0.5 text-[10px] text-[#c17070]">
+              {gaps.length} missing
+            </span>
+          )}
+        </span>
+        <span className="text-[11px] text-[#b4aca5]">{open ? "▲ hide" : "▼ show"}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-[rgba(227,220,214,0.7)] px-4 pb-4 pt-3">
+          {gaps.length === 0 ? (
+            <p className="text-[12px] text-[#7a9e7a]">All rows have a valid Sharpe ratio.</p>
+          ) : (
+            <>
+              <p className="mb-3 text-[11px] leading-5 text-[#8f8780]">
+                These rows have <code className="rounded bg-[rgba(0,0,0,0.06)] px-1">mean_sharpe = null</code> in the
+                raw API data. The cause is usually missing volatility (Sharpe = return / vol — if vol is null,
+                Sharpe cannot be computed) or the backend view not covering this strategy/market combination.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-[11px]">
+                  <thead>
+                    <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                      {["Strategy", "Market", "Sharpe", "Ann. Return", "Volatility", "Obs.", "Likely cause"].map((h) => (
+                        <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-[#b4aca5]">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gaps.map((row, i) => {
+                      let cause = "Unknown";
+                      if (!row.hasVol && row.hasReturn) cause = "Volatility missing → Sharpe not computable";
+                      else if (!row.hasReturn && !row.hasVol) cause = "Return + volatility both missing";
+                      else if (row.hasReturn && row.hasVol) cause = "Backend did not compute Sharpe despite having inputs";
+                      return (
+                        <tr key={i} className="border-b border-[rgba(227,220,214,0.6)] last:border-0">
+                          <td className="px-3 py-2 font-medium text-[#5e5955]">{row.strategy}</td>
+                          <td className="px-3 py-2 text-[#8d857f]">{row.market}</td>
+                          <td className="px-3 py-2 font-mono text-[#c17070]">null</td>
+                          <td className="px-3 py-2 tabular-nums text-[#8d857f]">
+                            {row.mean_annualized_return != null ? `${(row.mean_annualized_return * 100).toFixed(1)}%` : "null"}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums text-[#8d857f]">
+                            {row.mean_volatility != null ? `${(row.mean_volatility * 100).toFixed(1)}%` : "null"}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums text-[#8d857f]">{row.observations}</td>
+                          <td className="px-3 py-2 text-[#a07c5a]">{cause}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-[10px] text-[#b4aca5]">
+                Total raw rows: {allRows.length} · Missing Sharpe: {gaps.length} ({((gaps.length / allRows.length) * 100).toFixed(0)}%)
+              </p>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
