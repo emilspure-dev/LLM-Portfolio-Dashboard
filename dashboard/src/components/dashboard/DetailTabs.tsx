@@ -355,14 +355,6 @@ function buildSharpeHistogramBins(
   return out;
 }
 
-function binNameForSharpeValue(bins: SharpeHistBin[], v: number): string | null {
-  if (!bins.length) return null;
-  const idx = bins.findIndex((bin, i) => {
-    const last = i === bins.length - 1;
-    return v >= bin.lo && (last ? v <= bin.hi + 1e-12 : v < bin.hi);
-  });
-  return idx >= 0 ? bins[idx]!.name : null;
-}
 
 function uniqueStrings(values: Array<string | null | undefined>) {
   return Array.from(
@@ -886,67 +878,43 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
     ffMean,
   } = sharpeHistogramModel;
 
-  const sharpeMeanMarkers = useMemo(
-    () =>
-      [
-        {
-          key: "adv",
-          value: advancedMean,
-          label: "GPT Advanced μ",
-          color: SHARPE_HIST_COLORS.gptAdvanced,
-          dashed: true,
-        },
-        {
-          key: "ret",
-          value: retailMean,
-          label: "GPT Retail μ",
-          color: SHARPE_HIST_COLORS.gptRetail,
-          dashed: true,
-        },
-        {
-          key: "ew",
-          value: ewMean,
-          label: "Equal weight μ",
-          color: SHARPE_HIST_COLORS.equalWeight,
-          dashed: false,
-        },
-        {
-          key: "mv",
-          value: mvMean,
-          label: "MV μ",
-          color: SHARPE_HIST_COLORS.meanVariance,
-          dashed: false,
-        },
-        {
-          key: "ix",
-          value: ixMean,
-          label: "Index μ",
-          color: SHARPE_HIST_COLORS.index,
-          dashed: false,
-        },
-        {
-          key: "sf",
-          value: sfMean,
-          label: "60/40 μ",
-          color: SHARPE_HIST_COLORS.sixtyForty,
-          dashed: false,
-        },
-        {
-          key: "ff",
-          value: ffMean,
-          label: "Fama-French μ",
-          color: SHARPE_HIST_COLORS.famaFrench,
-          dashed: false,
-        },
-      ].filter((m) => m.value != null && Number.isFinite(m.value)) as Array<{
-        key: string;
-        value: number;
-        label: string;
-        color: string;
-        dashed: boolean;
-      }>,
+  const _allMeanCandidates = useMemo(
+    () => [
+      { key: "adv", value: advancedMean, label: "GPT Advanced μ", color: SHARPE_HIST_COLORS.gptAdvanced, dashed: true },
+      { key: "ret", value: retailMean, label: "GPT Retail μ", color: SHARPE_HIST_COLORS.gptRetail, dashed: true },
+      { key: "ew", value: ewMean, label: "Equal weight μ", color: SHARPE_HIST_COLORS.equalWeight, dashed: false },
+      { key: "mv", value: mvMean, label: "MV μ", color: SHARPE_HIST_COLORS.meanVariance, dashed: false },
+      { key: "ix", value: ixMean, label: "Index μ", color: SHARPE_HIST_COLORS.index, dashed: false },
+      { key: "sf", value: sfMean, label: "60/40 μ", color: SHARPE_HIST_COLORS.sixtyForty, dashed: false },
+      { key: "ff", value: ffMean, label: "Fama-French μ", color: SHARPE_HIST_COLORS.famaFrench, dashed: false },
+    ],
     [advancedMean, ewMean, ffMean, ixMean, mvMean, retailMean, sfMean],
   );
+
+  const sharpeMeanMarkers = useMemo(
+    () =>
+      _allMeanCandidates.filter(
+        (m): m is typeof m & { value: number } =>
+          m.value != null && Number.isFinite(m.value),
+      ),
+    [_allMeanCandidates],
+  );
+
+  useEffect(() => {
+    if (sharpeBins.length > 0) {
+      const diag = _allMeanCandidates.map((c) => ({
+        key: c.key,
+        label: c.label,
+        rawValue: c.value,
+        included: c.value != null && Number.isFinite(c.value),
+      }));
+      console.table(diag);
+      console.log(
+        `[SharpeHist] ${sharpeMeanMarkers.length}/${_allMeanCandidates.length} markers active`,
+        sharpeMeanMarkers.map((m) => `${m.key}=${m.value.toFixed(3)}`),
+      );
+    }
+  }, [_allMeanCandidates, sharpeMeanMarkers, sharpeBins]);
 
   const topSharpe = summary[0];
   const bestReturn = [...summary].sort(
@@ -1039,87 +1007,120 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
                 ))}
             </div>
           )}
-          <ResponsiveContainer width="100%" height={328}>
-            <AreaChart
-              data={sharpeBins}
-              margin={{ top: 10, right: 8, left: 4, bottom: 56 }}
-            >
-              <CartesianGrid stroke="rgba(200, 192, 184, 0.55)" vertical={false} strokeDasharray="3 6" />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 9, fill: "#7a726c" }}
-                interval="preserveStartEnd"
-                angle={-32}
-                textAnchor="end"
-                height={54}
-                axisLine={{ stroke: "rgba(180, 172, 164, 0.65)" }}
-                tickLine={false}
-              />
-              <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 10, fill: "#8f8780" }}
-                axisLine={false}
-                tickLine={false}
-                width={36}
-                label={{
-                  value: "Count",
-                  angle: -90,
-                  position: "insideLeft",
-                  offset: 4,
-                  style: { fill: "#9b938b", fontSize: 10, fontWeight: 600 },
-                }}
-              />
-              <Tooltip
-                {...tooltipStyle}
-                formatter={(value: number | undefined, name: string) => [
-                  `${value ?? 0} run${value === 1 ? "" : "s"}`,
-                  name,
-                ]}
-                labelFormatter={(label) => `Sharpe bin ${label}`}
-              />
-              <Legend wrapperStyle={{ fontSize: 11, color: "#5d5754", paddingTop: 6 }} />
-              {[...sharpeMeanMarkers]
-                .sort((a, b) => Number(a.dashed) - Number(b.dashed))
-                .map((m) => {
-                  const xn = binNameForSharpeValue(sharpeBins, m.value);
-                  if (!xn) return null;
-                  return (
+          {(() => {
+            const markerXs = sharpeMeanMarkers.map((m) => m.value);
+            const binMids = sharpeBins.map((b) => b.mid);
+            const allXs = [...binMids, ...markerXs];
+            const xMin = Math.min(...allXs) - 0.3;
+            const xMax = Math.max(...allXs) + 0.3;
+            const sortedMarkers = [...sharpeMeanMarkers].sort(
+              (a, b) => a.value - b.value,
+            );
+            return (
+              <ResponsiveContainer width="100%" height={380}>
+                <AreaChart
+                  data={sharpeBins}
+                  margin={{ top: 28, right: 12, left: 4, bottom: 24 }}
+                >
+                  <CartesianGrid stroke="rgba(200, 192, 184, 0.55)" vertical={false} strokeDasharray="3 6" />
+                  <XAxis
+                    dataKey="mid"
+                    type="number"
+                    domain={[xMin, xMax]}
+                    tick={{ fontSize: 10, fill: "#7a726c" }}
+                    axisLine={{ stroke: "rgba(180, 172, 164, 0.65)" }}
+                    tickLine={false}
+                    label={{
+                      value: "Sharpe ratio",
+                      position: "insideBottom",
+                      offset: -16,
+                      style: { fill: "#9b938b", fontSize: 10, fontWeight: 600 },
+                    }}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 10, fill: "#8f8780" }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={36}
+                    label={{
+                      value: "Count",
+                      angle: -90,
+                      position: "insideLeft",
+                      offset: 4,
+                      style: { fill: "#9b938b", fontSize: 10, fontWeight: 600 },
+                    }}
+                  />
+                  <Tooltip
+                    {...tooltipStyle}
+                    formatter={(value: number | undefined, name: string) => [
+                      `${value ?? 0} run${value === 1 ? "" : "s"}`,
+                      name,
+                    ]}
+                    labelFormatter={(mid) =>
+                      `Sharpe ≈ ${typeof mid === "number" ? mid.toFixed(2) : mid}`
+                    }
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11, color: "#5d5754", paddingTop: 6 }} />
+                  <Area
+                    name="GPT (Retail)"
+                    dataKey="retail"
+                    type="stepAfter"
+                    stroke={SHARPE_HIST_COLORS.gptRetail}
+                    strokeWidth={1.5}
+                    fill={SHARPE_HIST_COLORS.gptRetail}
+                    fillOpacity={0.35}
+                    isAnimationActive={false}
+                  />
+                  <Area
+                    name="GPT (Advanced)"
+                    dataKey="advanced"
+                    type="stepAfter"
+                    stroke={SHARPE_HIST_COLORS.gptAdvanced}
+                    strokeWidth={1.5}
+                    fill={SHARPE_HIST_COLORS.gptAdvanced}
+                    fillOpacity={0.35}
+                    isAnimationActive={false}
+                  />
+                  {sortedMarkers.map((m, idx) => (
                     <ReferenceLine
                       key={m.key}
-                      x={xn}
+                      x={m.value}
                       stroke={m.color}
-                      strokeWidth={1.35}
-                      strokeDasharray={m.dashed ? "6 5" : "2 4"}
-                      strokeOpacity={0.92}
+                      strokeWidth={2.2}
+                      strokeDasharray={m.dashed ? "8 4" : "3 3"}
+                      ifOverflow="extendDomain"
+                      label={{
+                        value: `${m.label.replace(" μ", "")} ${m.value.toFixed(2)}`,
+                        position: "insideTopRight",
+                        fill: m.color,
+                        fontSize: 9,
+                        fontWeight: 700,
+                        dy: idx * 11,
+                      }}
                     />
-                  );
-                })}
-              <Area
-                name="GPT (Retail)"
-                dataKey="retail"
-                type="step"
-                stroke={SHARPE_HIST_COLORS.gptRetail}
-                strokeWidth={1.5}
-                fill={SHARPE_HIST_COLORS.gptRetail}
-                fillOpacity={0.35}
-                isAnimationActive={false}
-              />
-              <Area
-                name="GPT (Advanced)"
-                dataKey="advanced"
-                type="step"
-                stroke={SHARPE_HIST_COLORS.gptAdvanced}
-                strokeWidth={1.5}
-                fill={SHARPE_HIST_COLORS.gptAdvanced}
-                fillOpacity={0.35}
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+            );
+          })()}
           <p className="mt-2 text-[10px] text-[#a39b93]">
-            X-axis: Sharpe ratio bins (half-open intervals except the right edge of the last bin). Y-axis: number of
-            runs in each bin.
+            X-axis: Sharpe ratio (numerical). Y-axis: number of runs in each bin.
           </p>
+          {/* Diagnostic: shows which mean markers were resolved vs null */}
+          <details className="mt-1 text-[9px] text-[#b0a8a0]">
+            <summary className="cursor-pointer hover:text-[#8a827a]">
+              Marker diagnostics ({sharpeMeanMarkers.length}/{_allMeanCandidates.length} active)
+            </summary>
+            <ul className="mt-1 ml-3 list-disc space-y-0.5">
+              {_allMeanCandidates.map((c) => (
+                <li key={c.key} style={{ color: c.value != null && Number.isFinite(c.value) ? "#5d8a5e" : "#c45a4a" }}>
+                  {c.label}: {c.value != null ? c.value.toFixed(4) : "NULL / NaN"}{" "}
+                  {c.value != null && Number.isFinite(c.value) ? "✓" : "✗ (excluded)"}
+                </li>
+              ))}
+            </ul>
+          </details>
         </Panel>
       ) : (
         <Panel>
