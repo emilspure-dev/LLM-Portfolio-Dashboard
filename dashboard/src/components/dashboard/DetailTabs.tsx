@@ -2212,6 +2212,22 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
     };
   }, [filteredRuns]);
 
+  const hhiScatterData = useMemo(() => {
+    const models = Array.from(new Set(filteredRuns.map((r) => r.model).filter(Boolean) as string[])).sort();
+    if (models.length < 2) return null;
+    const colorMap = new Map(models.map((m, i) => [m, MODEL_COLORS[i % MODEL_COLORS.length]]));
+    const points = filteredRuns
+      .filter((r) => r.model && asNumber(r.hhi) != null)
+      .map((r) => ({
+        hhi: asNumber(r.hhi)!,
+        sharpe: asNumber(r.sharpe_ratio) ?? 0,
+        model: String(r.model),
+        color: colorMap.get(String(r.model)) ?? COLORS.accent,
+      }));
+    if (points.length < 4) return null;
+    return { models, colorMap, points };
+  }, [filteredRuns]);
+
   return (
     <div className="space-y-4 pb-1">
       <Panel>
@@ -2392,6 +2408,78 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                   />
                 </ScatterChart>
               </ResponsiveContainer>
+            </Panel>
+          )}
+
+          {hhiScatterData && (
+            <Panel>
+              <p className="dashboard-label mb-4">Model comparison — Sharpe vs HHI (concentration)</p>
+              <ResponsiveContainer width="100%" height={300}>
+                <ScatterChart margin={{ top: 8, right: 100, left: 8, bottom: 8 }}>
+                  <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
+                  <XAxis
+                    type="number"
+                    dataKey="sharpe"
+                    name="Sharpe"
+                    tick={{ fontSize: 10, fill: "#aca49d" }}
+                    axisLine={false}
+                    tickLine={false}
+                    label={{ value: "Sharpe ratio", position: "insideBottom", offset: -2, style: { fontSize: 10, fill: "#aca49d" } }}
+                  />
+                  <YAxis
+                    type="number"
+                    dataKey="hhi"
+                    name="HHI"
+                    tick={{ fontSize: 10, fill: "#aca49d" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) => v.toFixed(2)}
+                    label={{ value: "HHI (concentration)", angle: -90, position: "insideLeft", offset: 12, style: { fontSize: 10, fill: "#aca49d" } }}
+                  />
+                  <ZAxis range={[40, 40]} />
+                  <Tooltip
+                    {...tooltipStyle}
+                    content={({ payload }) => {
+                      if (!payload?.length) return null;
+                      const d = payload[0].payload as { model: string; sharpe: number; hhi: number };
+                      return (
+                        <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
+                          <p style={{ fontWeight: 600, marginBottom: 4, color: "#5c534c" }}>{d.model}</p>
+                          <p style={{ color: "#8f8780" }}>Sharpe: {d.sharpe.toFixed(2)}</p>
+                          <p style={{ color: "#8f8780" }}>HHI: {d.hhi.toFixed(3)}</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Scatter
+                    data={hhiScatterData.points}
+                    shape={(props: Record<string, unknown>) => {
+                      const cx = props.cx as number;
+                      const cy = props.cy as number;
+                      const pt = props.payload as { color: string };
+                      return <circle cx={cx} cy={cy} r={5} fill={pt.color} fillOpacity={0.7} stroke="white" strokeWidth={1} />;
+                    }}
+                  />
+                  <Legend
+                    verticalAlign="top"
+                    align="right"
+                    content={() => (
+                      <div className="flex flex-wrap gap-3 text-[10px]">
+                        {hhiScatterData.models.map((m) => (
+                          <span key={m} className="flex items-center gap-1">
+                            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: hhiScatterData.colorMap.get(m) }} />
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  />
+                  <ReferenceLine y={0.15} stroke="rgba(192,120,110,0.5)" strokeDasharray="6 3" label={{ value: "Concentrated (0.15)", position: "right", fontSize: 9, fill: "#b47070" }} />
+                </ScatterChart>
+              </ResponsiveContainer>
+              <p className="mt-1 text-[10px] text-[#b4aca5]">
+                Lower HHI = more diversified. Runs above the dashed line (0.15) are concentrated portfolios.
+              </p>
             </Panel>
           )}
 
