@@ -44,7 +44,7 @@ function LoadingPanel() {
     <div className="flex-1 px-4 pb-4 pt-4 md:px-6 md:pb-6">
       <div className="dashboard-panel-strong flex h-full min-h-[360px] items-center justify-center rounded-[22px] p-8">
         <div className="animate-fade-in space-y-4 text-center">
-          <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/70 bg-white/50">
+          <div className="dashboard-glass-inset mx-auto inline-flex h-16 w-16 items-center justify-center rounded-[20px]">
             <Loader2 className="h-6 w-6 animate-spin text-[#b39a91]" />
           </div>
           <div>
@@ -71,7 +71,7 @@ function ErrorPanel({ message, onRetry }: ErrorPanelProps) {
     <div className="flex-1 px-4 pb-4 pt-4 md:px-6 md:pb-6">
       <div className="dashboard-panel-strong flex h-full min-h-[360px] items-center justify-center rounded-[22px] p-8">
         <div className="animate-fade-in space-y-4 text-center">
-          <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-[20px] border border-white/70 bg-white/50">
+          <div className="dashboard-glass-inset mx-auto inline-flex h-16 w-16 items-center justify-center rounded-[20px]">
             <WifiOff className="h-6 w-6 text-[#b39a91]" />
           </div>
           <div>
@@ -85,7 +85,7 @@ function ErrorPanel({ message, onRetry }: ErrorPanelProps) {
           <div className="flex justify-center">
             <Button
               variant="outline"
-              className="rounded-full border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.7)] text-[11px] font-semibold text-[#6e6762] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] hover:bg-white hover:text-[#5d5754]"
+              className="rounded-full border border-white/45 bg-white/50 text-[11px] font-semibold text-[#5d5754] shadow-sm backdrop-blur-sm hover:bg-white/75 hover:text-[#4a4542]"
               onClick={onRetry}
             >
               <RefreshCw className="mr-1 h-3 w-3" />
@@ -217,14 +217,14 @@ export default function Index() {
                     for retail investors
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-[#aaa29a]">
-                  <span className="rounded-full border border-white/70 bg-white/40 px-3 py-1.5">
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-[#7a726c]">
+                  <span className="rounded-full border border-white/50 bg-white/55 px-3 py-1.5 shadow-sm backdrop-blur-sm">
                     Market: {marketFilter}
                   </span>
-                  <span className="rounded-full border border-white/70 bg-white/40 px-3 py-1.5">
+                  <span className="rounded-full border border-white/50 bg-white/55 px-3 py-1.5 shadow-sm backdrop-blur-sm">
                     Experiment: {resolvedExperimentId ?? "Loading"}
                   </span>
-                  <span className="rounded-full border border-white/70 bg-white/40 px-3 py-1.5">
+                  <span className="rounded-full border border-white/50 bg-white/55 px-3 py-1.5 shadow-sm backdrop-blur-sm">
                     {data
                       ? `${filteredRuns.length} runs loaded`
                       : isLoading
@@ -243,20 +243,23 @@ export default function Index() {
           ) : (
             <>
               <div className="shrink-0 px-4 pb-2 pt-4 md:px-6">
-                <div className="flex flex-wrap gap-2">
-                  {TAB_NAMES.map((name, index) => (
-                    <button
-                      key={name}
-                      onClick={() => setActiveTab(index)}
-                      className={`rounded-full border px-3.5 py-1.5 text-[11px] font-semibold transition-all ${
-                        activeTab === index
-                          ? "border-[#191513] bg-[#191513] text-[#f9f6f1] shadow-[0_8px_18px_rgba(35,28,22,0.18)]"
-                          : "border-[rgba(232,224,217,0.94)] bg-[rgba(255,255,252,0.46)] text-[#b0a8a1] hover:bg-[rgba(255,255,252,0.78)] hover:text-[#7b736e]"
-                      }`}
-                    >
-                      {name}
-                    </button>
-                  ))}
+                <div className="dashboard-tab-bar rounded-[22px] p-2 md:p-2.5">
+                  <div className="flex flex-wrap gap-2">
+                    {TAB_NAMES.map((name, index) => (
+                      <button
+                        key={name}
+                        onClick={() => setActiveTab(index)}
+                        type="button"
+                        className={`rounded-full border px-3.5 py-1.5 text-[11px] font-semibold transition-all ${
+                          activeTab === index
+                            ? "border-[#191513] bg-[#191513] text-[#f9f6f1] shadow-[0_8px_18px_rgba(35,28,22,0.22)]"
+                            : "border-white/45 bg-white/45 text-[#6e6762] shadow-sm backdrop-blur-sm hover:bg-white/65 hover:text-[#4a4542]"
+                        }`}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

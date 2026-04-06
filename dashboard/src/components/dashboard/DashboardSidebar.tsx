@@ -73,7 +73,7 @@ export function DashboardSidebar({
 
       <div className="dashboard-panel rounded-[18px] p-4">
         <p className="dashboard-label mb-3">Data Source</p>
-        <div className="rounded-[14px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.72)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]">
+        <div className="dashboard-glass-inset rounded-[14px] px-4 py-3">
           <div className="flex items-start gap-3">
             <Database className="mt-0.5 h-4 w-4 text-[#b39a91]" />
             <div className="min-w-0 flex-1">
@@ -109,7 +109,7 @@ export function DashboardSidebar({
           <Button
             variant="outline"
             size="sm"
-            className="mt-3 h-10 w-full rounded-full border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.7)] text-[11px] font-semibold text-[#6e6762] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] hover:bg-white hover:text-[#5d5754]"
+            className="mt-3 h-10 w-full rounded-full border border-white/45 bg-white/50 text-[11px] font-semibold text-[#5d5754] shadow-sm backdrop-blur-sm hover:bg-white/75 hover:text-[#4a4542]"
             onClick={onRefresh}
           >
             <RefreshCw className="mr-1 h-3 w-3" />
@@ -126,7 +126,7 @@ export function DashboardSidebar({
             onChange={(event) =>
               onExperimentChange(event.target.value || undefined)
             }
-            className="w-full rounded-[14px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-2.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+            className="dashboard-glass-inset w-full rounded-[14px] px-3 py-2.5 text-[12px] font-medium text-[#5a544f] outline-none"
           >
             {meta.available_experiments.map((experiment) => (
               <option
@@ -153,7 +153,7 @@ export function DashboardSidebar({
           <select
             value={marketFilter}
             onChange={(event) => onMarketFilterChange(event.target.value)}
-            className="w-full rounded-[14px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-2.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+            className="dashboard-glass-inset w-full rounded-[14px] px-3 py-2.5 text-[12px] font-medium text-[#5a544f] outline-none"
           >
             <option value="All">All</option>
             {markets.map((market) => (
@@ -198,7 +198,7 @@ export function DashboardSidebar({
         <Button
           variant="outline"
           size="sm"
-          className="h-10 w-full rounded-full border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.7)] text-[11px] font-semibold text-[#6e6762] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] hover:bg-white hover:text-[#5d5754]"
+          className="h-10 w-full rounded-full border border-white/45 bg-white/50 text-[11px] font-semibold text-[#5d5754] shadow-sm backdrop-blur-sm hover:bg-white/75 hover:text-[#4a4542]"
           onClick={onReset}
         >
           <X className="mr-1 h-3 w-3" />
