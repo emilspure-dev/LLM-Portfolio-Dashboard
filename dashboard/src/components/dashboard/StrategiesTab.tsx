@@ -457,86 +457,98 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
 
       <SectionHeader>Strategy master table</SectionHeader>
       <Panel className="overflow-x-auto p-0">
-        <table className="w-full min-w-[1100px] text-[11px]">
+        <table className="w-full min-w-[1080px] text-[11px]">
           <thead>
             <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
               <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Strategy
               </th>
-              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+              <th className="px-2 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                Market
+              </th>
+              <th className="px-2 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Source
               </th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+              <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Runs
               </th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+              <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Sharpe
               </th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+              <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Ann. ret.
               </th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+              <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Vol.
               </th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+              <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Beat idx
               </th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+              <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Beat 60/40
               </th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+              <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Mean ret.
               </th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+              <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Turnover
               </th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+              <th className="px-2 py-2.5 pr-4 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Obs.
               </th>
             </tr>
           </thead>
           <tbody>
-            {sortedBySharpe.map((row) => (
-              <tr
-                key={`${row.strategy_key}::${row.source_type}`}
-                className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
-              >
-                <td className="px-3 py-2.5 font-medium text-[#5e5955]">
-                  {formatStrategyLabel(row.Strategy)}
-                </td>
-                <td className="px-3 py-2.5 text-[#8d857f]">{row.source_type}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-[#8d857f]">
-                  {runCounts.get(row.strategy_key) ?? "—"}
-                </td>
-                <td
-                  className="px-3 py-2.5 text-right font-medium tabular-nums"
-                  style={{ color: sharpeColor(row.mean_sharpe) }}
+            {sortedBySharpe.map((row) => {
+              const marketLabel =
+                row.markets && row.markets.length === 1
+                  ? (MARKET_LABELS[row.markets[0]]?.replace(/ \(.*\)$/, "") ?? row.markets[0])
+                  : "All markets";
+              return (
+                <tr
+                  key={`${row.strategy_key}::${row.source_type}::${row.markets?.[0] ?? ""}`}
+                  className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
                 >
-                  {row.mean_sharpe != null && Number.isFinite(row.mean_sharpe)
-                    ? row.mean_sharpe.toFixed(2)
-                    : "—"}
-                </td>
-                <td className="px-3 py-2.5 text-right text-[#8d857f]">
-                  {formatPctFromRatio(row.mean_annualized_return, 1)}
-                </td>
-                <td className="px-3 py-2.5 text-right text-[#8d857f]">
-                  {formatPctFromRatio(row.mean_volatility, 1)}
-                </td>
-                <td className="px-3 py-2.5 text-right text-[#8d857f]">
-                  {formatPctFromNumber(row.pct_runs_beating_index_sharpe, 0)}
-                </td>
-                <td className="px-3 py-2.5 text-right text-[#8d857f]">
-                  {formatPctFromNumber(row.pct_runs_beating_sixty_forty_sharpe, 0)}
-                </td>
-                <td className="px-3 py-2.5 text-right text-[#8d857f]">
-                  {formatPctFromRatio(row.net_return_mean, 1)}
-                </td>
-                <td className="px-3 py-2.5 text-right text-[#8d857f]">
-                  {formatPctFromRatio(row.mean_turnover, 1)}
-                </td>
-                <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.n_observations}</td>
-              </tr>
-            ))}
+                  <td className="px-3 py-2.5 font-medium text-[#5e5955]">
+                    {formatStrategyLabel(row.Strategy)}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-[#8d857f]">{marketLabel}</td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-[#8d857f]">{row.source_type}</td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-[#8d857f]">
+                    {runCounts.get(row.strategy_key) ?? "—"}
+                  </td>
+                  <td
+                    className="whitespace-nowrap px-2 py-2.5 text-right font-medium tabular-nums"
+                    style={{ color: sharpeColor(row.mean_sharpe) }}
+                  >
+                    {row.mean_sharpe != null && Number.isFinite(row.mean_sharpe)
+                      ? row.mean_sharpe.toFixed(2)
+                      : "—"}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-[#8d857f]">
+                    {formatPctFromRatio(row.mean_annualized_return, 1)}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-[#8d857f]">
+                    {formatPctFromRatio(row.mean_volatility, 1)}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-[#8d857f]">
+                    {formatPctFromNumber(row.pct_runs_beating_index_sharpe, 0)}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-[#8d857f]">
+                    {formatPctFromNumber(row.pct_runs_beating_sixty_forty_sharpe, 0)}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-[#8d857f]">
+                    {formatPctFromRatio(row.net_return_mean, 1)}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-[#8d857f]">
+                    {formatPctFromRatio(row.mean_turnover, 1)}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-2.5 pr-4 text-right tabular-nums text-[#8d857f]">
+                    {row.n_observations > 0 ? row.n_observations.toLocaleString() : "—"}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </Panel>
