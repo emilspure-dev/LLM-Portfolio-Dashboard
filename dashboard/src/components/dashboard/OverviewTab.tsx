@@ -157,6 +157,35 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     return result;
   }, [summary, runs]);
 
+  // Strategy Summary Table: group by strategy_key, order groups by best Sharpe desc,
+  // within each group order markets us → germany → japan.
+  const summarySorted = useMemo(() => {
+    const MARKET_ORDER: Record<string, number> = { us: 0, germany: 1, japan: 2 };
+    // Compute best Sharpe per strategy_key for group ordering
+    const bestSharpeByKey = new Map<string, number>();
+    for (const s of summary) {
+      const cur = bestSharpeByKey.get(s.strategy_key) ?? -Infinity;
+      if (s.mean_sharpe != null && Number.isFinite(s.mean_sharpe) && s.mean_sharpe > cur) {
+        bestSharpeByKey.set(s.strategy_key, s.mean_sharpe);
+      }
+    }
+    return [...summary].sort((a, b) => {
+      const aGpt = a.strategy_key.startsWith("gpt_");
+      const bGpt = b.strategy_key.startsWith("gpt_");
+      // GPT rows always first
+      if (aGpt !== bGpt) return aGpt ? -1 : 1;
+      // Same strategy_key → sort by market order
+      if (a.strategy_key === b.strategy_key) {
+        const am = a.markets?.[0] ?? "";
+        const bm = b.markets?.[0] ?? "";
+        return (MARKET_ORDER[am] ?? 99) - (MARKET_ORDER[bm] ?? 99);
+      }
+      // Different strategy groups → sort groups by best Sharpe desc
+      return (bestSharpeByKey.get(b.strategy_key) ?? -Infinity) -
+             (bestSharpeByKey.get(a.strategy_key) ?? -Infinity);
+    });
+  }, [summary]);
+
   // Two-tier strategy grouping: one overall entry per strategy_key + per-market breakdown
   const strategyGroups = useMemo(() => {
     if (!data.summary_rows?.length) return null;
@@ -446,7 +475,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                 </tr>
               </thead>
               <tbody>
-                {summary.map((s, i) => (
+                {summarySorted.map((s, i) => (
                   <tr key={i} className="border-b border-[rgba(227,220,214,0.8)] last:border-0 hover:bg-[rgba(214,205,197,0.12)] transition-colors">
                     <td className="px-3 py-2.5 font-medium text-[#5e5955]">{s.Strategy}</td>
                     <td className="px-3 py-2.5 text-[#8d857f]">
