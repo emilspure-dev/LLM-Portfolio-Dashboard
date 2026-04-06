@@ -2441,7 +2441,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
             <Panel>
               <p className="dashboard-label mb-4">Model comparison — Sharpe vs return</p>
               <ResponsiveContainer width="100%" height={300}>
-                <ScatterChart margin={{ top: 8, right: 100, left: 8, bottom: 8 }}>
+                <ScatterChart margin={{ top: 22, right: 100, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
                   <XAxis
                     type="number"
@@ -2545,8 +2545,9 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                   <Legend
                     verticalAlign="top"
                     align="right"
+                    wrapperStyle={{ top: -6 }}
                     content={() => (
-                      <div className="flex flex-wrap gap-3 text-[10px]">
+                      <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
                         {modelScatterData.models.map((m) => (
                           <span key={m} className="flex items-center gap-1">
                             <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelScatterData.colorMap.get(m) }} />
@@ -2569,7 +2570,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
             <Panel>
               <p className="dashboard-label mb-4">Model comparison — Sharpe vs HHI (concentration)</p>
               <ResponsiveContainer width="100%" height={300}>
-                <ScatterChart margin={{ top: 8, right: 100, left: 8, bottom: 8 }}>
+                <ScatterChart margin={{ top: 22, right: 100, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
                   <XAxis
                     type="number"
@@ -2673,8 +2674,9 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                   <Legend
                     verticalAlign="top"
                     align="right"
+                    wrapperStyle={{ top: -6 }}
                     content={() => (
-                      <div className="flex flex-wrap gap-3 text-[10px]">
+                      <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
                         {hhiScatterData.models.map((m) => (
                           <span key={m} className="flex items-center gap-1">
                             <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: hhiScatterData.colorMap.get(m) }} />
