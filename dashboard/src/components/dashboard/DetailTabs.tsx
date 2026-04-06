@@ -998,12 +998,9 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
             </div>
           )}
           <ResponsiveContainer width="100%" height={328}>
-            <BarChart
+            <AreaChart
               data={sharpeBins}
               margin={{ top: 10, right: 8, left: 4, bottom: 56 }}
-              barCategoryGap={0}
-              barGap={0}
-              barSize={999}
             >
               <CartesianGrid stroke="rgba(200, 192, 184, 0.55)" vertical={false} strokeDasharray="3 6" />
               <XAxis
@@ -1039,20 +1036,6 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
                 labelFormatter={(label) => `Sharpe bin ${label}`}
               />
               <Legend wrapperStyle={{ fontSize: 11, color: "#5d5754", paddingTop: 6 }} />
-              <Bar
-                name="GPT (Retail)"
-                dataKey="retail"
-                fill={SHARPE_HIST_COLORS.gptRetail}
-                fillOpacity={0.55}
-                radius={0}
-              />
-              <Bar
-                name="GPT (Advanced)"
-                dataKey="advanced"
-                fill={SHARPE_HIST_COLORS.gptAdvanced}
-                fillOpacity={0.50}
-                radius={0}
-              />
               {[...sharpeMeanMarkers]
                 .sort((a, b) => Number(a.dashed) - Number(b.dashed))
                 .map((m) => {
@@ -1069,7 +1052,27 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
                     />
                   );
                 })}
-            </BarChart>
+              <Area
+                name="GPT (Retail)"
+                dataKey="retail"
+                type="step"
+                stroke={SHARPE_HIST_COLORS.gptRetail}
+                strokeWidth={1.5}
+                fill={SHARPE_HIST_COLORS.gptRetail}
+                fillOpacity={0.35}
+                isAnimationActive={false}
+              />
+              <Area
+                name="GPT (Advanced)"
+                dataKey="advanced"
+                type="step"
+                stroke={SHARPE_HIST_COLORS.gptAdvanced}
+                strokeWidth={1.5}
+                fill={SHARPE_HIST_COLORS.gptAdvanced}
+                fillOpacity={0.35}
+                isAnimationActive={false}
+              />
+            </AreaChart>
           </ResponsiveContainer>
           <p className="mt-2 text-[10px] text-[#a39b93]">
             X-axis: Sharpe ratio bins (half-open intervals except the right edge of the last bin). Y-axis: number of
