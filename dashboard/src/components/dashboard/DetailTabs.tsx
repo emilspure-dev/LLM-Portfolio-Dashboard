@@ -33,6 +33,7 @@ import type {
   HoldingDailyRow,
   RegimeRow,
   StrategyDailyRow,
+  StrategySummaryApiRow,
 } from "@/lib/api-types";
 import type { BehaviorRow, EvaluationData, RunRow, StrategyRow } from "@/lib/types";
 import { KpiCard } from "./KpiCard";
@@ -331,13 +332,50 @@ function mean(values: number[]) {
     : null;
 }
 
+function isIndexStrategyKey(key: string | null | undefined): boolean {
+  return String(key ?? "").toLowerCase() === "index";
+}
+
+function marketFilterMatchesRun(marketFilter: string, runMarket: string | null | undefined): boolean {
+  if (marketFilter === "All") return true;
+  return String(runMarket ?? "") === String(marketFilter);
+}
+
+function periodFilterMatchesRun(periodFilter: string, runPeriod: string | null | undefined): boolean {
+  if (periodFilter === "All") return true;
+  return String(runPeriod ?? "").trim() === String(periodFilter).trim();
+}
+
+function weightedSummaryMetric(
+  rows: StrategySummaryApiRow[],
+  get: (r: StrategySummaryApiRow) => number | null | undefined
+): number | null {
+  let num = 0;
+  let den = 0;
+  for (const r of rows) {
+    const v = asNumber(get(r));
+    const w = asNumber(r.observations);
+    if (v != null && Number.isFinite(v) && w != null && w > 0) {
+      num += v * w;
+      den += w;
+    }
+  }
+  if (den > 0) return num / den;
+  const vals = rows.map((r) => asNumber(get(r))).filter((x): x is number => x != null && Number.isFinite(x));
+  return mean(vals);
+}
+
 /**
  * Index (market) benchmark for Run Explorer model scatters.
- * Uses `strategy_key === "index"` runs only, filtered by the tab's market + period (not portfolio/model),
- * then takes the simple mean of Sharpe, period return, and HHI so GPT dots compare to the same market context.
+ * 1) Prefer index `run_results` rows matching market + period.
+ * 2) Else index runs for that market across all periods (common when index rows omit period or use a different label).
+ * 3) Else all index runs if market is "All".
+ * 4) Fill missing Sharpe/return from `summary_rows` index strategy (many DBs expose benchmarks only in summary).
+ * HHI only comes from run rows when available.
  */
 function computeMarketIndexReference(
   runs: RunRow[],
+  summaryRows: StrategySummaryApiRow[] | undefined,
   marketFilter: string,
   periodFilter: string
 ): {
@@ -347,37 +385,84 @@ function computeMarketIndexReference(
   nIndexRuns: number;
   caption: string;
 } {
-  const idx = runs
-    .filter((r) => r.strategy_key === "index")
-    .filter((r) => marketFilter === "All" || r.market === marketFilter)
-    .filter((r) => periodFilter === "All" || r.period === periodFilter);
+  const indexRunsAll = runs.filter((r) => isIndexStrategyKey(r.strategy_key));
+  const byMarket = indexRunsAll.filter((r) => marketFilterMatchesRun(marketFilter, r.market));
+  const strict = byMarket.filter((r) => periodFilterMatchesRun(periodFilter, r.period));
 
-  const sharpes = idx
+  let pool = strict;
+  let poolLabel = "index runs (this market & period)";
+  if (pool.length === 0 && byMarket.length > 0) {
+    pool = byMarket;
+    poolLabel =
+      periodFilter === "All"
+        ? "index runs (this market)"
+        : "index runs (this market; no row for selected period — averaged across periods)";
+  }
+  if (pool.length === 0 && marketFilter === "All" && indexRunsAll.length > 0) {
+    pool = indexRunsAll;
+    poolLabel = "index runs (all markets; averaged)";
+  }
+
+  const sharpes = pool
     .map((r) => asNumber(r.sharpe_ratio))
     .filter((x): x is number => x != null && Number.isFinite(x));
-  const rets = idx
+  const rets = pool
     .map((r) => asNumber(r.period_return ?? r.net_return ?? r.period_return_net))
     .filter((x): x is number => x != null && Number.isFinite(x));
-  const hhis = idx.map((r) => asNumber(r.hhi)).filter((x): x is number => x != null && Number.isFinite(x));
+  const hhis = pool.map((r) => asNumber(r.hhi)).filter((x): x is number => x != null && Number.isFinite(x));
 
-  const sharpeMean = mean(sharpes);
-  const retMean = mean(rets);
-  const retPct = retMean != null ? retMean * 100 : null;
+  let sharpeMean = mean(sharpes);
+  let retMean = mean(rets);
+  let retPct = retMean != null ? retMean * 100 : null;
   const hhiMean = mean(hhis);
+
+  const summaryIndex =
+    summaryRows?.filter(
+      (r) => isIndexStrategyKey(r.strategy_key) && marketFilterMatchesRun(marketFilter, r.market)
+    ) ?? [];
+
+  let usedSummary = false;
+  if (sharpeMean == null && summaryIndex.length > 0) {
+    sharpeMean = weightedSummaryMetric(summaryIndex, (r) => r.mean_sharpe);
+    usedSummary = true;
+  }
+  if (retPct == null && summaryIndex.length > 0) {
+    const mr = weightedSummaryMetric(summaryIndex, (r) => r.mean_return);
+    if (mr != null) retPct = mr * 100;
+    usedSummary = true;
+  }
 
   const mkt =
     marketFilter === "All" ? "all markets" : (MARKET_LABELS[marketFilter] ?? marketFilter);
   const per = periodFilter === "All" ? "all periods" : periodFilter;
-  const caption =
-    idx.length === 0
-      ? "No index runs match the current market and period filters; market crosshairs are hidden."
-      : `Blue dashed crosshairs: mean index (market) benchmark — ${mkt}, ${per} (${idx.length} index run${idx.length === 1 ? "" : "s"}). When multiple markets or periods are included, values are simple averages across matching index runs.`;
+
+  const hasAnyLine = sharpeMean != null || retPct != null || hhiMean != null;
+  let caption: string;
+  if (!hasAnyLine) {
+    caption =
+      "Market crosshairs hidden: no index rows in run data or strategy summary for the current market filter.";
+  } else {
+    const parts = [
+      "Blue dashed crosshairs: market (index) benchmark.",
+      `Scope: ${mkt}, ${per}.`,
+      pool.length > 0
+        ? `From ${pool.length} index run(s) — ${poolLabel}.`
+        : "No index runs in the loaded run table.",
+    ];
+    if (usedSummary) {
+      parts.push("Sharpe/return filled from strategy summary where run-level values were missing.");
+    }
+    if (hhiMean == null && (sharpeMean != null || retPct != null)) {
+      parts.push("HHI line omitted (no index HHI in run data).");
+    }
+    caption = parts.join(" ");
+  }
 
   return {
     sharpe: sharpeMean,
     retPct,
     hhi: hhiMean,
-    nIndexRuns: idx.length,
+    nIndexRuns: pool.length,
     caption,
   };
 }
@@ -2148,8 +2233,8 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
   }, [runs, marketFilter, portfolioFilter, modelFilter, periodFilter]);
 
   const marketIndexRef = useMemo(
-    () => computeMarketIndexReference(runs, marketFilter, periodFilter),
-    [runs, marketFilter, periodFilter]
+    () => computeMarketIndexReference(runs, data.summary_rows, marketFilter, periodFilter),
+    [runs, data.summary_rows, marketFilter, periodFilter]
   );
 
   const totalPages = Math.max(1, Math.ceil(filteredRuns.length / 12));
