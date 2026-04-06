@@ -2086,20 +2086,40 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
     [runFactorsQuery.data]
   );
 
-  const pageComparisonData = useMemo(
-    () =>
-      pageRows.map((run, index) => ({
+  const pageComparisonData = useMemo(() => {
+    // Count how many times each run_id appears on this page (they can repeat across periods)
+    const runIdCounts = new Map<string, number>();
+    for (const run of pageRows) {
+      if (run.run_id != null) {
+        const rid = String(run.run_id);
+        runIdCounts.set(rid, (runIdCounts.get(rid) ?? 0) + 1);
+      }
+    }
+    // Track occurrence index per run_id so duplicates get #10a, #10b labels
+    const ridSeen = new Map<string, number>();
+    return pageRows.map((run, index) => {
+      let label: string;
+      if (run.run_id != null) {
+        const rid = String(run.run_id);
+        if ((runIdCounts.get(rid) ?? 0) > 1) {
+          const occurrence = (ridSeen.get(rid) ?? 0) + 1;
+          ridSeen.set(rid, occurrence);
+          label = `#${rid}${String.fromCharCode(96 + occurrence)}`; // #10a, #10b …
+        } else {
+          label = `#${rid}`;
+        }
+      } else {
+        label = `${(page - 1) * 12 + index + 1}`;
+      }
+      return {
         key: getRunExplorerKey(run),
-        label:
-          run.run_id != null
-            ? `#${run.run_id}`
-            : `${(page - 1) * 12 + index + 1}`,
+        label,
         sharpe: asNumber(run.sharpe_ratio),
         periodReturn: asNumber(run.period_return ?? run.net_return ?? run.period_return_net),
         strategyKey: run.strategy_key ?? "",
-      })),
-    [pageRows, page]
-  );
+      };
+    });
+  }, [pageRows, page]);
 
   const runFactorSeries = [
     { key: "size", label: "Size", color: CHART_COLORS[0] },
