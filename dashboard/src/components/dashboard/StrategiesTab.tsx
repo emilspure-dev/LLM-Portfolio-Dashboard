@@ -455,6 +455,89 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         </Panel>
       </div>
 
+      {/* Sharpe dispersion — run-level dots per strategy */}
+      {localRuns.some((r) => r.sharpe_ratio != null) && (() => {
+        const strategyOrder = sortedBySharpe.map((s) => s.strategy_key);
+        const dispersionPoints = localRuns
+          .filter((r) => r.sharpe_ratio != null && r.strategy_key)
+          .map((r) => ({
+            strategyIdx: strategyOrder.indexOf(r.strategy_key ?? "") + Math.random() * 0.6 - 0.3,
+            sharpe: r.sharpe_ratio as number,
+            label: formatStrategyLabel(r.strategy ?? r.strategy_key ?? ""),
+            strategyKey: r.strategy_key ?? "",
+          }))
+          .filter((p) => p.strategyIdx >= 0);
+
+        if (dispersionPoints.length < 4) return null;
+
+        return (
+          <Panel>
+            <p className="dashboard-label mb-4">Sharpe dispersion — all runs</p>
+            <ResponsiveContainer width="100%" height={320}>
+              <ScatterChart margin={{ top: 8, right: 12, left: 12, bottom: 36 }}>
+                <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
+                <XAxis
+                  type="number"
+                  dataKey="strategyIdx"
+                  domain={[-0.5, strategyOrder.length - 0.5]}
+                  ticks={strategyOrder.map((_, i) => i)}
+                  tickFormatter={(v: number) => {
+                    const idx = Math.round(v);
+                    return idx >= 0 && idx < sortedBySharpe.length
+                      ? formatStrategyLabel(sortedBySharpe[idx].Strategy)
+                      : "";
+                  }}
+                  tick={{ fontSize: 9, fill: "#8f8780" }}
+                  axisLine={false}
+                  tickLine={false}
+                  angle={-20}
+                  textAnchor="end"
+                  height={56}
+                />
+                <YAxis
+                  type="number"
+                  dataKey="sharpe"
+                  tick={{ fontSize: 10, fill: "#aca49d" }}
+                  axisLine={false}
+                  tickLine={false}
+                  label={{ value: "Sharpe ratio", angle: -90, position: "insideLeft", offset: 4, style: { fontSize: 9, fill: "#aca49d" } }}
+                />
+                <ZAxis range={[20, 20]} />
+                <Tooltip
+                  {...tooltipStyle}
+                  content={({ payload }) => {
+                    if (!payload?.length) return null;
+                    const d = payload[0].payload as { label: string; sharpe: number };
+                    return (
+                      <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
+                        <p style={{ fontWeight: 600, marginBottom: 3, color: "#5c534c" }}>{d.label}</p>
+                        <p style={{ color: "#8f8780" }}>Sharpe: {d.sharpe.toFixed(2)}</p>
+                      </div>
+                    );
+                  }}
+                />
+                {strategyOrder.map((_, i) => (
+                  <ReferenceLine
+                    key={i}
+                    x={i}
+                    stroke="rgba(220,213,206,0.4)"
+                    strokeDasharray="3 6"
+                  />
+                ))}
+                <Scatter data={dispersionPoints}>
+                  {dispersionPoints.map((p, i) => (
+                    <Cell key={i} fill={getStrategyColor(p.strategyKey)} fillOpacity={0.55} />
+                  ))}
+                </Scatter>
+              </ScatterChart>
+            </ResponsiveContainer>
+            <p className="mt-2 text-[10px] text-[#b4aca5]">
+              Each dot is one run. Horizontal spread is jitter for readability. Wide vertical spread = high variance.
+            </p>
+          </Panel>
+        );
+      })()}
+
       <SectionHeader>Strategy master table</SectionHeader>
       <Panel className="overflow-x-auto p-0">
         <table className="w-full min-w-[1080px] text-[11px]">

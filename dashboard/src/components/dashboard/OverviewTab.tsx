@@ -524,6 +524,90 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         </>
       )}
 
+      {/* Period-by-period consistency */}
+      {(() => {
+        const gptKeys = ["gpt_advanced", "gpt_retail"] as const;
+        const gptRuns = runs.filter((r) => gptKeys.includes(r.strategy_key as typeof gptKeys[number]));
+        const indexRuns = runs.filter((r) => r.strategy_key === "index");
+        const markets = Array.from(new Set(runs.map((r) => r.market).filter(Boolean) as string[])).sort(
+          (a, b) => {
+            const o: Record<string, number> = { us: 0, germany: 1, japan: 2 };
+            return (o[a] ?? 99) - (o[b] ?? 99);
+          }
+        );
+        const periods = Array.from(new Set(runs.map((r) => r.period).filter(Boolean) as string[])).sort();
+        if (gptRuns.length === 0 || indexRuns.length === 0 || periods.length < 2) return null;
+
+        const idxSharpe = new Map<string, number>();
+        for (const r of indexRuns) {
+          const k = `${r.market}::${r.period}`;
+          const s = r.sharpe_ratio as number | null;
+          if (s != null) {
+            const prev = idxSharpe.get(k);
+            if (prev == null || s > prev) idxSharpe.set(k, s);
+          }
+        }
+
+        const columns = markets.flatMap((m) =>
+          gptKeys.map((gk) => ({ market: m, gptKey: gk, col: `${m}::${gk}` }))
+        );
+
+        return (
+          <>
+            <SoftHr />
+            <SectionHeader>Period-by-period consistency</SectionHeader>
+            <div className="dashboard-panel-strong overflow-hidden rounded-[20px]">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Period</th>
+                    {columns.map((c) => (
+                      <th key={c.col} className="px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                        <div>{MARKET_SHORT[c.market] ?? c.market}</div>
+                        <div className="mt-0.5 text-[9px] font-normal normal-case opacity-70">
+                          {c.gptKey === "gpt_advanced" ? "Advanced" : "Retail"}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {periods.map((period) => (
+                    <tr key={period} className="border-b border-[rgba(227,220,214,0.6)] last:border-0">
+                      <td className="whitespace-nowrap px-3 py-2 font-medium text-[#5e5955]">{period}</td>
+                      {columns.map((c) => {
+                        const idx = idxSharpe.get(`${c.market}::${period}`);
+                        const gpts = gptRuns.filter(
+                          (r) => r.strategy_key === c.gptKey && r.market === c.market && r.period === period
+                        );
+                        if (!gpts.length || idx == null) {
+                          return <td key={c.col} className="px-2 py-2 text-center text-[#d0c9c3]">—</td>;
+                        }
+                        const avg = gpts.reduce((s, r) => s + ((r.sharpe_ratio as number) ?? 0), 0) / gpts.length;
+                        const beat = avg > idx;
+                        return (
+                          <td key={c.col} className="px-2 py-2 text-center">
+                            <span
+                              className="inline-block rounded-[8px] px-2 py-0.5 text-[10px] font-semibold"
+                              style={{
+                                backgroundColor: beat ? "rgba(120,185,135,0.3)" : "rgba(212,140,130,0.25)",
+                                color: beat ? "#4a8a5a" : "#b05050",
+                              }}
+                            >
+                              {avg.toFixed(2)}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        );
+      })()}
+
       <SoftHr />
       <SharpeGapDiagnostic summaryRows={data.summary_rows} />
     </div>

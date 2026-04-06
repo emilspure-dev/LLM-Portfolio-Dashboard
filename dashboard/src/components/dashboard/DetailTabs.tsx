@@ -7,6 +7,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ErrorBar,
   Legend,
   Line,
   LineChart,
@@ -17,6 +18,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  ZAxis,
 } from "recharts";
 import { AlertCircle, ChevronLeft, ChevronRight, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -1414,6 +1416,24 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
     staleTime: 60_000,
   });
 
+  const isNotIndex = selection.selectedStrategyKey !== "index";
+  const benchmarkQuery = useQuery({
+    queryKey: ["equity-benchmark", data.active_experiment_id, selection.selectedMarket],
+    queryFn: () =>
+      fetchEquitySeriesWithPathFallback(
+        data.active_experiment_id,
+        selection.selectedMarket,
+        "index",
+        data.runs
+      ),
+    enabled: Boolean(selection.selectedMarket && isNotIndex),
+    staleTime: 120_000,
+  });
+  const benchmarkRows = useMemo(
+    () => (isNotIndex ? aggregateDailyRows(benchmarkQuery.data ?? []) : []),
+    [benchmarkQuery.data, isNotIndex]
+  );
+
   const curveRows = useMemo(
     () => aggregateDailyRows(equityQuery.data ?? []),
     [equityQuery.data]
@@ -1539,31 +1559,54 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
             <Panel>
               <p className="dashboard-label mb-4">Average equity curve</p>
               <ResponsiveContainer width="100%" height={320}>
-                <LineChart data={curveRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
-                  <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={formatDateLabel}
-                    minTickGap={28}
-                    tick={{ fontSize: 10, fill: "#aca49d" }}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
-                  <Tooltip
-                    {...tooltipStyle}
-                    labelFormatter={(value) => formatDateLabel(String(value))}
-                    formatter={(value: number | null) => (value != null ? value.toFixed(3) : "—")}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="portfolioValue"
-                    stroke={getStrategyColor(selection.selectedStrategyKey)}
-                    strokeWidth={2.5}
-                    dot={false}
-                    name="Portfolio value"
-                  />
-                </LineChart>
+                {(() => {
+                  const benchMap = new Map(benchmarkRows.map((r) => [r.date, r.portfolioValue]));
+                  const hasBench = benchmarkRows.length > 0 && isNotIndex;
+                  const merged = curveRows.map((r) => ({
+                    ...r,
+                    benchmarkValue: hasBench ? (benchMap.get(r.date) ?? null) : null,
+                  }));
+                  return (
+                    <LineChart data={merged} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
+                      <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                      <XAxis
+                        dataKey="date"
+                        tickFormatter={formatDateLabel}
+                        minTickGap={28}
+                        tick={{ fontSize: 10, fill: "#aca49d" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        {...tooltipStyle}
+                        labelFormatter={(value) => formatDateLabel(String(value))}
+                        formatter={(value: number | null) => (value != null ? value.toFixed(3) : "—")}
+                      />
+                      {hasBench && (
+                        <Line
+                          type="monotone"
+                          dataKey="benchmarkValue"
+                          stroke="rgba(180,172,165,0.7)"
+                          strokeWidth={1.5}
+                          strokeDasharray="6 3"
+                          dot={false}
+                          name="Market index"
+                          connectNulls
+                        />
+                      )}
+                      <Line
+                        type="monotone"
+                        dataKey="portfolioValue"
+                        stroke={getStrategyColor(selection.selectedStrategyKey)}
+                        strokeWidth={2.5}
+                        dot={false}
+                        name="Portfolio value"
+                      />
+                      {hasBench && <Legend />}
+                    </LineChart>
+                  );
+                })()}
               </ResponsiveContainer>
             </Panel>
 
@@ -2150,6 +2193,25 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
       .filter((value): value is number => value != null)
   );
 
+  const MODEL_COLORS = [CHART_COLORS[0], CHART_COLORS[1], CHART_COLORS[2], CHART_COLORS[3], CHART_COLORS[4], COLORS.accent, COLORS.amber];
+  const modelScatterData = useMemo(() => {
+    const models = Array.from(new Set(filteredRuns.map((r) => r.model).filter(Boolean) as string[])).sort();
+    if (models.length < 2) return null;
+    const colorMap = new Map(models.map((m, i) => [m, MODEL_COLORS[i % MODEL_COLORS.length]]));
+    return {
+      models,
+      colorMap,
+      points: filteredRuns
+        .filter((r) => r.model && asNumber(r.sharpe_ratio) != null)
+        .map((r) => ({
+          sharpe: asNumber(r.sharpe_ratio)!,
+          ret: (asNumber(r.period_return ?? r.net_return ?? r.period_return_net) ?? 0) * 100,
+          model: String(r.model),
+          color: colorMap.get(String(r.model)) ?? COLORS.accent,
+        })),
+    };
+  }, [filteredRuns]);
+
   return (
     <div className="space-y-4 pb-1">
       <Panel>
@@ -2264,6 +2326,74 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
               </ResponsiveContainer>
             </Panel>
           </div>
+
+          {modelScatterData && (
+            <Panel>
+              <p className="dashboard-label mb-4">Model comparison — Sharpe vs return</p>
+              <ResponsiveContainer width="100%" height={300}>
+                <ScatterChart margin={{ top: 8, right: 100, left: 8, bottom: 8 }}>
+                  <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
+                  <XAxis
+                    type="number"
+                    dataKey="sharpe"
+                    name="Sharpe"
+                    tick={{ fontSize: 10, fill: "#aca49d" }}
+                    axisLine={false}
+                    tickLine={false}
+                    label={{ value: "Sharpe ratio", position: "insideBottom", offset: -2, style: { fontSize: 10, fill: "#aca49d" } }}
+                  />
+                  <YAxis
+                    type="number"
+                    dataKey="ret"
+                    name="Return %"
+                    tick={{ fontSize: 10, fill: "#aca49d" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) => `${v.toFixed(0)}%`}
+                    label={{ value: "Period return", angle: -90, position: "insideLeft", offset: 12, style: { fontSize: 10, fill: "#aca49d" } }}
+                  />
+                  <ZAxis range={[40, 40]} />
+                  <Tooltip
+                    {...tooltipStyle}
+                    content={({ payload }) => {
+                      if (!payload?.length) return null;
+                      const d = payload[0].payload as { model: string; sharpe: number; ret: number };
+                      return (
+                        <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
+                          <p style={{ fontWeight: 600, marginBottom: 4, color: "#5c534c" }}>{d.model}</p>
+                          <p style={{ color: "#8f8780" }}>Sharpe: {d.sharpe.toFixed(2)}</p>
+                          <p style={{ color: "#8f8780" }}>Return: {d.ret.toFixed(1)}%</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Scatter
+                    data={modelScatterData.points}
+                    shape={(props: Record<string, unknown>) => {
+                      const cx = props.cx as number;
+                      const cy = props.cy as number;
+                      const pt = props.payload as { model: string; color: string };
+                      return <circle cx={cx} cy={cy} r={5} fill={pt.color} fillOpacity={0.7} stroke="white" strokeWidth={1} />;
+                    }}
+                  />
+                  <Legend
+                    verticalAlign="top"
+                    align="right"
+                    content={() => (
+                      <div className="flex flex-wrap gap-3 text-[10px]">
+                        {modelScatterData.models.map((m) => (
+                          <span key={m} className="flex items-center gap-1">
+                            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelScatterData.colorMap.get(m) }} />
+                            {m}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </Panel>
+          )}
 
           <SectionHeader>Selected run — daily path</SectionHeader>
           {selectedRun && (
@@ -2652,6 +2782,94 @@ export function ByMarketTab({ data }: BaseTabProps) {
           </tbody>
         </table>
       </Panel>
+
+      {/* Period consistency heatmap */}
+      {(() => {
+        const gptKeys = ["gpt_advanced", "gpt_retail"];
+        const gptRuns = data.runs.filter((r) => gptKeys.includes(r.strategy_key ?? ""));
+        const indexRuns = data.runs.filter((r) => r.strategy_key === "index");
+        const periods = Array.from(new Set(data.runs.map((r) => r.period).filter(Boolean) as string[])).sort();
+        if (gptRuns.length === 0 || indexRuns.length === 0 || periods.length === 0) return null;
+
+        const idxSharpeMap = new Map<string, number>();
+        for (const r of indexRuns) {
+          const key = `${r.market ?? ""}::${r.period ?? ""}`;
+          const existing = idxSharpeMap.get(key);
+          const s = asNumber(r.sharpe_ratio);
+          if (s != null && (existing == null || s > existing)) idxSharpeMap.set(key, s);
+        }
+
+        const columns = markets.flatMap((m) =>
+          gptKeys.map((gk) => ({ market: m, gptKey: gk, colKey: `${m}::${gk}` }))
+        );
+
+        return (
+          <>
+            <SectionHeader>Period Consistency</SectionHeader>
+            <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+              <p className="text-[12px] leading-5 text-[#8f8780]">
+                For each period, does GPT beat the market index Sharpe in that market?
+                Green = GPT Sharpe exceeded index. Red = missed. Grey = no data.
+              </p>
+            </Panel>
+            <Panel className="overflow-x-auto p-0">
+              <table className="w-full min-w-[640px] text-[11px]">
+                <thead>
+                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                      Period
+                    </th>
+                    {columns.map((col) => (
+                      <th key={col.colKey} className="px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                        <div>{MARKET_LABELS[col.market]?.replace(/ \(.*\)$/, "") ?? col.market}</div>
+                        <div className="mt-0.5 text-[9px] font-normal normal-case opacity-70">
+                          {col.gptKey === "gpt_advanced" ? "Advanced" : "Retail"}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {periods.map((period) => (
+                    <tr key={period} className="border-b border-[rgba(227,220,214,0.6)] last:border-0">
+                      <td className="whitespace-nowrap px-3 py-2 font-medium text-[#5e5955]">{period}</td>
+                      {columns.map((col) => {
+                        const idxKey = `${col.market}::${period}`;
+                        const idxSharpe = idxSharpeMap.get(idxKey);
+                        const gptRunsForCell = gptRuns.filter(
+                          (r) => r.strategy_key === col.gptKey && r.market === col.market && r.period === period
+                        );
+                        if (gptRunsForCell.length === 0 || idxSharpe == null) {
+                          return (
+                            <td key={col.colKey} className="px-2 py-2 text-center text-[#d0c9c3]">—</td>
+                          );
+                        }
+                        const avgGpt =
+                          gptRunsForCell.reduce((s, r) => s + (asNumber(r.sharpe_ratio) ?? 0), 0) /
+                          gptRunsForCell.length;
+                        const beat = avgGpt > idxSharpe;
+                        return (
+                          <td key={col.colKey} className="px-2 py-2 text-center">
+                            <span
+                              className="inline-block rounded-[8px] px-2 py-1 text-[10px] font-semibold"
+                              style={{
+                                backgroundColor: beat ? "rgba(120,185,135,0.35)" : "rgba(212,140,130,0.3)",
+                                color: beat ? "#4a8a5a" : "#b05050",
+                              }}
+                            >
+                              {avgGpt.toFixed(2)}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Panel>
+          </>
+        );
+      })()}
     </div>
   );
 }
@@ -2736,6 +2954,13 @@ export function StatisticalTestsTab({ runs }: BaseTabProps) {
                   }}
                 />
                 <Bar dataKey="meanSharpe" radius={[10, 10, 0, 0]}>
+                  <ErrorBar
+                    dataKey="sharpeCi95"
+                    width={6}
+                    strokeWidth={2}
+                    stroke="rgba(140,120,100,0.55)"
+                    direction="y"
+                  />
                   {statsRows.map((row) => (
                     <Cell key={row.strategyKey} fill={getStrategyColor(row.strategyKey)} />
                   ))}
@@ -2941,6 +3166,74 @@ export function BehaviorTab({ data }: BaseTabProps) {
               </tbody>
             </table>
           </Panel>
+
+          {/* ── Reasoning keyword frequency ── */}
+          {(() => {
+            const STOP = new Set([
+              "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+              "of", "with", "by", "from", "as", "is", "was", "are", "were", "be",
+              "been", "being", "have", "has", "had", "do", "does", "did", "will",
+              "would", "could", "should", "may", "might", "shall", "can", "need",
+              "it", "its", "this", "that", "these", "those", "i", "we", "you", "he",
+              "she", "they", "me", "him", "her", "us", "them", "my", "our", "your",
+              "his", "their", "which", "who", "whom", "what", "where", "when", "how",
+              "not", "no", "nor", "if", "then", "than", "so", "up", "out", "just",
+              "also", "more", "most", "very", "too", "each", "all", "any", "both",
+              "few", "some", "such", "into", "over", "only", "own", "same", "other",
+              "new", "one", "two", "about", "after", "before", "between", "under",
+              "through", "during", "while", "because", "since", "until", "although",
+              "however", "therefore", "thus", "there", "here", "s", "t", "m", "re",
+              "ve", "d", "ll", "don", "doesn", "didn", "won", "wouldn", "couldn",
+              "shouldn", "isn", "aren", "wasn", "weren", "hasn", "haven", "hadn",
+              "based", "given", "using", "used", "like", "well", "still", "even",
+            ]);
+            const counts = new Map<string, number>();
+            for (const run of data.runs) {
+              const text = String((run as Record<string, unknown>).reasoning_summary ?? "");
+              if (!text) continue;
+              const words = text.toLowerCase().replace(/[^a-z\s]/g, " ").split(/\s+/);
+              for (const w of words) {
+                if (w.length < 3 || STOP.has(w)) continue;
+                counts.set(w, (counts.get(w) ?? 0) + 1);
+              }
+            }
+            const sorted = Array.from(counts.entries())
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 30);
+            if (sorted.length < 5) return null;
+            const maxCount = sorted[0][1];
+
+            return (
+              <>
+                <SectionHeader>Reasoning themes</SectionHeader>
+                <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+                  <p className="text-[12px] leading-5 text-[#8f8780]">
+                    Most frequent words in all reasoning summaries (stop words removed). Helps identify
+                    whether the model consistently invokes certain themes across runs.
+                  </p>
+                </Panel>
+                <Panel>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 md:grid-cols-3">
+                    {sorted.map(([word, count]) => (
+                      <div key={word} className="flex items-center gap-2 py-1">
+                        <span className="w-[80px] truncate text-[11px] font-medium text-[#5e5955]">{word}</span>
+                        <div className="flex-1">
+                          <div
+                            className="h-[6px] rounded-full"
+                            style={{
+                              width: `${(count / maxCount) * 100}%`,
+                              backgroundColor: "rgba(188,160,130,0.45)",
+                            }}
+                          />
+                        </div>
+                        <span className="w-[28px] text-right text-[10px] tabular-nums text-[#9b938b]">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+              </>
+            );
+          })()}
 
           {/* ── Post-loss reasoning analysis ── */}
           <SectionHeader>Post-loss reasoning</SectionHeader>
