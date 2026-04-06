@@ -112,16 +112,20 @@ function sortSummaryRows(rows: StrategyRow[]) {
       return leftIsGpt ? -1 : 1;
     }
 
-    const lb =
-      left.mean_sharpe != null && Number.isFinite(left.mean_sharpe);
-    const rb =
-      right.mean_sharpe != null && Number.isFinite(right.mean_sharpe);
-    if (lb && rb) {
-      return right.mean_sharpe! - left.mean_sharpe!;
+    // Group same strategy_key together (e.g. all "index" rows together)
+    if (left.strategy_key !== right.strategy_key) {
+      const lb = left.mean_sharpe != null && Number.isFinite(left.mean_sharpe);
+      const rb = right.mean_sharpe != null && Number.isFinite(right.mean_sharpe);
+      if (lb && rb) return right.mean_sharpe! - left.mean_sharpe!;
+      if (lb) return -1;
+      if (rb) return 1;
+      return 0;
     }
-    if (lb) return -1;
-    if (rb) return 1;
-    return 0;
+
+    // Same strategy_key: sort by market label so S&P / DAX / Nikkei appear in stable order
+    const lm = (left.markets?.[0] ?? left.Strategy).toLowerCase();
+    const rm = (right.markets?.[0] ?? right.Strategy).toLowerCase();
+    return lm.localeCompare(rm);
   });
 }
 
@@ -137,7 +141,13 @@ export function buildStrategySummaryView(
   const grouped = new Map<string, StrategySummaryApiRow[]>();
 
   for (const row of filteredRows) {
-    const key = `${row.strategy_key}::${row.source_type}`;
+    // GPT strategies are evaluated across all markets and should be aggregated into one row.
+    // Benchmark strategies are market-specific assets (S&P 500 index ≠ DAX 40 index) and
+    // must be kept separate per market so they show individually in charts and tables.
+    const isGpt = row.strategy_key.startsWith("gpt_");
+    const key = isGpt
+      ? `${row.strategy_key}::${row.source_type}`
+      : `${row.strategy_key}::${row.source_type}::${row.market}`;
     const group = grouped.get(key) ?? [];
     group.push(row);
     grouped.set(key, group);

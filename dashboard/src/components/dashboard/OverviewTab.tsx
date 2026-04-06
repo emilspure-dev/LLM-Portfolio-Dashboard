@@ -192,13 +192,20 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       {summary.length > 0 && (
         <>
           <SectionHeader>Strategy Performance</SectionHeader>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {summary.slice(0, 6).map((s) => {
-              const short = s.Strategy.replace("GPT (", "").replace(")", "")
-                .replace(" (market-matched)", "").replace(" (buy-and-hold)", "");
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {summary.map((s) => {
+              const marketSuffix = !s.strategy_key.startsWith("gpt_") && s.markets?.length === 1
+                ? ` · ${s.markets[0]}`
+                : "";
+              const short = s.Strategy
+                .replace("GPT (", "")
+                .replace(")", "")
+                .replace(" (market-matched)", "")
+                .replace(" (buy-and-hold)", "")
+                + marketSuffix;
               return (
                 <KpiCard
-                  key={s.strategy_key || s.Strategy}
+                  key={`${s.strategy_key}::${s.markets?.[0] ?? ""}`}
                   label={short}
                   value={fmt(s.mean_sharpe, 2)}
                   color={sharpeColor(s.mean_sharpe)}
