@@ -283,6 +283,31 @@ function getRunExplorerKey(run: RunRow): string {
   return `row:${run.strategy_key ?? ""}-${run.market ?? ""}-${run.period ?? ""}-${run.model ?? ""}-${run.prompt_type ?? ""}`;
 }
 
+function runExplorerPointMeta(run: RunRow) {
+  const runKey = getRunExplorerKey(run);
+  const runIdLabel =
+    run.run_id != null && String(run.run_id).length > 0
+      ? `Run ${run.run_id}`
+      : run.path_id != null && String(run.path_id).length > 0
+        ? `Path ${run.path_id}`
+        : "Composite key (see table)";
+  const promptLabel =
+    run.prompt_type === "advanced"
+      ? "Advanced"
+      : run.prompt_type === "retail"
+        ? "Retail"
+        : (run.prompt_type ?? "—");
+  const marketLabel = MARKET_LABELS[run.market ?? ""] ?? run.market ?? "—";
+  return {
+    runKey,
+    runIdLabel,
+    promptLabel,
+    marketLabel,
+    period: run.period ?? "—",
+    strategyLabel: formatStrategyLabel(run.strategy ?? run.strategy_key ?? ""),
+  };
+}
+
 function singlePathEquitySeries(rows: StrategyDailyRow[]) {
   const sorted = [...rows].sort((left, right) => left.date.localeCompare(right.date));
   const firstValue = sorted.find((row) => row.portfolio_value != null)?.portfolio_value ?? null;
@@ -2213,6 +2238,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
           ret: (asNumber(r.period_return ?? r.net_return ?? r.period_return_net) ?? 0) * 100,
           model: String(r.model),
           color: colorMap.get(String(r.model)) ?? COLORS.accent,
+          ...runExplorerPointMeta(r),
         })),
     };
   }, [gptFilteredRuns]);
@@ -2228,6 +2254,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
         sharpe: asNumber(r.sharpe_ratio) ?? 0,
         model: String(r.model),
         color: colorMap.get(String(r.model)) ?? COLORS.accent,
+        ...runExplorerPointMeta(r),
       }));
     if (points.length < 4) return null;
     return { models, colorMap, points };
@@ -2378,12 +2405,27 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                     {...tooltipStyle}
                     content={({ payload }) => {
                       if (!payload?.length) return null;
-                      const d = payload[0].payload as { model: string; sharpe: number; ret: number };
+                      const d = payload[0].payload as {
+                        model: string;
+                        sharpe: number;
+                        ret: number;
+                        runIdLabel: string;
+                        strategyLabel: string;
+                        promptLabel: string;
+                        marketLabel: string;
+                        period: string;
+                      };
                       return (
                         <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
-                          <p style={{ fontWeight: 600, marginBottom: 4, color: "#5c534c" }}>{d.model}</p>
+                          <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{d.runIdLabel}</p>
+                          <p style={{ color: "#6b6560", marginBottom: 4 }}>{d.strategyLabel}</p>
+                          <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{d.model}</p>
+                          <p style={{ color: "#8f8780", marginBottom: 4 }}>
+                            {d.promptLabel} · {d.marketLabel} · {d.period}
+                          </p>
                           <p style={{ color: "#8f8780" }}>Sharpe: {d.sharpe.toFixed(2)}</p>
                           <p style={{ color: "#8f8780" }}>Return: {d.ret.toFixed(1)}%</p>
+                          <p style={{ color: "#b4aca5", fontSize: 10, marginTop: 6 }}>Click the dot to select this run below.</p>
                         </div>
                       );
                     }}
@@ -2393,8 +2435,21 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                     shape={(props: Record<string, unknown>) => {
                       const cx = props.cx as number;
                       const cy = props.cy as number;
-                      const pt = props.payload as { model: string; color: string };
-                      return <circle cx={cx} cy={cy} r={5} fill={pt.color} fillOpacity={0.7} stroke="white" strokeWidth={1} />;
+                      const pt = props.payload as { model: string; color: string; runKey: string };
+                      const sel = pt.runKey === selectedRunKey;
+                      return (
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={sel ? 6.5 : 5}
+                          fill={pt.color}
+                          fillOpacity={0.75}
+                          stroke={sel ? "#4a433d" : "white"}
+                          strokeWidth={sel ? 2 : 1}
+                          style={{ cursor: "pointer" }}
+                          onClick={() => setSelectedRunKey(pt.runKey)}
+                        />
+                      );
                     }}
                   />
                   <Legend
@@ -2413,6 +2468,9 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                   />
                 </ScatterChart>
               </ResponsiveContainer>
+              <p className="mt-1 text-[10px] text-[#b4aca5]">
+                Hover for run id, market, period, and prompt; click a dot to select that run in the table and daily path below.
+              </p>
             </Panel>
           )}
 
@@ -2446,12 +2504,27 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                     {...tooltipStyle}
                     content={({ payload }) => {
                       if (!payload?.length) return null;
-                      const d = payload[0].payload as { model: string; sharpe: number; hhi: number };
+                      const d = payload[0].payload as {
+                        model: string;
+                        sharpe: number;
+                        hhi: number;
+                        runIdLabel: string;
+                        strategyLabel: string;
+                        promptLabel: string;
+                        marketLabel: string;
+                        period: string;
+                      };
                       return (
                         <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
-                          <p style={{ fontWeight: 600, marginBottom: 4, color: "#5c534c" }}>{d.model}</p>
+                          <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{d.runIdLabel}</p>
+                          <p style={{ color: "#6b6560", marginBottom: 4 }}>{d.strategyLabel}</p>
+                          <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{d.model}</p>
+                          <p style={{ color: "#8f8780", marginBottom: 4 }}>
+                            {d.promptLabel} · {d.marketLabel} · {d.period}
+                          </p>
                           <p style={{ color: "#8f8780" }}>Sharpe: {d.sharpe.toFixed(2)}</p>
                           <p style={{ color: "#8f8780" }}>HHI: {d.hhi.toFixed(3)}</p>
+                          <p style={{ color: "#b4aca5", fontSize: 10, marginTop: 6 }}>Click the dot to select this run below.</p>
                         </div>
                       );
                     }}
@@ -2461,8 +2534,21 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                     shape={(props: Record<string, unknown>) => {
                       const cx = props.cx as number;
                       const cy = props.cy as number;
-                      const pt = props.payload as { color: string };
-                      return <circle cx={cx} cy={cy} r={5} fill={pt.color} fillOpacity={0.7} stroke="white" strokeWidth={1} />;
+                      const pt = props.payload as { color: string; runKey: string };
+                      const sel = pt.runKey === selectedRunKey;
+                      return (
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={sel ? 6.5 : 5}
+                          fill={pt.color}
+                          fillOpacity={0.75}
+                          stroke={sel ? "#4a433d" : "white"}
+                          strokeWidth={sel ? 2 : 1}
+                          style={{ cursor: "pointer" }}
+                          onClick={() => setSelectedRunKey(pt.runKey)}
+                        />
+                      );
                     }}
                   />
                   <Legend
@@ -2483,7 +2569,8 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                 </ScatterChart>
               </ResponsiveContainer>
               <p className="mt-1 text-[10px] text-[#b4aca5]">
-                Lower HHI = more diversified. Runs above the dashed line (0.15) are concentrated portfolios.
+                Lower HHI = more diversified. Runs above the dashed line (0.15) are concentrated portfolios. Hover a dot for run id,
+                market, period, and prompt; click to select it in the table and path section below.
               </p>
             </Panel>
           )}
