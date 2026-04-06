@@ -331,6 +331,63 @@ function mean(values: number[]) {
     : null;
 }
 
+/**
+ * Index (market) benchmark for Run Explorer model scatters.
+ * Uses `strategy_key === "index"` runs only, filtered by the tab's market + period (not portfolio/model),
+ * then takes the simple mean of Sharpe, period return, and HHI so GPT dots compare to the same market context.
+ */
+function computeMarketIndexReference(
+  runs: RunRow[],
+  marketFilter: string,
+  periodFilter: string
+): {
+  sharpe: number | null;
+  retPct: number | null;
+  hhi: number | null;
+  nIndexRuns: number;
+  caption: string;
+} {
+  const idx = runs
+    .filter((r) => r.strategy_key === "index")
+    .filter((r) => marketFilter === "All" || r.market === marketFilter)
+    .filter((r) => periodFilter === "All" || r.period === periodFilter);
+
+  const sharpes = idx
+    .map((r) => asNumber(r.sharpe_ratio))
+    .filter((x): x is number => x != null && Number.isFinite(x));
+  const rets = idx
+    .map((r) => asNumber(r.period_return ?? r.net_return ?? r.period_return_net))
+    .filter((x): x is number => x != null && Number.isFinite(x));
+  const hhis = idx.map((r) => asNumber(r.hhi)).filter((x): x is number => x != null && Number.isFinite(x));
+
+  const sharpeMean = mean(sharpes);
+  const retMean = mean(rets);
+  const retPct = retMean != null ? retMean * 100 : null;
+  const hhiMean = mean(hhis);
+
+  const mkt =
+    marketFilter === "All" ? "all markets" : (MARKET_LABELS[marketFilter] ?? marketFilter);
+  const per = periodFilter === "All" ? "all periods" : periodFilter;
+  const caption =
+    idx.length === 0
+      ? "No index runs match the current market and period filters; market crosshairs are hidden."
+      : `Blue dashed crosshairs: mean index (market) benchmark — ${mkt}, ${per} (${idx.length} index run${idx.length === 1 ? "" : "s"}). When multiple markets or periods are included, values are simple averages across matching index runs.`;
+
+  return {
+    sharpe: sharpeMean,
+    retPct,
+    hhi: hhiMean,
+    nIndexRuns: idx.length,
+    caption,
+  };
+}
+
+const MARKET_REF_LINE = {
+  stroke: "rgba(72, 98, 140, 0.78)",
+  dash: "5 5" as const,
+  width: 1.5,
+};
+
 function stdDev(values: number[]) {
   if (values.length < 2) {
     return null;
@@ -2090,6 +2147,11 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
       .sort((left, right) => (asNumber(right.sharpe_ratio) ?? -Infinity) - (asNumber(left.sharpe_ratio) ?? -Infinity));
   }, [runs, marketFilter, portfolioFilter, modelFilter, periodFilter]);
 
+  const marketIndexRef = useMemo(
+    () => computeMarketIndexReference(runs, marketFilter, periodFilter),
+    [runs, marketFilter, periodFilter]
+  );
+
   const totalPages = Math.max(1, Math.ceil(filteredRuns.length / 12));
   const pageRows = useMemo(
     () => filteredRuns.slice((page - 1) * 12, page * 12),
@@ -2452,6 +2514,34 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                       );
                     }}
                   />
+                  {marketIndexRef.sharpe != null && (
+                    <ReferenceLine
+                      x={marketIndexRef.sharpe}
+                      stroke={MARKET_REF_LINE.stroke}
+                      strokeWidth={MARKET_REF_LINE.width}
+                      strokeDasharray={MARKET_REF_LINE.dash}
+                      label={{
+                        value: `Market μ Sharpe ${marketIndexRef.sharpe.toFixed(2)}`,
+                        position: "top",
+                        fontSize: 9,
+                        fill: "#5a6d8c",
+                      }}
+                    />
+                  )}
+                  {marketIndexRef.retPct != null && (
+                    <ReferenceLine
+                      y={marketIndexRef.retPct}
+                      stroke={MARKET_REF_LINE.stroke}
+                      strokeWidth={MARKET_REF_LINE.width}
+                      strokeDasharray={MARKET_REF_LINE.dash}
+                      label={{
+                        value: `Market μ return ${marketIndexRef.retPct.toFixed(1)}%`,
+                        position: "right",
+                        fontSize: 9,
+                        fill: "#5a6d8c",
+                      }}
+                    />
+                  )}
                   <Legend
                     verticalAlign="top"
                     align="right"
@@ -2469,7 +2559,8 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                 </ScatterChart>
               </ResponsiveContainer>
               <p className="mt-1 text-[10px] text-[#b4aca5]">
-                Hover for run id, market, period, and prompt; click a dot to select that run in the table and daily path below.
+                Hover for run id, market, period, and prompt; click a dot to select that run in the table and daily path below.{" "}
+                {marketIndexRef.caption}
               </p>
             </Panel>
           )}
@@ -2551,6 +2642,34 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                       );
                     }}
                   />
+                  {marketIndexRef.sharpe != null && (
+                    <ReferenceLine
+                      x={marketIndexRef.sharpe}
+                      stroke={MARKET_REF_LINE.stroke}
+                      strokeWidth={MARKET_REF_LINE.width}
+                      strokeDasharray={MARKET_REF_LINE.dash}
+                      label={{
+                        value: `Market μ Sharpe ${marketIndexRef.sharpe.toFixed(2)}`,
+                        position: "top",
+                        fontSize: 9,
+                        fill: "#5a6d8c",
+                      }}
+                    />
+                  )}
+                  {marketIndexRef.hhi != null && (
+                    <ReferenceLine
+                      y={marketIndexRef.hhi}
+                      stroke={MARKET_REF_LINE.stroke}
+                      strokeWidth={MARKET_REF_LINE.width}
+                      strokeDasharray={MARKET_REF_LINE.dash}
+                      label={{
+                        value: `Market μ HHI ${marketIndexRef.hhi.toFixed(3)}`,
+                        position: "right",
+                        fontSize: 9,
+                        fill: "#5a6d8c",
+                      }}
+                    />
+                  )}
                   <Legend
                     verticalAlign="top"
                     align="right"
@@ -2570,7 +2689,8 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
               </ResponsiveContainer>
               <p className="mt-1 text-[10px] text-[#b4aca5]">
                 Lower HHI = more diversified. Runs above the dashed line (0.15) are concentrated portfolios. Hover a dot for run id,
-                market, period, and prompt; click to select it in the table and path section below.
+                market, period, and prompt; click to select it in the table and path section below.{" "}
+                {marketIndexRef.caption}
               </p>
             </Panel>
           )}
