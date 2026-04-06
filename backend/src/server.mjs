@@ -863,7 +863,15 @@ const server = http.createServer((request, response) => {
       throw createHttpError(503, "SQLite database is unavailable");
     }
 
-    const payload = handler({ request, response, url });
+    let payload = handler({ request, response, url });
+    if (url.pathname === "/api/health" && payload && typeof payload === "object") {
+      payload = {
+        ...payload,
+        routes: {
+          factor_style: routes.has("GET /api/summary/factor-style"),
+        },
+      };
+    }
     json(response, 200, payload);
   } catch (error) {
     const statusCode = error.statusCode ?? 500;

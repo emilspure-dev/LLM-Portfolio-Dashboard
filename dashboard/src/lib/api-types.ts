@@ -2,6 +2,10 @@ export interface HealthResponse {
   status: "ok" | "degraded";
   db_available: boolean;
   current_db_path: string;
+  /** Present on newer APIs; false means the VPS process is an older build (restart after git pull). */
+  routes?: {
+    factor_style: boolean;
+  };
 }
 
 export interface ExperimentOption {
