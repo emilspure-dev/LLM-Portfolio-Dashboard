@@ -298,6 +298,8 @@ const SHARPE_HIST_COLORS = {
   equalWeight: "#4896a8",
   meanVariance: "#8b7cb5",
   index: "#b8964d",
+  sixtyForty: "#7a7a7a",
+  famaFrench: "#6366f1",
 } as const;
 
 interface SharpeHistBin {
@@ -849,6 +851,8 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
     const ewMean = mean(runStrategySharpes(scoped, "equal_weight"));
     const mvMean = mean(runStrategySharpes(scoped, "mean_variance"));
     const ixMean = mean(runStrategySharpes(scoped, "index"));
+    const sfMean = mean(runStrategySharpes(scoped, "sixty_forty"));
+    const ffMean = mean(runStrategySharpes(scoped, "fama_french"));
     return {
       retail,
       advanced,
@@ -858,6 +862,8 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
       ewMean,
       mvMean,
       ixMean,
+      sfMean,
+      ffMean,
     };
   }, [runs, marketFilter]);
 
@@ -870,6 +876,8 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
     ewMean,
     mvMean,
     ixMean,
+    sfMean,
+    ffMean,
   } = sharpeHistogramModel;
 
   const sharpeMeanMarkers = useMemo(
@@ -878,14 +886,14 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
         {
           key: "adv",
           value: advancedMean,
-          label: "Mean GPT (Advanced)",
+          label: "GPT Advanced μ",
           color: SHARPE_HIST_COLORS.gptAdvanced,
           dashed: true,
         },
         {
           key: "ret",
           value: retailMean,
-          label: "Mean GPT (Retail)",
+          label: "GPT Retail μ",
           color: SHARPE_HIST_COLORS.gptRetail,
           dashed: true,
         },
@@ -899,15 +907,29 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
         {
           key: "mv",
           value: mvMean,
-          label: "Mean-variance μ",
+          label: "MV μ",
           color: SHARPE_HIST_COLORS.meanVariance,
           dashed: false,
         },
         {
           key: "ix",
           value: ixMean,
-          label: "Market index μ",
+          label: "Index μ",
           color: SHARPE_HIST_COLORS.index,
+          dashed: false,
+        },
+        {
+          key: "sf",
+          value: sfMean,
+          label: "60/40 μ",
+          color: SHARPE_HIST_COLORS.sixtyForty,
+          dashed: false,
+        },
+        {
+          key: "ff",
+          value: ffMean,
+          label: "Fama-French μ",
+          color: SHARPE_HIST_COLORS.famaFrench,
           dashed: false,
         },
       ].filter((m) => m.value != null && Number.isFinite(m.value)) as Array<{
@@ -917,7 +939,7 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
         color: string;
         dashed: boolean;
       }>,
-    [advancedMean, ewMean, ixMean, mvMean, retailMean],
+    [advancedMean, ewMean, ffMean, ixMean, mvMean, retailMean, sfMean],
   );
 
   const topSharpe = summary[0];
@@ -984,17 +1006,31 @@ export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
           <p className="mb-3 text-[11px] leading-5 text-[#8a827a]">
             Overlapping run-level Sharpe counts for GPT portfolios (current market filter).{" "}
             <span className="font-medium text-[#6f6863]">Dashed</span> lines: mean Sharpe for GPT
-            (Advanced) and GPT (Retail).{" "}
-            <span className="font-medium text-[#6f6863]">Dotted</span>: mean Sharpe across runs for
-            equal weight, mean-variance, and market index.
+            portfolios.{" "}
+            <span className="font-medium text-[#6f6863]">Dotted</span>: benchmark strategy means
+            (1/N, MV, 60/40, Fama-French, Index).
           </p>
           {sharpeMeanMarkers.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5 border-b border-[rgba(232,224,217,0.65)] pb-3 text-[10px] font-semibold tracking-tight">
-              {sharpeMeanMarkers.map((m) => (
-                <span key={m.key} style={{ color: m.color }}>
-                  {m.label}: {m.value.toFixed(2)}
-                </span>
-              ))}
+            <div className="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 border-b border-[rgba(232,224,217,0.65)] pb-3 text-[10px] sm:grid-cols-3 lg:grid-cols-4">
+              {[...sharpeMeanMarkers]
+                .sort((a, b) => a.value - b.value)
+                .map((m) => (
+                  <span key={m.key} className="flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-[2px] w-4 shrink-0"
+                      style={{
+                        backgroundColor: m.color,
+                        borderTop: m.dashed
+                          ? `2px dashed ${m.color}`
+                          : `2px dotted ${m.color}`,
+                        height: 0,
+                      }}
+                    />
+                    <span style={{ color: m.color }} className="font-semibold">
+                      {m.label}: {m.value.toFixed(2)}
+                    </span>
+                  </span>
+                ))}
             </div>
           )}
           <ResponsiveContainer width="100%" height={328}>
