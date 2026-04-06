@@ -291,6 +291,77 @@ function stdDev(values: number[]) {
   return Math.sqrt(variance);
 }
 
+/** GPT run-level Sharpe histogram (light-theme friendly blues / ambers) */
+const SHARPE_HIST_COLORS = {
+  gptRetail: "#3d6ea8",
+  gptAdvanced: "#b5652b",
+  equalWeight: "#4896a8",
+  meanVariance: "#8b7cb5",
+  index: "#b8964d",
+} as const;
+
+interface SharpeHistBin {
+  lo: number;
+  hi: number;
+  name: string;
+  mid: number;
+  retail: number;
+  advanced: number;
+}
+
+function filterRunsForMarketFilter(runs: RunRow[], marketFilter: string): RunRow[] {
+  if (marketFilter === "All") return runs;
+  return runs.filter((r) => r.market === marketFilter);
+}
+
+function runStrategySharpes(runs: RunRow[], strategyKey: string): number[] {
+  return runs
+    .filter((r) => r.strategy_key === strategyKey)
+    .map((r) => asNumber(r.sharpe_ratio))
+    .filter((v): v is number => v != null && Number.isFinite(v));
+}
+
+function buildSharpeHistogramBins(
+  retail: number[],
+  advanced: number[],
+  binWidth: number,
+  domainPad: [number, number] = [-2.25, 10],
+): SharpeHistBin[] {
+  const all = [...retail, ...advanced];
+  if (all.length === 0) return [];
+  let lo = Math.min(domainPad[0], ...all) - binWidth * 0.25;
+  let hi = Math.max(domainPad[1], ...all) + binWidth * 0.25;
+  lo = Math.min(lo, domainPad[0]);
+  hi = Math.max(hi, domainPad[1]);
+  lo = Math.floor(lo / binWidth) * binWidth;
+  hi = Math.ceil(hi / binWidth) * binWidth;
+  const out: SharpeHistBin[] = [];
+  for (let x = lo; x < hi - 1e-12; x += binWidth) {
+    const h = Math.min(x + binWidth, hi);
+    const last = Math.abs(h - hi) < 1e-9;
+    const inBin = (v: number) =>
+      last ? v >= x && v <= h + 1e-12 : v >= x && v < h;
+    out.push({
+      lo: x,
+      hi: h,
+      mid: (x + h) / 2,
+      name: `${x.toFixed(2)}–${h.toFixed(2)}`,
+      retail: retail.filter(inBin).length,
+      advanced: advanced.filter(inBin).length,
+    });
+  }
+  return out;
+}
+
+function binNameForSharpeValue(bins: SharpeHistBin[], v: number): string | null {
+  if (!bins.length) return null;
+  const idx = bins.findIndex((bin, i) => {
+    const last = i === bins.length - 1;
+    return v >= bin.lo && (last ? v <= bin.hi + 1e-12 : v < bin.hi);
+  });
+  return idx >= 0 ? bins[idx]!.name : null;
+}
+
 function uniqueStrings(values: Array<string | null | undefined>) {
   return Array.from(
     new Set(values.filter((value): value is string => Boolean(value)))
@@ -760,8 +831,94 @@ function buildStrategyStats(runs: RunRow[]) {
     .sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity));
 }
 
-export function SharpeReturnsTab({ data }: BaseTabProps) {
+export function SharpeReturnsTab({ data, runs, marketFilter }: BaseTabProps) {
   const summary = data.summary;
+
+  const sharpeHistogramModel = useMemo(() => {
+    const scoped = filterRunsForMarketFilter(runs, marketFilter);
+    const retail = runStrategySharpes(scoped, "gpt_retail");
+    const advanced = runStrategySharpes(scoped, "gpt_advanced");
+    let binWidth = 0.42;
+    let bins = buildSharpeHistogramBins(retail, advanced, binWidth);
+    while (bins.length > 42 && binWidth < 2.5) {
+      binWidth += 0.14;
+      bins = buildSharpeHistogramBins(retail, advanced, binWidth);
+    }
+    const retailMean = retail.length ? mean(retail) : null;
+    const advancedMean = advanced.length ? mean(advanced) : null;
+    const ewMean = mean(runStrategySharpes(scoped, "equal_weight"));
+    const mvMean = mean(runStrategySharpes(scoped, "mean_variance"));
+    const ixMean = mean(runStrategySharpes(scoped, "index"));
+    return {
+      retail,
+      advanced,
+      bins,
+      retailMean,
+      advancedMean,
+      ewMean,
+      mvMean,
+      ixMean,
+    };
+  }, [runs, marketFilter]);
+
+  const {
+    retail: retailSharpes,
+    advanced: advancedSharpes,
+    bins: sharpeBins,
+    retailMean,
+    advancedMean,
+    ewMean,
+    mvMean,
+    ixMean,
+  } = sharpeHistogramModel;
+
+  const sharpeMeanMarkers = useMemo(
+    () =>
+      [
+        {
+          key: "adv",
+          value: advancedMean,
+          label: "Mean GPT (Advanced)",
+          color: SHARPE_HIST_COLORS.gptAdvanced,
+          dashed: true,
+        },
+        {
+          key: "ret",
+          value: retailMean,
+          label: "Mean GPT (Retail)",
+          color: SHARPE_HIST_COLORS.gptRetail,
+          dashed: true,
+        },
+        {
+          key: "ew",
+          value: ewMean,
+          label: "Equal weight μ",
+          color: SHARPE_HIST_COLORS.equalWeight,
+          dashed: false,
+        },
+        {
+          key: "mv",
+          value: mvMean,
+          label: "Mean-variance μ",
+          color: SHARPE_HIST_COLORS.meanVariance,
+          dashed: false,
+        },
+        {
+          key: "ix",
+          value: ixMean,
+          label: "Market index μ",
+          color: SHARPE_HIST_COLORS.index,
+          dashed: false,
+        },
+      ].filter((m) => m.value != null && Number.isFinite(m.value)) as Array<{
+        key: string;
+        value: number;
+        label: string;
+        color: string;
+        dashed: boolean;
+      }>,
+    [advancedMean, ewMean, ixMean, mvMean, retailMean],
+  );
 
   const topSharpe = summary[0];
   const bestReturn = [...summary].sort(
@@ -821,6 +978,115 @@ export function SharpeReturnsTab({ data }: BaseTabProps) {
       <SoftHr />
 
       <SectionHeader>Sharpe Distribution</SectionHeader>
+      {retailSharpes.length > 0 || advancedSharpes.length > 0 ? (
+        <Panel>
+          <p className="dashboard-label mb-2">Distribution of period Sharpe ratios</p>
+          <p className="mb-3 text-[11px] leading-5 text-[#8a827a]">
+            Overlapping run-level Sharpe counts for GPT portfolios (current market filter).{" "}
+            <span className="font-medium text-[#6f6863]">Dashed</span> lines: mean Sharpe for GPT
+            (Advanced) and GPT (Retail).{" "}
+            <span className="font-medium text-[#6f6863]">Dotted</span>: mean Sharpe across runs for
+            equal weight, mean-variance, and market index.
+          </p>
+          {sharpeMeanMarkers.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1.5 border-b border-[rgba(232,224,217,0.65)] pb-3 text-[10px] font-semibold tracking-tight">
+              {sharpeMeanMarkers.map((m) => (
+                <span key={m.key} style={{ color: m.color }}>
+                  {m.label}: {m.value.toFixed(2)}
+                </span>
+              ))}
+            </div>
+          )}
+          <ResponsiveContainer width="100%" height={328}>
+            <BarChart
+              data={sharpeBins}
+              margin={{ top: 10, right: 8, left: 4, bottom: 56 }}
+              barCategoryGap="12%"
+              barGap={-24}
+              maxBarSize={44}
+            >
+              <CartesianGrid stroke="rgba(200, 192, 184, 0.55)" vertical={false} strokeDasharray="3 6" />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 9, fill: "#7a726c" }}
+                interval="preserveStartEnd"
+                angle={-32}
+                textAnchor="end"
+                height={54}
+                axisLine={{ stroke: "rgba(180, 172, 164, 0.65)" }}
+                tickLine={false}
+              />
+              <YAxis
+                allowDecimals={false}
+                tick={{ fontSize: 10, fill: "#8f8780" }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+                label={{
+                  value: "Count",
+                  angle: -90,
+                  position: "insideLeft",
+                  offset: 4,
+                  style: { fill: "#9b938b", fontSize: 10, fontWeight: 600 },
+                }}
+              />
+              <Tooltip
+                {...tooltipStyle}
+                formatter={(value: number | undefined, name: string) => [
+                  `${value ?? 0} run${value === 1 ? "" : "s"}`,
+                  name,
+                ]}
+                labelFormatter={(label) => `Sharpe bin ${label}`}
+              />
+              <Legend wrapperStyle={{ fontSize: 11, color: "#5d5754", paddingTop: 6 }} />
+              <Bar
+                name="GPT (Retail)"
+                dataKey="retail"
+                fill={SHARPE_HIST_COLORS.gptRetail}
+                fillOpacity={0.62}
+                radius={[4, 4, 0, 0]}
+              />
+              <Bar
+                name="GPT (Advanced)"
+                dataKey="advanced"
+                fill={SHARPE_HIST_COLORS.gptAdvanced}
+                fillOpacity={0.58}
+                radius={[4, 4, 0, 0]}
+              />
+              {[...sharpeMeanMarkers]
+                .sort((a, b) => Number(a.dashed) - Number(b.dashed))
+                .map((m) => {
+                  const xn = binNameForSharpeValue(sharpeBins, m.value);
+                  if (!xn) return null;
+                  return (
+                    <ReferenceLine
+                      key={m.key}
+                      x={xn}
+                      stroke={m.color}
+                      strokeWidth={1.35}
+                      strokeDasharray={m.dashed ? "6 5" : "2 4"}
+                      strokeOpacity={0.92}
+                    />
+                  );
+                })}
+            </BarChart>
+          </ResponsiveContainer>
+          <p className="mt-2 text-[10px] text-[#a39b93]">
+            X-axis: Sharpe ratio bins (half-open intervals except the right edge of the last bin). Y-axis: number of
+            runs in each bin.
+          </p>
+        </Panel>
+      ) : (
+        <Panel>
+          <p className="text-[12px] leading-5 text-[#8a827a]">
+            No GPT run-level Sharpe observations for this market filter. The histogram uses runs with{" "}
+            <span className="font-mono text-[11px]">strategy_key</span>{" "}
+            <span className="font-mono">gpt_retail</span> or <span className="font-mono">gpt_advanced</span> and a
+            numeric <span className="font-mono">sharpe_ratio</span>.
+          </p>
+        </Panel>
+      )}
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <Panel>
           <p className="dashboard-label mb-4">Mean Sharpe by strategy</p>
