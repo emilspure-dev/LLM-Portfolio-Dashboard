@@ -45,9 +45,147 @@ function applyCors(request, response) {
   }
 
   response.setHeader("Access-Control-Allow-Origin", origin);
-  response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type");
   response.setHeader("Vary", "Origin");
+}
+
+function readJsonBody(request, limit = 128 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    request.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(createHttpError(413, "Request body too large"));
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on("end", () => {
+      try {
+        const raw = Buffer.concat(chunks).toString("utf8");
+        if (!raw.trim()) {
+          resolve(null);
+          return;
+        }
+        resolve(JSON.parse(raw));
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          reject(createHttpError(400, "Invalid JSON body"));
+        } else {
+          reject(e);
+        }
+      }
+    });
+    request.on("error", (err) => reject(err));
+  });
+}
+
+async function handlePostFactorStyleAnalysis(request, response) {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
+    json(response, 503, {
+      error: "openai_not_configured",
+      message:
+        "Set OPENAI_API_KEY on this API server to enable factor-style AI analysis (see backend README).",
+    });
+    return;
+  }
+
+  const body = await readJsonBody(request);
+  if (!body || typeof body !== "object") {
+    json(response, 400, { error: "bad_request", message: "Expected JSON body" });
+    return;
+  }
+
+  const experimentId =
+    typeof body.experiment_id === "string" ? body.experiment_id.trim() : "";
+  const marketScope =
+    typeof body.market_scope === "string" ? body.market_scope : "All";
+  const rows = Array.isArray(body.rows) ? body.rows : null;
+  if (!experimentId || !rows || rows.length === 0) {
+    json(response, 400, {
+      error: "bad_request",
+      message: "Body must include experiment_id and non-empty rows[]",
+    });
+    return;
+  }
+
+  const maxRows = 64;
+  const slice = rows.slice(0, maxRows);
+
+  const model =
+    process.env.OPENAI_MODEL?.trim() ||
+    process.env.FACTOR_ANALYSIS_MODEL?.trim() ||
+    "gpt-4o";
+
+  const glossary =
+    body.glossary && typeof body.glossary === "object" ? body.glossary : {};
+  const factorDefs =
+    typeof body.factor_definitions === "string"
+      ? body.factor_definitions
+      : "Size, value, momentum, low risk, and quality are portfolio style exposures from the backtest pipeline (typically 0–1 scale).";
+
+  const userPayload = {
+    experiment_id: experimentId,
+    market_scope: marketScope,
+    rows: slice,
+    strategy_glossary: glossary,
+    factor_definitions: factorDefs,
+  };
+
+  const system = `You are helping interpret an academic empirical-finance backtest dashboard. You receive mean factor exposures per strategy (size, value, momentum, low risk, quality). Output must be educational: compare strategies, describe tilts vs benchmarks, and state that this is not investment advice. Use Markdown with ## headings. Stay under 900 words.`;
+
+  const user = `Analyze the following factor-exposure summary JSON and use strategy_glossary to explain what each strategy_key represents before interpreting numbers.\n\n${JSON.stringify(userPayload, null, 2)}`;
+
+  const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.4,
+      max_tokens: 2200,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+  });
+
+  const rawText = await openaiRes.text();
+  if (!openaiRes.ok) {
+    let msg = `OpenAI request failed (${openaiRes.status})`;
+    try {
+      const err = JSON.parse(rawText);
+      if (err.error?.message) {
+        msg = err.error.message;
+      }
+    } catch {
+      // ignore
+    }
+    json(response, 502, { error: "openai_error", message: msg });
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    json(response, 502, { error: "openai_error", message: "Invalid JSON from OpenAI" });
+    return;
+  }
+
+  const text = parsed.choices?.[0]?.message?.content?.trim();
+  if (!text) {
+    json(response, 502, { error: "openai_error", message: "Empty model response" });
+    return;
+  }
+
+  json(response, 200, { analysis: text, model });
 }
 
 function quoteIdentifier(identifier) {
@@ -1134,49 +1272,66 @@ const routes = new Map([
 ]);
 
 const server = http.createServer((request, response) => {
-  try {
-    applyCors(request, response);
+  void (async () => {
+    try {
+      applyCors(request, response);
 
-    if (request.method === "OPTIONS") {
-      response.writeHead(204);
-      response.end();
-      return;
-    }
+      if (request.method === "OPTIONS") {
+        response.writeHead(204);
+        response.end();
+        return;
+      }
 
-    const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
-    const routeKey = `${request.method} ${url.pathname}`;
-    const handler = routes.get(routeKey);
+      const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
 
-    if (!handler) {
-      json(response, 404, {
-        error: "not_found",
-        message: `No route matches ${routeKey}`,
+      if (request.method === "POST" && url.pathname === "/api/ai/factor-style-analysis") {
+        await handlePostFactorStyleAnalysis(request, response);
+        return;
+      }
+
+      if (request.method !== "GET") {
+        json(response, 405, {
+          error: "method_not_allowed",
+          message: `No handler for ${request.method} ${url.pathname}`,
+        });
+        return;
+      }
+
+      const routeKey = `${request.method} ${url.pathname}`;
+      const handler = routes.get(routeKey);
+
+      if (!handler) {
+        json(response, 404, {
+          error: "not_found",
+          message: `No route matches ${routeKey}`,
+        });
+        return;
+      }
+
+      if (!checkDatabase() && url.pathname !== "/api/health") {
+        throw createHttpError(503, "SQLite database is unavailable");
+      }
+
+      let payload = handler({ request, response, url });
+      if (url.pathname === "/api/health" && payload && typeof payload === "object") {
+        payload = {
+          ...payload,
+          routes: {
+            factor_style: routes.has("GET /api/summary/factor-style"),
+            ai_factor_style: Boolean(process.env.OPENAI_API_KEY?.trim()),
+          },
+        };
+      }
+      json(response, 200, payload);
+    } catch (error) {
+      const statusCode = error.statusCode ?? 500;
+      json(response, statusCode, {
+        error: statusCode >= 500 ? "internal_error" : "bad_request",
+        message: error.message ?? "Unexpected error",
+        details: error.details ?? null,
       });
-      return;
     }
-
-    if (!checkDatabase() && url.pathname !== "/api/health") {
-      throw createHttpError(503, "SQLite database is unavailable");
-    }
-
-    let payload = handler({ request, response, url });
-    if (url.pathname === "/api/health" && payload && typeof payload === "object") {
-      payload = {
-        ...payload,
-        routes: {
-          factor_style: routes.has("GET /api/summary/factor-style"),
-        },
-      };
-    }
-    json(response, 200, payload);
-  } catch (error) {
-    const statusCode = error.statusCode ?? 500;
-    json(response, statusCode, {
-      error: statusCode >= 500 ? "internal_error" : "bad_request",
-      message: error.message ?? "Unexpected error",
-      details: error.details ?? null,
-    });
-  }
+  })();
 });
 
 server.listen(PORT, HOST, () => {

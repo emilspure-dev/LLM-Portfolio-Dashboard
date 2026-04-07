@@ -14,6 +14,7 @@ Key variables:
 - `DASHBOARD_ALLOWED_ORIGINS=https://dashboard.example.com`
 - `PORT=3001`
 - `HOST=0.0.0.0`
+- Optional — **Factor style → AI analysis** in the dashboard: `OPENAI_API_KEY` (server-side only; never commit). Model defaults to `gpt-4o`; override with `OPENAI_MODEL` or `FACTOR_ANALYSIS_MODEL` (e.g. `gpt-4.1`, `gpt-4o-mini`). Endpoint: `POST /api/ai/factor-style-analysis`. `/api/health` includes `routes.ai_factor_style` when the key is set.
 
 For local verification you can point `SQLITE_DB_PATH` at a copied snapshot, for example `/tmp/current.sqlite`.
 

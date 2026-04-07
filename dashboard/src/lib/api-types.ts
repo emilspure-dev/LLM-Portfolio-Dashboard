@@ -5,6 +5,8 @@ export interface HealthResponse {
   /** Present on newer APIs; false means the VPS process is an older build (restart after git pull). */
   routes?: {
     factor_style: boolean;
+    /** True when OPENAI_API_KEY is set (POST /api/ai/factor-style-analysis available). */
+    ai_factor_style?: boolean;
   };
 }
 

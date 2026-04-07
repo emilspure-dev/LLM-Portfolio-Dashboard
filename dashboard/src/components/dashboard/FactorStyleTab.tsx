@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -13,8 +13,14 @@ import {
 import { InsightCard } from "./InsightCard";
 import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
 import { CHART_COLORS, MARKET_LABELS } from "@/lib/constants";
-import { getApiBaseUrl } from "@/lib/api-client";
+import { getApiBaseUrl, postFactorStyleAnalysis } from "@/lib/api-client";
+import {
+  FACTOR_DEFINITIONS_BLURB,
+  STRATEGY_GLOSSARY,
+} from "@/lib/strategy-factor-glossary";
 import type { FactorStyleSummaryRow } from "@/lib/api-types";
 import type { EvaluationData } from "@/lib/types";
 
@@ -70,6 +76,102 @@ interface FactorStyleTabProps {
   runs?: unknown;
 }
 
+function FactorStyleAiSection({
+  experimentId,
+  marketFilter,
+  factorStyleFiltered,
+}: {
+  experimentId: string;
+  marketFilter: string;
+  factorStyleFiltered: FactorStyleSummaryRow[];
+}) {
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [modelLabel, setModelLabel] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const runAnalysis = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const market_scope =
+        marketFilter === "All" ? "All markets" : (MARKET_LABELS[marketFilter] ?? marketFilter);
+      const rows = factorStyleFiltered.map((r) => ({
+        strategy_key: r.strategy_key,
+        strategy: r.strategy,
+        prompt_type: r.prompt_type,
+        market: r.market,
+        path_count: r.path_count,
+        size: r.mean_size_exposure,
+        value: r.mean_value_exposure,
+        momentum: r.mean_momentum_exposure,
+        low_risk: r.mean_low_risk_exposure,
+        quality: r.mean_quality_exposure,
+      }));
+      const res = await postFactorStyleAnalysis({
+        experiment_id: experimentId,
+        market_scope,
+        rows,
+        glossary: STRATEGY_GLOSSARY,
+        factor_definitions: FACTOR_DEFINITIONS_BLURB,
+      });
+      setAnalysis(res.analysis);
+      setModelLabel(res.model);
+    } catch (e) {
+      setAnalysis(null);
+      setModelLabel(null);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [experimentId, marketFilter, factorStyleFiltered]);
+
+  return (
+    <div className="dashboard-panel-strong mt-4 rounded-[20px] p-4 md:p-5">
+      <p className="dashboard-label mb-2">AI interpretation (OpenAI)</p>
+      <p className="mb-3 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
+        Generates a concise comparison of factor tilts across strategies using the table above. The API server calls
+        OpenAI (default model <span className="font-mono text-[11px]">gpt-4o</span>; set{" "}
+        <span className="font-mono text-[11px]">OPENAI_MODEL</span> on the API host for another chat model). Not
+        investment advice.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="rounded-full border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] text-[12px] font-semibold"
+          disabled={loading || factorStyleFiltered.length === 0}
+          onClick={() => void runAnalysis()}
+        >
+          {loading ? "Running…" : "Generate analysis"}
+        </Button>
+        {modelLabel && (
+          <span className="text-[11px] text-[#aaa29a]">
+            Model: <span className="font-mono">{modelLabel}</span>
+          </span>
+        )}
+      </div>
+      {error && (
+        <p className="mt-3 text-[12px] leading-5 text-[#a85a52]">
+          {error}{" "}
+          <span className="text-[#9d958d]">
+            (If you see “openai_not_configured”, set <span className="font-mono">OPENAI_API_KEY</span> on the Node API
+            and restart.)
+          </span>
+        </p>
+      )}
+      {analysis && (
+        <div className="mt-4 max-h-[min(70vh,520px)] overflow-y-auto rounded-[14px] border border-[rgba(232,224,217,0.85)] bg-[rgba(255,255,252,0.65)] px-4 py-3">
+          <div className="whitespace-pre-wrap text-[12px] leading-6 text-[#5e5955] [word-break:break-word]">
+            {analysis}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FactorStyleTab({ data }: FactorStyleTabProps) {
   const allMarkets: string[] = data.filters?.markets ?? [];
   const [marketFilter, setMarketFilter] = useState("All");
@@ -113,6 +215,11 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
     return factorStyleFiltered
       .filter((r) => r.strategy_key === "gpt_retail" || r.strategy_key === "gpt_advanced")
       .reduce((acc, r) => acc + (r.path_count ?? 0), 0);
+  }, [factorStyleFiltered]);
+
+  const strategyKeysInView = useMemo(() => {
+    const keys = new Set(factorStyleFiltered.map((r) => r.strategy_key));
+    return [...keys].sort((a, b) => factorStyleSortKey(a) - factorStyleSortKey(b));
   }, [factorStyleFiltered]);
 
   return (
@@ -168,6 +275,29 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
         )}
       </div>
 
+      <div className="mt-4 space-y-3">
+        <SectionHeader>Strategy &amp; factor definitions</SectionHeader>
+        <p className="max-w-3xl text-[12px] leading-5 text-[#9d958d]">{FACTOR_DEFINITIONS_BLURB}</p>
+        <Accordion type="multiple" className="dashboard-panel rounded-[16px] border border-[rgba(232,224,217,0.9)] px-3">
+          {strategyKeysInView.map((key) => {
+            const g = STRATEGY_GLOSSARY[key];
+            const row0 = factorStyleFiltered.find((r) => r.strategy_key === key);
+            const title = g?.title ?? row0?.strategy ?? key;
+            const summary =
+              g?.summary ??
+              "Custom or auxiliary strategy in this experiment; use the factor bars versus index and 60/40 to see relative tilts.";
+            return (
+              <AccordionItem key={key} value={key} className="border-[rgba(227,220,214,0.75)]">
+                <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+                  {title}
+                </AccordionTrigger>
+                <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">{summary}</AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      </div>
+
       <SoftHr />
 
       {data.factor_style_error ? (
@@ -179,66 +309,74 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
           />
         </div>
       ) : factorBarChartData.length > 0 ? (
-        <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
-          <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
-            <FigureExportControls
-              captureRef={factorStyleChartRef}
-              slug="factor-style-portfolio-tilts"
-              caption="Factor style — Portfolio factor tilts (size, value, momentum, low risk, quality)"
-              experimentId={data.active_experiment_id}
-            />
-          </div>
-          <div ref={factorStyleChartRef} className="min-w-0">
-            <ResponsiveContainer
-              width="100%"
-              height={Math.min(720, Math.max(260, factorBarChartData.length * 44 + 72))}
-            >
-              <BarChart
-                data={factorBarChartData}
-                layout="vertical"
-                margin={{ left: 8, right: 16, top: 8, bottom: 8 }}
+        <>
+          <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+            <div className="mb-3 flex flex-wrap items-start justify-end gap-2">
+              <FigureExportControls
+                captureRef={factorStyleChartRef}
+                slug="factor-style-portfolio-tilts"
+                caption="Factor style — Portfolio factor tilts (size, value, momentum, low risk, quality)"
+                experimentId={data.active_experiment_id}
+              />
+            </div>
+            <div ref={factorStyleChartRef} className="min-w-0">
+              <ResponsiveContainer
+                width="100%"
+                height={Math.min(780, Math.max(280, factorBarChartData.length * 52 + 80))}
               >
-                <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical strokeDasharray="3 6" />
-                <XAxis
-                  type="number"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: "#aca49d" }}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={168}
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 9, fill: "#8f8780" }}
-                />
-                <ReferenceLine x={0} stroke="rgba(192, 180, 170, 0.85)" strokeDasharray="4 4" />
-                <Tooltip
-                  {...tooltipStyle}
-                  labelFormatter={(label, payload) => {
-                    const row = payload?.[0]?.payload as { path_count?: number } | undefined;
-                    const n = row?.path_count;
-                    return n != null ? `${label} · ${n} paths` : label;
-                  }}
-                  formatter={(value: number) =>
-                    typeof value === "number" && !Number.isNaN(value) ? value.toFixed(3) : "—"
-                  }
-                />
-                <Legend
-                  wrapperStyle={{ fontSize: 10, color: "#9b938b", paddingTop: 8 }}
-                  iconType="circle"
-                  iconSize={8}
-                />
-                <Bar dataKey="Size" fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} barSize={10} />
-                <Bar dataKey="Value" fill={CHART_COLORS[1]} radius={[0, 4, 4, 0]} barSize={10} />
-                <Bar dataKey="Momentum" fill={CHART_COLORS[2]} radius={[0, 4, 4, 0]} barSize={10} />
-                <Bar dataKey="Low risk" fill={CHART_COLORS[3]} radius={[0, 4, 4, 0]} barSize={10} />
-                <Bar dataKey="Quality" fill={CHART_COLORS[4]} radius={[0, 4, 4, 0]} barSize={10} />
-              </BarChart>
-            </ResponsiveContainer>
+                <BarChart
+                  data={factorBarChartData}
+                  layout="vertical"
+                  margin={{ left: 4, right: 20, top: 8, bottom: 8 }}
+                >
+                  <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical strokeDasharray="3 6" />
+                  <XAxis
+                    type="number"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "#aca49d" }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={236}
+                    interval={0}
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 9, fill: "#8f8780" }}
+                  />
+                  <ReferenceLine x={0} stroke="rgba(192, 180, 170, 0.85)" strokeDasharray="4 4" />
+                  <Tooltip
+                    {...tooltipStyle}
+                    labelFormatter={(label, payload) => {
+                      const row = payload?.[0]?.payload as { path_count?: number } | undefined;
+                      const n = row?.path_count;
+                      return n != null ? `${label} · ${n} paths` : label;
+                    }}
+                    formatter={(value: number) =>
+                      typeof value === "number" && !Number.isNaN(value) ? value.toFixed(3) : "—"
+                    }
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: 10, color: "#9b938b", paddingTop: 10 }}
+                    iconType="circle"
+                    iconSize={8}
+                  />
+                  <Bar dataKey="Size" fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} barSize={8} />
+                  <Bar dataKey="Value" fill={CHART_COLORS[1]} radius={[0, 4, 4, 0]} barSize={8} />
+                  <Bar dataKey="Momentum" fill={CHART_COLORS[2]} radius={[0, 4, 4, 0]} barSize={8} />
+                  <Bar dataKey="Low risk" fill={CHART_COLORS[3]} radius={[0, 4, 4, 0]} barSize={8} />
+                  <Bar dataKey="Quality" fill={CHART_COLORS[4]} radius={[0, 4, 4, 0]} barSize={8} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        </div>
+          <FactorStyleAiSection
+            experimentId={data.active_experiment_id}
+            marketFilter={marketFilter}
+            factorStyleFiltered={factorStyleFiltered}
+          />
+        </>
       ) : (
         <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
           <InsightCard

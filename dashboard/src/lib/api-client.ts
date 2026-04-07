@@ -120,6 +120,74 @@ export function getApiBaseUrl() {
   return resolveApiRoot();
 }
 
+export interface FactorStyleAnalysisRow {
+  strategy_key: string;
+  strategy: string;
+  prompt_type: string | null;
+  market: string;
+  path_count: number;
+  size: number | null;
+  value: number | null;
+  momentum: number | null;
+  low_risk: number | null;
+  quality: number | null;
+}
+
+export interface FactorStyleAnalysisRequest {
+  experiment_id: string;
+  market_scope: string;
+  rows: FactorStyleAnalysisRow[];
+  /** Shipped from the dashboard so the model shares the same definitions as the UI. */
+  glossary?: Record<string, { title: string; summary: string }>;
+  factor_definitions?: string;
+}
+
+export interface FactorStyleAnalysisResponse {
+  analysis: string;
+  model: string;
+}
+
+export async function postFactorStyleAnalysis(
+  body: FactorStyleAnalysisRequest
+): Promise<FactorStyleAnalysisResponse> {
+  const requestUrl = buildUrl("/ai/factor-style-analysis");
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error(
+      `Unable to reach API at ${requestUrl}. Start the backend API or set NEXT_PUBLIC_API_BASE_URL.`
+    );
+  }
+
+  if (!response.ok) {
+    let message = `Request failed with status ${response.status}`;
+    try {
+      const payload = await response.json();
+      if (typeof payload?.message === "string") {
+        message = payload.message;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error(`API returned unexpected content type: ${contentType || "unknown"}.`);
+  }
+
+  return (await response.json()) as FactorStyleAnalysisResponse;
+}
+
 export function getHealth() {
   return requestJson<HealthResponse>("/health");
 }
