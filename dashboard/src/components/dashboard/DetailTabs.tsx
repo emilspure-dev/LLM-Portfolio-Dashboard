@@ -121,6 +121,14 @@ const tooltipStyle = {
   itemStyle: { color: "#6f6762" },
 };
 
+const CHART_X_TICK = { fontSize: 11, fill: "#8f8780" };
+const CHART_Y_TICK = { fontSize: 11, fill: "#aca49d" };
+const CHART_LEGEND_WRAPPER = {
+  fontSize: 11,
+  color: "#6f6863",
+  paddingTop: 8,
+};
+
 const MODEL_SCATTER_COLORS = [
   CHART_COLORS[0],
   CHART_COLORS[1],
@@ -638,6 +646,42 @@ function aggregateRollingMetricSeries(rows: StrategyDailyRow[]) {
       prompt,
       seriesLabel: `${model} · ${prompt}`,
     }));
+  });
+}
+
+function attachRunLevelModelsToDailyRows(
+  rows: StrategyDailyRow[],
+  runs: RunRow[]
+): StrategyDailyRow[] {
+  const byRunId = new Map<string, string>();
+  const byFallbackKey = new Map<string, string>();
+
+  for (const run of runs) {
+    const model = String(run.model ?? "").trim();
+    if (!model) continue;
+    const runId = run.run_id != null && String(run.run_id).trim() ? String(run.run_id) : null;
+    if (runId) {
+      byRunId.set(runId, model);
+    }
+    const fallbackKey = [
+      String(run.strategy_key ?? ""),
+      String(run.market ?? ""),
+      String(run.period ?? ""),
+      String(run.prompt_type ?? ""),
+    ].join("::");
+    byFallbackKey.set(fallbackKey, model);
+  }
+
+  return rows.map((row) => {
+    const runId = row.run_id != null && String(row.run_id).trim() ? String(row.run_id) : null;
+    const fallbackKey = [
+      String(row.strategy_key ?? ""),
+      String(row.market ?? ""),
+      String(row.period ?? ""),
+      String(row.prompt_type ?? ""),
+    ].join("::");
+    const resolvedModel = (runId ? byRunId.get(runId) : null) ?? byFallbackKey.get(fallbackKey) ?? row.model;
+    return resolvedModel === row.model ? row : { ...row, model: resolvedModel };
   });
 }
 
@@ -4130,6 +4174,7 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
 export function BehaviorTab({ data, runs }: BaseTabProps) {
   const rows = data.behavior;
   const [modelMarketFilter, setModelMarketFilter] = useState("All");
+  const [behaviorModelFilter, setBehaviorModelFilter] = useState("All");
   const [reasoningPromptFilter, setReasoningPromptFilter] = useState<"all" | "retail" | "advanced">("all");
   const [reasoningSearch, setReasoningSearch] = useState("");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -4242,11 +4287,29 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
     ];
   }, [runs]);
 
+  const behaviorModelOptions = useMemo(() => {
+    const models = Array.from(
+      new Set(
+        runs
+          .filter((run) => run.prompt_type === "retail" || run.prompt_type === "advanced")
+          .map((run) => String(run.model ?? "").trim())
+          .filter((value) => value.length > 0)
+      )
+    ).sort();
+    return [{ value: "All", label: "All models" }, ...models.map((model) => ({ value: model, label: model }))];
+  }, [runs]);
+
   useEffect(() => {
     if (!modelMarketOptions.some((option) => option.value === modelMarketFilter)) {
       setModelMarketFilter("All");
     }
   }, [modelMarketFilter, modelMarketOptions]);
+
+  useEffect(() => {
+    if (!behaviorModelOptions.some((option) => option.value === behaviorModelFilter)) {
+      setBehaviorModelFilter("All");
+    }
+  }, [behaviorModelFilter, behaviorModelOptions]);
 
   const filteredModelComparisonData = useMemo(() => {
     if (!modelComparisonData) return null;
@@ -4286,6 +4349,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       const model = String(run.model ?? "").trim();
       if (!model || (promptType !== "retail" && promptType !== "advanced")) continue;
       if (modelMarketFilter !== "All" && run.market !== modelMarketFilter) continue;
+      if (behaviorModelFilter !== "All" && model !== behaviorModelFilter) continue;
       const key = `${model}::${promptType}`;
       const bucket = grouped.get(key) ?? {
         model,
@@ -4323,7 +4387,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       meanRationaleLength: mean(row.rationaleLengths),
       equalWeightRate: row.runCount > 0 ? row.equalWeightLike / row.runCount : null,
     }));
-  }, [runs, modelMarketFilter]);
+  }, [runs, modelMarketFilter, behaviorModelFilter]);
 
   const hhiByModelPeriod = useMemo(() => {
     const grouped = new Map<string, { period: string; model: string; values: number[] }>();
@@ -4333,6 +4397,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       const hhi = asNumber(run.hhi);
       if (!model || !period || hhi == null) continue;
       if (modelMarketFilter !== "All" && run.market !== modelMarketFilter) continue;
+      if (behaviorModelFilter !== "All" && model !== behaviorModelFilter) continue;
       const key = `${period}::${model}`;
       const bucket = grouped.get(key) ?? { period, model, values: [] };
       bucket.values.push(hhi);
@@ -4347,7 +4412,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       }
       return row;
     });
-  }, [runs, modelMarketFilter]);
+  }, [runs, modelMarketFilter, behaviorModelFilter]);
 
   const rationaleByModelPeriod = useMemo(() => {
     const grouped = new Map<string, { period: string; model: string; values: number[] }>();
@@ -4357,6 +4422,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       const length = String((run as Record<string, unknown>).reasoning_summary ?? "").trim().length;
       if (!model || !period || length <= 0) continue;
       if (modelMarketFilter !== "All" && run.market !== modelMarketFilter) continue;
+      if (behaviorModelFilter !== "All" && model !== behaviorModelFilter) continue;
       const key = `${period}::${model}`;
       const bucket = grouped.get(key) ?? { period, model, values: [] };
       bucket.values.push(length);
@@ -4371,7 +4437,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       }
       return row;
     });
-  }, [runs, modelMarketFilter]);
+  }, [runs, modelMarketFilter, behaviorModelFilter]);
 
   const behaviorHoldingsQuery = useQuery({
     queryKey: ["behavior-holdings", data.active_experiment_id, modelMarketFilter],
@@ -4996,7 +5062,19 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
           {structuralRows.length > 0 && (
             <Panel className="overflow-x-auto p-0">
               <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
-                <p className="dashboard-label">Structural comparison by model and prompt</p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="min-w-[220px] flex-1">
+                    <p className="dashboard-label">Structural comparison by model and prompt</p>
+                  </div>
+                  <div className="min-w-[220px]">
+                    <FilterSelect
+                      label="Model"
+                      value={behaviorModelFilter}
+                      onChange={setBehaviorModelFilter}
+                      options={behaviorModelOptions}
+                    />
+                  </div>
+                </div>
               </div>
               <table className="w-full min-w-[940px] text-[11px]">
                 <thead>
@@ -5044,10 +5122,10 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={hhiByModelPeriod}>
                     <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                    <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="period" tick={CHART_X_TICK} axisLine={false} tickLine={false} />
+                    <YAxis tick={CHART_Y_TICK} axisLine={false} tickLine={false} />
                     <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? value.toFixed(3) : "—")} />
-                    <Legend />
+                    <Legend wrapperStyle={CHART_LEGEND_WRAPPER} iconType="line" />
                     {Array.from(new Set(structuralRows.map((row) => row.model))).map((model, index) => (
                       <Line key={model} type="monotone" dataKey={model} stroke={MODEL_SCATTER_COLORS[index % MODEL_SCATTER_COLORS.length]} dot={false} />
                     ))}
@@ -5072,10 +5150,10 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart data={rationaleByModelPeriod}>
                     <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                    <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="period" tick={CHART_X_TICK} axisLine={false} tickLine={false} />
+                    <YAxis tick={CHART_Y_TICK} axisLine={false} tickLine={false} />
                     <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? `${value.toFixed(0)} chars` : "—")} />
-                    <Legend />
+                    <Legend wrapperStyle={CHART_LEGEND_WRAPPER} iconType="line" />
                     {Array.from(new Set(structuralRows.map((row) => row.model))).map((model, index) => (
                       <Line key={model} type="monotone" dataKey={model} stroke={MODEL_SCATTER_COLORS[index % MODEL_SCATTER_COLORS.length]} dot={false} />
                     ))}
@@ -5711,10 +5789,11 @@ export function DrawdownsTab({ data }: BaseTabProps) {
   );
 }
 
-export function RollingRiskTab({ data }: BaseTabProps) {
+export function RollingRiskTab({ data, runs }: BaseTabProps) {
   const allMarkets = useMemo(() => getMarketOptions(data), [data]);
   const [marketFilter, setMarketFilter] = useState(allMarkets[0] ?? "");
-  const [seriesFilter, setSeriesFilter] = useState("All");
+  const [modelFilter, setModelFilter] = useState("All");
+  const [promptFilter, setPromptFilter] = useState("All");
   const rollingSharpeRef = useRef<HTMLDivElement>(null);
   const rollingSortinoRef = useRef<HTMLDivElement>(null);
   const rollingVolRef = useRef<HTMLDivElement>(null);
@@ -5743,24 +5822,56 @@ export function RollingRiskTab({ data }: BaseTabProps) {
     staleTime: 60_000,
   });
 
-  const rollingRows = useMemo(
-    () => aggregateRollingMetricSeries(rollingQuery.data ?? []),
-    [rollingQuery.data]
+  const relabeledRows = useMemo(
+    () => attachRunLevelModelsToDailyRows(rollingQuery.data ?? [], runs),
+    [rollingQuery.data, runs]
   );
 
-  const seriesOptions = useMemo(() => {
-    const values = Array.from(new Set(rollingRows.map((row) => row.seriesLabel))).sort();
-    return [{ value: "All", label: "All series" }, ...values.map((value) => ({ value, label: value }))];
+  const rollingRows = useMemo(
+    () => aggregateRollingMetricSeries(relabeledRows),
+    [relabeledRows]
+  );
+
+  const modelOptions = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        rollingRows
+          .map((row) => row.model)
+          .filter((value): value is string => typeof value === "string" && value.length > 0)
+      )
+    ).sort();
+    return [{ value: "All", label: "All models" }, ...values.map((value) => ({ value, label: value }))];
+  }, [rollingRows]);
+
+  const promptOptions = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        rollingRows
+          .map((row) => row.prompt)
+          .filter((value): value is string => typeof value === "string" && value.length > 0)
+      )
+    ).sort();
+    return [{ value: "All", label: "All prompts" }, ...values.map((value) => ({ value, label: value }))];
   }, [rollingRows]);
 
   useEffect(() => {
-    if (!seriesOptions.some((option) => option.value === seriesFilter)) {
-      setSeriesFilter("All");
+    if (!modelOptions.some((option) => option.value === modelFilter)) {
+      setModelFilter("All");
     }
-  }, [seriesFilter, seriesOptions]);
+  }, [modelFilter, modelOptions]);
+
+  useEffect(() => {
+    if (!promptOptions.some((option) => option.value === promptFilter)) {
+      setPromptFilter("All");
+    }
+  }, [promptFilter, promptOptions]);
 
   const chartRows = useMemo(() => {
-    const filtered = rollingRows.filter((row) => seriesFilter === "All" || row.seriesLabel === seriesFilter);
+    const filtered = rollingRows.filter((row) => {
+      if (modelFilter !== "All" && row.model !== modelFilter) return false;
+      if (promptFilter !== "All" && row.prompt !== promptFilter) return false;
+      return true;
+    });
     const grouped = new Map<string, Record<string, string | number | null>>();
     for (const row of filtered) {
       const bucket = grouped.get(row.date) ?? { date: row.date };
@@ -5770,12 +5881,16 @@ export function RollingRiskTab({ data }: BaseTabProps) {
       grouped.set(row.date, bucket);
     }
     return Array.from(grouped.values()).sort((left, right) => String(left.date).localeCompare(String(right.date)));
-  }, [rollingRows, seriesFilter]);
+  }, [rollingRows, modelFilter, promptFilter]);
 
   const visibleSeries = useMemo(() => {
-    const filtered = rollingRows.filter((row) => seriesFilter === "All" || row.seriesLabel === seriesFilter);
+    const filtered = rollingRows.filter((row) => {
+      if (modelFilter !== "All" && row.model !== modelFilter) return false;
+      if (promptFilter !== "All" && row.prompt !== promptFilter) return false;
+      return true;
+    });
     return Array.from(new Set(filtered.map((row) => row.seriesLabel)));
-  }, [rollingRows, seriesFilter]);
+  }, [rollingRows, modelFilter, promptFilter]);
 
   const colorMap = useMemo(
     () =>
@@ -5787,7 +5902,7 @@ export function RollingRiskTab({ data }: BaseTabProps) {
 
   const autocorrelationSummary = useMemo(() => {
     return visibleSeries.map((label) => {
-      const returns = rollingQuery.data
+      const returns = relabeledRows
         ?.filter((row) => `${String(row.model ?? "").trim() || "unknown"} · ${String(row.prompt_type ?? "").trim() || "unknown"}` === label)
         .map((row) => asNumber(row.daily_return))
         .filter((value): value is number => value != null) ?? [];
@@ -5798,12 +5913,12 @@ export function RollingRiskTab({ data }: BaseTabProps) {
         n: returns.length,
       };
     });
-  }, [rollingQuery.data, visibleSeries]);
+  }, [relabeledRows, visibleSeries]);
 
   return (
     <div className="space-y-4 pb-1">
       <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <FilterSelect
             label="Market"
             value={marketFilter}
@@ -5811,12 +5926,21 @@ export function RollingRiskTab({ data }: BaseTabProps) {
             options={allMarkets.map((market) => ({ value: market, label: MARKET_LABELS[market] ?? market }))}
           />
           <FilterSelect
-            label="Model / prompt series"
-            value={seriesFilter}
-            onChange={setSeriesFilter}
-            options={seriesOptions}
+            label="Model"
+            value={modelFilter}
+            onChange={setModelFilter}
+            options={modelOptions}
+          />
+          <FilterSelect
+            label="Prompt"
+            value={promptFilter}
+            onChange={setPromptFilter}
+            options={promptOptions}
           />
         </div>
+        <p className="mt-3 text-[11px] leading-5 text-[#8f8780]">
+          Daily rows are relabeled from run-level model metadata before the rolling metrics are built, so model names can change across the timeline instead of staying fixed to one path label.
+        </p>
       </Panel>
 
       {rollingQuery.isLoading ? (
@@ -5839,10 +5963,10 @@ export function RollingRiskTab({ data }: BaseTabProps) {
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartRows}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} minTickGap={28} />
-                  <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="date" tick={CHART_X_TICK} axisLine={false} tickLine={false} minTickGap={28} />
+                  <YAxis tick={CHART_Y_TICK} axisLine={false} tickLine={false} />
                   <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")} />
-                  <Legend />
+                  <Legend wrapperStyle={CHART_LEGEND_WRAPPER} iconType="line" />
                   {visibleSeries.map((label) => (
                     <Line key={label} type="monotone" dataKey={`${label}__Sharpe`} name={label} stroke={colorMap.get(label)} strokeWidth={2} dot={false} />
                   ))}
@@ -5866,10 +5990,10 @@ export function RollingRiskTab({ data }: BaseTabProps) {
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={chartRows}>
                     <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} minTickGap={28} />
-                    <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="date" tick={CHART_X_TICK} axisLine={false} tickLine={false} minTickGap={28} />
+                  <YAxis tick={CHART_Y_TICK} axisLine={false} tickLine={false} />
                     <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")} />
-                    <Legend />
+                  <Legend wrapperStyle={CHART_LEGEND_WRAPPER} iconType="line" />
                     {visibleSeries.map((label) => (
                       <Line key={label} type="monotone" dataKey={`${label}__Sortino`} name={label} stroke={colorMap.get(label)} strokeWidth={2} dot={false} />
                     ))}
@@ -5892,10 +6016,10 @@ export function RollingRiskTab({ data }: BaseTabProps) {
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={chartRows}>
                     <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} minTickGap={28} />
-                    <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} tickFormatter={(value: number) => `${value.toFixed(0)}%`} />
+                  <XAxis dataKey="date" tick={CHART_X_TICK} axisLine={false} tickLine={false} minTickGap={28} />
+                  <YAxis tick={CHART_Y_TICK} axisLine={false} tickLine={false} tickFormatter={(value: number) => `${value.toFixed(0)}%`} />
                     <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? `${value.toFixed(1)}%` : "—")} />
-                    <Legend />
+                  <Legend wrapperStyle={CHART_LEGEND_WRAPPER} iconType="line" />
                     {visibleSeries.map((label) => (
                       <Line key={label} type="monotone" dataKey={`${label}__Volatility`} name={label} stroke={colorMap.get(label)} strokeWidth={2} dot={false} />
                     ))}

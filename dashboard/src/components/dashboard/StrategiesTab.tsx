@@ -95,6 +95,14 @@ const tooltipStyle = {
   itemStyle: { color: "#6f6762" },
 };
 
+const CHART_X_TICK = { fontSize: 11, fill: "#8f8780" };
+const CHART_Y_TICK = { fontSize: 11, fill: "#aca49d" };
+const CHART_LEGEND_WRAPPER = {
+  fontSize: 11,
+  color: "#6f6863",
+  paddingTop: 8,
+};
+
 function runCountByStrategy(runs: RunRow[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const r of runs) {
@@ -778,10 +786,10 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             <ResponsiveContainer width="100%" height={320}>
               <AreaChart data={cumulativePathData} margin={{ top: 8, right: 14, left: 6, bottom: 8 }}>
                 <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v.toFixed(0)}%`} />
+                <XAxis dataKey="period" tick={CHART_X_TICK} axisLine={false} tickLine={false} />
+                <YAxis tick={CHART_Y_TICK} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v.toFixed(0)}%`} />
                 <Tooltip {...tooltipStyle} formatter={(value: number) => `${value.toFixed(1)}%`} />
-                <Legend />
+                <Legend wrapperStyle={CHART_LEGEND_WRAPPER} iconType="line" />
                 <Area type="monotone" dataKey="gpt_retail" name="GPT (Retail)" stroke={SHARPE_HIST_COLORS.gptRetail} fill={SHARPE_HIST_COLORS.gptRetail} fillOpacity={0.08} />
                 <Area type="monotone" dataKey="gpt_advanced" name="GPT (Advanced)" stroke={SHARPE_HIST_COLORS.gptAdvanced} fill={SHARPE_HIST_COLORS.gptAdvanced} fillOpacity={0.08} />
                 <Area type="monotone" dataKey="index" name="Market Index" stroke={SHARPE_HIST_COLORS.index} fill={SHARPE_HIST_COLORS.index} fillOpacity={0.03} />
@@ -810,10 +818,10 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={periodContributionRows} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
                 <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="period" tick={CHART_X_TICK} axisLine={false} tickLine={false} />
+                <YAxis tick={CHART_Y_TICK} axisLine={false} tickLine={false} />
                 <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")} />
-                <Legend />
+                <Legend wrapperStyle={CHART_LEGEND_WRAPPER} />
                 <Bar dataKey="gpt_retail" name="GPT (Retail)" fill={SHARPE_HIST_COLORS.gptRetail} radius={[6, 6, 0, 0]} />
                 <Bar dataKey="gpt_advanced" name="GPT (Advanced)" fill={SHARPE_HIST_COLORS.gptAdvanced} radius={[6, 6, 0, 0]} />
                 <Bar dataKey="index" name="Market Index" fill={SHARPE_HIST_COLORS.index} radius={[6, 6, 0, 0]} />
