@@ -330,6 +330,28 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            <div className="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-[14px] border border-[rgba(232,224,217,0.8)] bg-[rgba(255,255,252,0.62)] px-3 py-2">
+                <p className="text-[11px] font-semibold text-[#6f6863]">Size</p>
+                <p className="mt-1 text-[11px] leading-5 text-[#9d958d]">Higher = more tilt toward smaller companies.</p>
+              </div>
+              <div className="rounded-[14px] border border-[rgba(232,224,217,0.8)] bg-[rgba(255,255,252,0.62)] px-3 py-2">
+                <p className="text-[11px] font-semibold text-[#6f6863]">Value</p>
+                <p className="mt-1 text-[11px] leading-5 text-[#9d958d]">Higher = more tilt toward cheaper / value stocks.</p>
+              </div>
+              <div className="rounded-[14px] border border-[rgba(232,224,217,0.8)] bg-[rgba(255,255,252,0.62)] px-3 py-2">
+                <p className="text-[11px] font-semibold text-[#6f6863]">Momentum</p>
+                <p className="mt-1 text-[11px] leading-5 text-[#9d958d]">Higher = more tilt toward recent winners / trend-following names.</p>
+              </div>
+              <div className="rounded-[14px] border border-[rgba(232,224,217,0.8)] bg-[rgba(255,255,252,0.62)] px-3 py-2">
+                <p className="text-[11px] font-semibold text-[#6f6863]">Low risk</p>
+                <p className="mt-1 text-[11px] leading-5 text-[#9d958d]">Higher = more defensive, lower-volatility exposure.</p>
+              </div>
+              <div className="rounded-[14px] border border-[rgba(232,224,217,0.8)] bg-[rgba(255,255,252,0.62)] px-3 py-2">
+                <p className="text-[11px] font-semibold text-[#6f6863]">Quality</p>
+                <p className="mt-1 text-[11px] leading-5 text-[#9d958d]">Higher = more tilt toward profitable, financially stronger firms.</p>
+              </div>
+            </div>
           </div>
           <FactorStyleAiSection
             experimentId={data.active_experiment_id}
