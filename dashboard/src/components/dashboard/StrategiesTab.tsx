@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -18,18 +18,12 @@ import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import { COLORS, MARKET_LABELS, getStrategyColor, sharpeColor } from "@/lib/constants";
 import { buildStrategySummaryWithRunSharpe } from "@/lib/data-loader";
-import {
-  computeScatterLabelLayouts,
-  type ScatterLabelLayout,
-} from "@/lib/scatter-label-layout";
 import type { FactorStyleSummaryRow } from "@/lib/api-types";
 import type { EvaluationData, RunRow } from "@/lib/types";
 
-const RISK_RETURN_SCATTER = {
-  height: 320,
-  /** Room for labels on left/right of the plot (greedy placement uses both sides). */
-  margin: { top: 10, right: 84, left: 84, bottom: 12 },
-} as const;
+const MARKET_SHORT: Record<string, string> = Object.fromEntries(
+  Object.entries(MARKET_LABELS).map(([k, v]) => [k, v.replace(/ \(.*\)$/, "")])
+);
 
 /** Stable [0, 1) for jitter so dots don’t jump on re-render. */
 function jitter01(run: RunRow): number {
@@ -269,69 +263,30 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             Number.isFinite(row.mean_volatility) &&
             Number.isFinite(row.mean_annualized_return)
         )
-        .map((row) => ({
-          name: formatStrategyLabel(row.Strategy),
-          strategy_key: row.strategy_key,
-          volPct: (row.mean_volatility as number) * 100,
-          retPct: (row.mean_annualized_return as number) * 100,
-        })),
-    [summary]
+        .map((row) => {
+          const name = formatStrategyLabel(row.Strategy);
+          const market = row.market ?? "";
+          const scatterKey = `${row.strategy_key}::${market}::${row.prompt_type ?? ""}`;
+          const legendLabel =
+            marketFilter === "All" && market
+              ? `${name} · ${MARKET_SHORT[market] ?? market}`
+              : name;
+          return {
+            scatterKey,
+            legendLabel,
+            name,
+            strategy_key: row.strategy_key,
+            market,
+            volPct: (row.mean_volatility as number) * 100,
+            retPct: (row.mean_annualized_return as number) * 100,
+          };
+        }),
+    [summary, marketFilter]
   );
 
-  const riskReturnDomains = useMemo(() => {
-    if (scatterData.length === 0) return null;
-    const vols = scatterData.map((d) => d.volPct);
-    const rets = scatterData.map((d) => d.retPct);
-    let v0 = Math.min(...vols);
-    let v1 = Math.max(...vols);
-    let r0 = Math.min(...rets);
-    let r1 = Math.max(...rets);
-    if (v0 === v1) {
-      v0 -= 1;
-      v1 += 1;
-    }
-    if (r0 === r1) {
-      r0 -= 1;
-      r1 += 1;
-    }
-    return { vol: [v0, v1] as [number, number], ret: [r0, r1] as [number, number] };
+  const riskReturnLegendRows = useMemo(() => {
+    return [...scatterData].sort((a, b) => a.legendLabel.localeCompare(b.legendLabel));
   }, [scatterData]);
-
-  const [riskReturnPlotW, setRiskReturnPlotW] = useState(520);
-
-  useLayoutEffect(() => {
-    if (scatterData.length === 0) return;
-    const el = strategiesRiskReturnRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const apply = (w: number) => {
-      if (w >= 80) setRiskReturnPlotW(Math.floor(w));
-    };
-    apply(el.getBoundingClientRect().width);
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (w) apply(w);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [scatterData]);
-
-  const riskReturnLabelLayouts = useMemo(() => {
-    if (scatterData.length === 0) return new Map<string, ScatterLabelLayout>();
-    return computeScatterLabelLayouts(
-      scatterData.map((d) => ({
-        key: d.strategy_key,
-        name: d.name,
-        x: d.volPct,
-        y: d.retPct,
-      })),
-      {
-        width: riskReturnPlotW,
-        height: RISK_RETURN_SCATTER.height,
-        margin: { ...RISK_RETURN_SCATTER.margin },
-        dotR: 6,
-      }
-    );
-  }, [scatterData, riskReturnPlotW]);
 
   const marketScope =
     marketFilter === "All" ? "all markets" : (MARKET_LABELS[marketFilter] ?? marketFilter);
@@ -485,15 +440,14 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             </p>
           ) : (
             <div ref={strategiesRiskReturnRef} className="min-w-0">
-              <ResponsiveContainer width="100%" height={RISK_RETURN_SCATTER.height}>
-                <ScatterChart margin={{ ...RISK_RETURN_SCATTER.margin }}>
+              <ResponsiveContainer width="100%" height={320}>
+                <ScatterChart margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
                 <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
                 <XAxis
                   type="number"
                   dataKey="volPct"
                   name="Volatility"
-                  unit="%"
-                  domain={riskReturnDomains?.vol}
+                  tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
                   tick={{ fontSize: 10, fill: "#aca49d" }}
                   axisLine={false}
                   tickLine={false}
@@ -502,8 +456,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                   type="number"
                   dataKey="retPct"
                   name="Ann. return"
-                  unit="%"
-                  domain={riskReturnDomains?.ret}
+                  tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
                   tick={{ fontSize: 10, fill: "#aca49d" }}
                   axisLine={false}
                   tickLine={false}
@@ -514,10 +467,14 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                   cursor={{ strokeDasharray: "3 6" }}
                   content={({ payload }) => {
                     if (!payload?.length) return null;
-                    const d = payload[0].payload as { name: string; volPct: number; retPct: number };
+                    const d = payload[0].payload as {
+                      legendLabel: string;
+                      volPct: number;
+                      retPct: number;
+                    };
                     return (
                       <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
-                        <p style={{ fontWeight: 600, marginBottom: 4, color: "#5c534c" }}>{d.name}</p>
+                        <p style={{ fontWeight: 600, marginBottom: 4, color: "#5c534c" }}>{d.legendLabel}</p>
                         <p style={{ color: "#8f8780" }}>Volatility : {d.volPct.toFixed(1)}%</p>
                         <p style={{ color: "#8f8780" }}>Ann. return : {d.retPct.toFixed(1)}%</p>
                       </div>
@@ -530,37 +487,40 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                   shape={(props: Record<string, unknown>) => {
                     const cx = props.cx as number;
                     const cy = props.cy as number;
-                    const payload = props.payload as { strategy_key: string; name: string };
+                    const payload = props.payload as { scatterKey: string; strategy_key: string };
                     const color = getStrategyColor(payload.strategy_key);
                     const r = 6;
-                    const lay =
-                      riskReturnLabelLayouts.get(payload.strategy_key) ?? {
-                        textAnchor: "start" as const,
-                        dominantBaseline: "middle" as const,
-                        offsetX: r + 6,
-                        offsetY: 3,
-                      };
                     return (
-                      <g key={payload.strategy_key}>
+                      <g key={payload.scatterKey}>
                         <circle cx={cx} cy={cy} r={r} fill={color} stroke="white" strokeWidth={1.5} />
-                        <text
-                          x={cx + lay.offsetX}
-                          y={cy + lay.offsetY}
-                          textAnchor={lay.textAnchor}
-                          dominantBaseline={lay.dominantBaseline}
-                          fontSize={10}
-                          fill={color}
-                          fontWeight={500}
-                          style={{ userSelect: "none" }}
-                        >
-                          {payload.name}
-                        </text>
                       </g>
                     );
                   }}
                 />
               </ScatterChart>
               </ResponsiveContainer>
+              <p className="mt-2 text-[11px] text-[#9a928b]">
+                Hover a point for volatility and return. Strategy names are listed below to avoid overlapping labels on the chart.
+              </p>
+              <div className="mt-3 max-h-[200px] space-y-1 overflow-y-auto pr-1 text-[11px] text-[#9a928b]">
+                {riskReturnLegendRows.map((row) => (
+                  <div
+                    key={row.scatterKey}
+                    className="flex min-w-0 items-baseline justify-between gap-3 border-b border-[rgba(227,220,214,0.5)] py-1 last:border-0"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: getStrategyColor(row.strategy_key) }}
+                      />
+                      <span className="truncate text-[#6f6863]">{row.legendLabel}</span>
+                    </span>
+                    <span className="shrink-0 tabular-nums text-[#8d857f]">
+                      σ {row.volPct.toFixed(1)}% · μ {row.retPct.toFixed(1)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </Panel>
