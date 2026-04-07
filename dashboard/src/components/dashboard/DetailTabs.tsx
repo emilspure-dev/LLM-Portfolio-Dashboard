@@ -827,6 +827,71 @@ function aggregateFactorRows(rows: FactorExposureRow[]) {
     }));
 }
 
+type ExposureChartMarker = { date: string; kind: "model" | "period"; label: string };
+
+/** First day the aggregated model set or (fallback) period label changes between consecutive dates. */
+function computeFactorExposureMarkers(raw: FactorExposureRow[]): ExposureChartMarker[] {
+  if (raw.length === 0) return [];
+
+  const anyModel = raw.some((r) => Boolean(r.model?.trim()));
+  const byDate = new Map<string, { models: Set<string>; period: string | null }>();
+
+  for (const row of raw) {
+    const cur =
+      byDate.get(row.date) ??
+      ({
+        models: new Set<string>(),
+        period: null as string | null,
+      } satisfies { models: Set<string>; period: string | null });
+    if (row.model?.trim()) {
+      cur.models.add(row.model.trim());
+    }
+    if (row.period?.trim() && cur.period == null) {
+      cur.period = row.period.trim();
+    }
+    byDate.set(row.date, cur);
+  }
+
+  const dates = [...byDate.keys()].sort();
+  const markers: ExposureChartMarker[] = [];
+
+  if (anyModel) {
+    let prevKey = "";
+    for (const d of dates) {
+      const mKey = [...(byDate.get(d)!.models)].sort().join("\u0001");
+      if (prevKey !== "" && mKey !== "" && mKey !== prevKey) {
+        const prevLabel = prevKey.split("\u0001").join(", ");
+        const nextLabel = mKey.split("\u0001").join(", ");
+        markers.push({
+          date: d,
+          kind: "model",
+          label: `${prevLabel} → ${nextLabel}`,
+        });
+      }
+      if (mKey) {
+        prevKey = mKey;
+      }
+    }
+  } else {
+    let prevPeriod = "";
+    for (const d of dates) {
+      const p = byDate.get(d)!.period?.trim() ?? "";
+      if (prevPeriod !== "" && p !== "" && p !== prevPeriod) {
+        markers.push({
+          date: d,
+          kind: "period",
+          label: `${prevPeriod} → ${p}`,
+        });
+      }
+      if (p) {
+        prevPeriod = p;
+      }
+    }
+  }
+
+  return markers.slice(0, 24);
+}
+
 function aggregateRegimeRows(rows: RegimeRow[]) {
   const grouped = new Map<
     string,
@@ -1653,6 +1718,11 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
     [factorsQuery.data]
   );
 
+  const factorChangeMarkers = useMemo(
+    () => computeFactorExposureMarkers(factorsQuery.data ?? []),
+    [factorsQuery.data]
+  );
+
   const pathCount = new Set((equityQuery.data ?? []).map((row) => row.path_id)).size;
   const firstValue = curveRows[0]?.portfolioValue ?? null;
   const lastValue = curveRows[curveRows.length - 1]?.portfolioValue ?? null;
@@ -1872,7 +1942,7 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
                 </div>
                 <div ref={factorExposureCaptureRef} className="min-w-0">
                   <ResponsiveContainer width="100%" height={320}>
-                    <LineChart data={factorRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
+                    <LineChart data={factorRows} margin={{ top: 10, right: 18, left: 6, bottom: 28 }}>
                     <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
                     <XAxis
                       dataKey="date"
@@ -1888,7 +1958,7 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
                       labelFormatter={(value) => formatDateLabel(String(value))}
                       formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")}
                     />
-                    <Legend />
+                    <Legend wrapperStyle={{ paddingTop: 10 }} iconType="line" />
                     {factorSeries.map((series) => (
                       <Line
                         key={series.key}
@@ -1900,8 +1970,39 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
                         name={series.label}
                       />
                     ))}
+                    {factorChangeMarkers.map((m) => (
+                      <ReferenceLine
+                        key={`${m.date}-${m.kind}-${m.label.slice(0, 24)}`}
+                        x={m.date}
+                        stroke={
+                          m.kind === "model"
+                            ? "rgba(92, 82, 74, 0.5)"
+                            : "rgba(180, 160, 140, 0.45)"
+                        }
+                        strokeDasharray="5 4"
+                        strokeWidth={1}
+                        ifOverflow="extendDomain"
+                        label={{
+                          value:
+                            m.kind === "model"
+                              ? `Model ${m.label.length > 42 ? `${m.label.slice(0, 40)}…` : m.label}`
+                              : m.label.length > 36
+                                ? `${m.label.slice(0, 34)}…`
+                                : m.label,
+                          position: "insideTopLeft",
+                          fill: "#9b938b",
+                          fontSize: 9,
+                        }}
+                      />
+                    ))}
                     </LineChart>
                   </ResponsiveContainer>
+                  <p className="mt-2 text-[11px] leading-4 text-[#9d958d]">
+                    Vertical dashed lines mark the first day the{" "}
+                    <span className="font-medium text-[#7a736d]">LLM model mix</span> changes in the underlying daily
+                    rows (dark) or, when no model is recorded, a{" "}
+                    <span className="font-medium text-[#7a736d]">period</span> boundary (tan).
+                  </p>
                 </div>
               </Panel>
             </>
@@ -2413,6 +2514,11 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
 
   const runFactorRows = useMemo(
     () => aggregateFactorRows(runFactorsQuery.data ?? []),
+    [runFactorsQuery.data]
+  );
+
+  const runFactorChangeMarkers = useMemo(
+    () => computeFactorExposureMarkers(runFactorsQuery.data ?? []),
     [runFactorsQuery.data]
   );
 
@@ -3144,7 +3250,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                     </div>
                     <div ref={runExplorerFactorRef} className="min-w-0">
                       <ResponsiveContainer width="100%" height={280}>
-                        <LineChart data={runFactorRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
+                        <LineChart data={runFactorRows} margin={{ top: 10, right: 18, left: 6, bottom: 28 }}>
                         <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
                         <XAxis
                           dataKey="date"
@@ -3160,7 +3266,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                           labelFormatter={(value) => formatDateLabel(String(value))}
                           formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")}
                         />
-                        <Legend />
+                        <Legend wrapperStyle={{ paddingTop: 10 }} iconType="line" />
                         {runFactorSeries.map((series) => (
                           <Line
                             key={series.key}
@@ -3172,8 +3278,36 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                             name={series.label}
                           />
                         ))}
+                        {runFactorChangeMarkers.map((m) => (
+                          <ReferenceLine
+                            key={`run-${m.date}-${m.kind}-${m.label.slice(0, 24)}`}
+                            x={m.date}
+                            stroke={
+                              m.kind === "model"
+                                ? "rgba(92, 82, 74, 0.5)"
+                                : "rgba(180, 160, 140, 0.45)"
+                            }
+                            strokeDasharray="5 4"
+                            strokeWidth={1}
+                            ifOverflow="extendDomain"
+                            label={{
+                              value:
+                                m.kind === "model"
+                                  ? `Model ${m.label.length > 42 ? `${m.label.slice(0, 40)}…` : m.label}`
+                                  : m.label.length > 36
+                                    ? `${m.label.slice(0, 34)}…`
+                                    : m.label,
+                              position: "insideTopLeft",
+                              fill: "#9b938b",
+                              fontSize: 9,
+                            }}
+                          />
+                        ))}
                       </LineChart>
                       </ResponsiveContainer>
+                      <p className="mt-2 text-[11px] leading-4 text-[#9d958d]">
+                        Dashed vertical lines: model change (dark) or period boundary when model is unset (tan).
+                      </p>
                     </div>
                   </Panel>
                 )
