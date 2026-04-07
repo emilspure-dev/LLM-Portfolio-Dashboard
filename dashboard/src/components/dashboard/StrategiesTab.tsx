@@ -245,12 +245,25 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
 
   const sharpeBarData = useMemo(
     () =>
-      sortedBySharpe.map((row) => ({
-        Strategy: formatStrategyLabel(row.Strategy),
-        strategy_key: row.strategy_key,
-        mean_sharpe: row.mean_sharpe,
-      })),
-    [sortedBySharpe]
+      sortedBySharpe.map((row) => {
+        const base = formatStrategyLabel(row.Strategy);
+        let marketSuffix = "";
+        if (marketFilter === "All") {
+          if (row.markets.length > 1) {
+            marketSuffix = " · all mkts";
+          } else if (row.markets.length === 1 && row.markets[0]) {
+            marketSuffix = ` · ${MARKET_SHORT[row.markets[0]] ?? row.markets[0]}`;
+          }
+        }
+        const barKey = `${row.strategy_key}|${[...row.markets].sort().join(",")}|${[...row.prompt_types].sort().join(",")}`;
+        return {
+          Strategy: `${base}${marketSuffix}`,
+          barKey,
+          strategy_key: row.strategy_key,
+          mean_sharpe: row.mean_sharpe,
+        };
+      }),
+    [sortedBySharpe, marketFilter]
   );
 
   const scatterData = useMemo(
@@ -393,16 +406,16 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             />
           </div>
           <div ref={strategiesMeanSharpeRef} className="min-w-0">
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart data={sharpeBarData} margin={{ top: 6, right: 12, left: 12, bottom: 56 }}>
+            <ResponsiveContainer width="100%" height={340}>
+              <BarChart data={sharpeBarData} margin={{ top: 6, right: 12, left: 12, bottom: 88 }}>
               <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
               <XAxis
                 dataKey="Strategy"
-                tick={{ fontSize: 10, fill: "#8f8780" }}
-                angle={-22}
+                tick={{ fontSize: 9, fill: "#8f8780" }}
+                angle={-32}
                 textAnchor="end"
                 interval={0}
-                height={72}
+                height={96}
                 axisLine={false}
                 tickLine={false}
               />
@@ -416,7 +429,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
               <ReferenceLine y={0} stroke="rgba(192, 180, 170, 0.9)" strokeDasharray="3 6" />
               <Bar dataKey="mean_sharpe" radius={[10, 10, 0, 0]}>
                 {sharpeBarData.map((row) => (
-                  <Cell key={row.strategy_key} fill={getStrategyColor(row.strategy_key)} />
+                  <Cell key={row.barKey} fill={getStrategyColor(row.strategy_key)} />
                 ))}
               </Bar>
             </BarChart>
