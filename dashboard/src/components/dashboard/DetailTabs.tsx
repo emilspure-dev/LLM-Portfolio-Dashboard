@@ -3891,24 +3891,6 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
     };
   }, [runs]);
 
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7570/ingest/dc8c104d-3f8d-40d2-a9bc-ff989f22d16e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'edace0'},body:JSON.stringify({sessionId:'edace0',runId:'pre-fix',hypothesisId:'H1',location:'dashboard/src/components/dashboard/DetailTabs.tsx:3889',message:'BehaviorTab input sizes',data:{behaviorRows:rows.length,totalRuns:runs.length,hasBehaviorBranch:rows.length>0},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [rows.length, runs.length]);
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7570/ingest/dc8c104d-3f8d-40d2-a9bc-ff989f22d16e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'edace0'},body:JSON.stringify({sessionId:'edace0',runId:'pre-fix',hypothesisId:'H2',location:'dashboard/src/components/dashboard/DetailTabs.tsx:3894',message:'BehaviorTab GPT run field coverage',data:{gptLikeRuns:runs.filter((run)=>run.prompt_type==='retail'||run.prompt_type==='advanced').length,withModel:runs.filter((run)=>(run.prompt_type==='retail'||run.prompt_type==='advanced')&&typeof run.model==='string'&&run.model.trim().length>0).length,withSharpe:runs.filter((run)=>(run.prompt_type==='retail'||run.prompt_type==='advanced')&&typeof run.model==='string'&&run.model.trim().length>0&&typeof run.sharpe_ratio==='number').length,withReturn:runs.filter((run)=>(run.prompt_type==='retail'||run.prompt_type==='advanced')&&typeof run.model==='string'&&run.model.trim().length>0&&typeof (run.period_return ?? run.net_return ?? run.period_return_net)==='number').length,withHhi:runs.filter((run)=>(run.prompt_type==='retail'||run.prompt_type==='advanced')&&typeof run.model==='string'&&run.model.trim().length>0&&typeof run.hhi==='number').length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [runs]);
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7570/ingest/dc8c104d-3f8d-40d2-a9bc-ff989f22d16e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'edace0'},body:JSON.stringify({sessionId:'edace0',runId:'pre-fix',hypothesisId:'H3',location:'dashboard/src/components/dashboard/DetailTabs.tsx:3900',message:'BehaviorTab model comparison summary',data:{hasModelComparison:Boolean(modelComparisonData),modelCount:modelComparisonData?.models.length??0,returnPointCount:modelComparisonData?.returnPoints.length??0,hhiPointCount:modelComparisonData?.hhiPoints.length??0,models:modelComparisonData?.models.slice(0,5)??[]},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [modelComparisonData]);
-
   // Compute post-loss runs: for each (strategy, market, model, prompt_type) group sorted by
   // period, find runs where the immediately preceding period had a negative return.
   const postLossRuns = useMemo(() => {
