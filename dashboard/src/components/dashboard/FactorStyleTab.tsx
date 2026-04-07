@@ -128,12 +128,13 @@ function FactorStyleAiSection({
 
   return (
     <div className="dashboard-panel-strong mt-4 rounded-[20px] p-4 md:p-5">
-      <p className="dashboard-label mb-2">AI interpretation (OpenAI)</p>
+      <p className="dashboard-label mb-2">GPT style interpretation (OpenAI)</p>
       <p className="mb-3 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
-        Generates a concise comparison of factor tilts across strategies using the table above. The API server calls
-        OpenAI (default model <span className="font-mono text-[11px]">gpt-4o</span>; set{" "}
+        Focuses first on the GPT portfolios: what implicit factor strategies the retail and advanced prompts are
+        following, how they differ from benchmarks, and how much those tilts may plausibly explain returns. The API
+        server calls OpenAI (default model <span className="font-mono text-[11px]">gpt-4o</span>; set{" "}
         <span className="font-mono text-[11px]">OPENAI_MODEL</span> on the API host for another chat model). Not
-        investment advice.
+        investment advice and not a causal proof.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -144,7 +145,7 @@ function FactorStyleAiSection({
           disabled={loading || factorStyleFiltered.length === 0}
           onClick={() => void runAnalysis()}
         >
-          {loading ? "Running…" : "Generate analysis"}
+          {loading ? "Running…" : "Generate GPT-focused analysis"}
         </Button>
         {modelLabel && (
           <span className="text-[11px] text-[#aaa29a]">
@@ -248,9 +249,12 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
       <div>
         <SectionHeader>Portfolio factor style</SectionHeader>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
-          See how LLM-built portfolios tilt toward <strong>size</strong>, <strong>value</strong>,{" "}
-          <strong>momentum</strong>, <strong>low risk</strong>, and <strong>quality</strong> versus
-          deterministic benchmarks, using the same exposures as the daily factor series in the API.
+          Main question for this page: <strong>what factor strategies are the GPT prompt portfolios implicitly
+          following</strong>, and <strong>how much might those tilts explain their returns</strong>?
+        </p>
+        <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#9d958d]">
+          The GPT rows are the primary object of interest. Benchmark rows are there as anchors, so you can judge
+          whether the models are behaving more like value, momentum, defensive, or passive constructions.
         </p>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#9d958d]">
           Values are means from{" "}
@@ -258,7 +262,8 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             daily_path_metrics
           </code>
           : each portfolio path is averaged over trading days, then paths are averaged within each
-          strategy · prompt · market cell.
+          strategy · prompt · market cell. This supports a <strong>plausible explanation</strong> of returns, not a
+          strict attribution model.
         </p>
         {data.factor_style_from_exposure_fallback && (
           <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#5a6d78]">
@@ -276,7 +281,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
       </div>
 
       <div className="mt-4 space-y-3">
-        <SectionHeader>Strategy &amp; factor definitions</SectionHeader>
+        <SectionHeader>What The GPT Models Are Following</SectionHeader>
         <p className="max-w-3xl text-[12px] leading-5 text-[#9d958d]">{FACTOR_DEFINITIONS_BLURB}</p>
         <Accordion type="multiple" className="dashboard-panel rounded-[16px] border border-[rgba(232,224,217,0.9)] px-3">
           {strategyKeysInView.map((key) => {

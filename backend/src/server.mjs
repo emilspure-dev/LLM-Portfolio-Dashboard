@@ -135,9 +135,9 @@ async function handlePostFactorStyleAnalysis(request, response) {
     factor_definitions: factorDefs,
   };
 
-  const system = `You are helping interpret an academic empirical-finance backtest dashboard. You receive mean factor exposures per strategy (size, value, momentum, low risk, quality). Output must be educational: compare strategies, describe tilts vs benchmarks, and state that this is not investment advice. Use Markdown with ## headings. Stay under 900 words.`;
+  const system = `You are helping interpret an academic empirical-finance backtest dashboard. Focus first on the GPT prompt portfolios (gpt_retail and gpt_advanced): explain what factor strategies they appear to be following, compare them with benchmarks, and discuss how much those tilts may plausibly explain return differences. Be explicit that this is suggestive interpretation, not causal attribution or investment advice. Use Markdown with ## headings and stay under 900 words.`;
 
-  const user = `Analyze the following factor-exposure summary JSON and use strategy_glossary to explain what each strategy_key represents before interpreting numbers.\n\n${JSON.stringify(userPayload, null, 2)}`;
+  const user = `Analyze the following factor-exposure summary JSON. Use strategy_glossary to explain what each strategy_key represents, but prioritize the GPT prompt portfolios. Answer the question: "What factor strategies are the GPT models following, and how much might that explain their returns?" Distinguish clearly between plausible explanation and proven cause.\n\n${JSON.stringify(userPayload, null, 2)}`;
 
   const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",

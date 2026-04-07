@@ -42,4 +42,4 @@ export const STRATEGY_GLOSSARY: Record<
 };
 
 export const FACTOR_DEFINITIONS_BLURB =
-  "Each bar is the mean portfolio exposure to a style proxy over time and paths: size (small vs large), value (cheap vs rich), momentum (recent winners), low risk (defensive tilt), quality (profitable, stable firms). Values use the experiment’s internal scale (often roughly 0–1); compare across rows in this chart, not to published live factor indices.";
+  "Each bar is the mean portfolio exposure to a style proxy over time and paths: size (small vs large), value (cheap vs rich), momentum (recent winners), low risk (defensive tilt), quality (profitable, stable firms). Read the GPT rows first, then use benchmark rows as comparators for what the model is behaving like. These tilts can help explain returns, but they are not a full causal attribution model.";
