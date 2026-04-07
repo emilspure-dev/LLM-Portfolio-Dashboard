@@ -416,13 +416,13 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         </>
       )}
 
-      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+      <div className="dashboard-panel-strong rounded-[20px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)] p-4 md:p-5">
         <p className="text-[12px] leading-5 text-[#8f8780]">
           Use <strong>Performance</strong> for full strategy ranking and run distributions, <strong>Factor Style</strong>
           for return explanations, <strong>Paths</strong> for time-series drill-down, and <strong>Diagnostics</strong> for
           missing-data and confidence checks.
         </p>
-      </Panel>
+      </div>
     </div>
   );
 }
