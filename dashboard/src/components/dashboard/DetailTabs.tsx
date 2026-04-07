@@ -32,7 +32,9 @@ import {
   COLORS,
   INDEX_VS_PILL,
   MARKET_LABELS,
+  getSourceDisplayName,
   getStrategyColor,
+  getStrategyDisplayName,
   sharpeColor,
 } from "@/lib/constants";
 import type {
@@ -220,7 +222,7 @@ function TabMarketSelector({
           onChange={(e) => onChange(e.target.value)}
           className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
         >
-          <option value="All">All markets</option>
+          <option value="All">All Markets</option>
           {markets.map((m) => (
             <option key={m} value={m}>
               {MARKET_LABELS[m] ?? m}
@@ -232,17 +234,8 @@ function TabMarketSelector({
   );
 }
 
-function formatStrategyLabel(label: string) {
-  return label
-    .replace("GPT (", "")
-    .replace(")", "")
-    .replace("prompting", "Prompt")
-    .replace("Advanced Prompting", "Advanced")
-    .replace("Advanced prompting", "Advanced")
-    .replace("Retail prompt", "Retail")
-    .replace(" (market-matched)", "")
-    .replace(" proxy", "")
-    .trim();
+function formatStrategyLabel(label: string, strategyKey?: string | null) {
+  return getStrategyDisplayName(label, strategyKey);
 }
 
 function formatPctFromRatio(value: number | null | undefined, digits = 1) {
@@ -313,7 +306,7 @@ function runExplorerPointMeta(run: RunRow) {
     promptLabel,
     marketLabel,
     period: run.period ?? "—",
-    strategyLabel: formatStrategyLabel(run.strategy ?? run.strategy_key ?? ""),
+    strategyLabel: formatStrategyLabel(run.strategy ?? run.strategy_key ?? "", run.strategy_key),
   };
 }
 
@@ -1161,7 +1154,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
       { key: "adv", value: advancedMean, label: "GPT Advanced μ", color: SHARPE_HIST_COLORS.gptAdvanced, dashed: true },
       { key: "ret", value: retailMean, label: "GPT Retail μ", color: SHARPE_HIST_COLORS.gptRetail, dashed: true },
       { key: "ew", value: ewMean, label: "Equal weight μ", color: SHARPE_HIST_COLORS.equalWeight, dashed: false },
-      { key: "mv", value: mvMean, label: "MV μ", color: SHARPE_HIST_COLORS.meanVariance, dashed: false },
+      { key: "mv", value: mvMean, label: "Mean-Variance μ", color: SHARPE_HIST_COLORS.meanVariance, dashed: false },
       { key: "ix", value: ixMean, label: "Index μ", color: SHARPE_HIST_COLORS.index, dashed: false },
       { key: "sf", value: sfMean, label: "60/40 μ", color: SHARPE_HIST_COLORS.sixtyForty, dashed: false },
       { key: "ff", value: ffMean, label: "Fama-French μ", color: SHARPE_HIST_COLORS.famaFrench, dashed: false },
@@ -1211,7 +1204,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
     )[0];
 
   const scatterData = summary.map((row) => ({
-    name: formatStrategyLabel(row.Strategy),
+    name: formatStrategyLabel(row.Strategy, row.strategy_key),
     strategyKey: row.strategy_key,
     volatilityPct: row.mean_volatility != null ? row.mean_volatility * 100 : null,
     annualizedReturnPct:
@@ -1228,25 +1221,25 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
           label="Top Sharpe"
           value={topSharpe?.mean_sharpe?.toFixed(2) ?? "—"}
           color={sharpeColor(topSharpe?.mean_sharpe)}
-          sub={topSharpe ? formatStrategyLabel(topSharpe.Strategy) : "No strategy data"}
+          sub={topSharpe ? formatStrategyLabel(topSharpe.Strategy, topSharpe.strategy_key) : "No strategy data"}
         />
         <KpiCard
           label="Top Annualized Return"
           value={formatPctFromRatio(bestReturn?.mean_annualized_return, 1)}
           color={COLORS.accent}
-          sub={bestReturn ? formatStrategyLabel(bestReturn.Strategy) : "No strategy data"}
+          sub={bestReturn ? formatStrategyLabel(bestReturn.Strategy, bestReturn.strategy_key) : "No strategy data"}
         />
         <KpiCard
           label="Lowest Volatility"
           value={formatPctFromRatio(lowestVolatility?.mean_volatility, 1)}
           color={COLORS.cyan}
-          sub={lowestVolatility ? formatStrategyLabel(lowestVolatility.Strategy) : "No strategy data"}
+          sub={lowestVolatility ? formatStrategyLabel(lowestVolatility.Strategy, lowestVolatility.strategy_key) : "No strategy data"}
         />
         <KpiCard
           label="Best Index Beat Rate"
           value={formatPctFromNumber(bestBeatRate?.pct_runs_beating_index_sharpe, 0)}
           color={COLORS.green}
-          sub={bestBeatRate ? formatStrategyLabel(bestBeatRate.Strategy) : "No strategy data"}
+          sub={bestBeatRate ? formatStrategyLabel(bestBeatRate.Strategy, bestBeatRate.strategy_key) : "No strategy data"}
         />
       </div>
 
@@ -1269,7 +1262,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
             <span className="font-medium text-[#6f6863]">Dashed</span> lines: mean Sharpe for GPT
             portfolios.{" "}
             <span className="font-medium text-[#6f6863]">Dotted</span>: benchmark strategy means
-            (1/N, MV, 60/40, Fama-French, Index).
+            (Equal Weight, Mean-Variance, 60/40, Fama-French, Market Index).
           </p>
           {sharpeMeanMarkers.length > 0 && (
             <div className="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 border-b border-[rgba(232,224,217,0.65)] pb-3 text-[10px] sm:grid-cols-3 lg:grid-cols-4">
@@ -1459,11 +1452,11 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
 
         <Panel>
           <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-            <p className="dashboard-label">Risk / return map</p>
+            <p className="dashboard-label">Risk / Return Summary</p>
             <FigureExportControls
               captureRef={riskReturnCaptureRef}
               slug="sharpe-returns-risk-return-map"
-              caption="Risk / return map (summary strategies)"
+              caption="Risk / Return Summary (Strategy Overview)"
               experimentId={data.active_experiment_id}
             />
           </div>
@@ -1537,7 +1530,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
               <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Volatility</th>
               <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Beat index</th>
               <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Turnover</th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Obs.</th>
+              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Observations</th>
             </tr>
           </thead>
           <tbody>
@@ -1769,13 +1762,13 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
             onChange={selection.setSelectedStrategyKey}
             options={selection.strategyOptions.map((option) => ({
               value: option.strategy_key,
-              label: formatStrategyLabel(option.strategy),
+              label: formatStrategyLabel(option.strategy, option.strategy_key),
             }))}
           />
           <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
             <p className="dashboard-label">Series source</p>
             <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">
-              {selectedStrategy?.source_type === "benchmark" ? "Benchmark path metrics" : "Strategy path metrics"}
+              {selectedStrategy ? `${getSourceDisplayName(selectedStrategy.source_type)} path metrics` : "Path metrics"}
             </p>
             <p className="mt-1 text-[11px] text-[#9b938b]">
               The chart is loaded from raw daily path metrics through the backend.
@@ -1824,7 +1817,7 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
               label="Live Paths"
               value={String(pathCount)}
               color={COLORS.cyan}
-              sub={selectedStrategy ? formatStrategyLabel(selectedStrategy.strategy) : "—"}
+              sub={selectedStrategy ? formatStrategyLabel(selectedStrategy.strategy, selectedStrategy.strategy_key) : "—"}
             />
             <KpiCard
               label="Active Holdings"
@@ -2179,7 +2172,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
             onChange={selection.setSelectedStrategyKey}
             options={selection.strategyOptions.map((option) => ({
               value: option.strategy_key,
-              label: formatStrategyLabel(option.strategy),
+              label: formatStrategyLabel(option.strategy, option.strategy_key),
             }))}
           />
           <FilterSelect
@@ -2268,7 +2261,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
               label="Positions"
               value={String(holdings.length)}
               color={COLORS.accent}
-              sub={selectedStrategy ? formatStrategyLabel(selectedStrategy.strategy) : "—"}
+              sub={selectedStrategy ? formatStrategyLabel(selectedStrategy.strategy, selectedStrategy.strategy_key) : "—"}
             />
             <KpiCard
               label="Top Weight"
@@ -2643,13 +2636,13 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
             label="Market"
             value={marketFilter}
             onChange={setMarketFilter}
-            options={[{ value: "All", label: "All markets" }, ...allMarkets.map((m) => ({ value: m, label: MARKET_LABELS[m] ?? m }))]}
+            options={[{ value: "All", label: "All Markets" }, ...allMarkets.map((m) => ({ value: m, label: MARKET_LABELS[m] ?? m }))]}
           />
           <FilterSelect
             label="Portfolio"
             value={portfolioFilter}
             onChange={setPortfolioFilter}
-            options={[{ value: "All", label: "All portfolios" }, ...portfolioOptions.map((key) => ({ value: key, label: formatStrategyLabel(key) }))]}
+            options={[{ value: "All", label: "All strategies" }, ...portfolioOptions.map((key) => ({ value: key, label: formatStrategyLabel(key, key) }))]}
           />
           <FilterSelect
             label="Model"
@@ -3057,7 +3050,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                 <div>
                   <p className="dashboard-label">Selected</p>
                   <p className="mt-1 text-[13px] font-semibold text-[#5f5955]">
-                    {formatStrategyLabel(selectedRun.strategy ?? selectedRun.strategy_key ?? "—")} ·{" "}
+                    {formatStrategyLabel(selectedRun.strategy ?? selectedRun.strategy_key ?? "—", selectedRun.strategy_key)} ·{" "}
                     {MARKET_LABELS[selectedRun.market ?? ""] ?? selectedRun.market ?? "—"}
                   </p>
                   <p className="mt-1 text-[11px] text-[#9b938b]">
@@ -3364,7 +3357,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                     tabIndex={0}
                     role="row"
                   >
-                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{formatStrategyLabel(run.strategy ?? run.strategy_key ?? "—")}</td>
+                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{formatStrategyLabel(run.strategy ?? run.strategy_key ?? "—", run.strategy_key)}</td>
                     <td className="px-3 py-2.5 text-[#8d857f]">
                       <div>{MARKET_LABELS[run.market ?? ""] ?? run.market ?? "—"}</div>
                       <div className="mt-1 text-[10px] text-[#aaa29a]">{run.period ?? "—"}</div>
@@ -3469,7 +3462,7 @@ export function ByMarketTab({ data }: BaseTabProps) {
                 : "—"
             }
             color={sharpeColor(row?.mean_sharpe)}
-            sub={row ? `Top strategy: ${formatStrategyLabel(row.Strategy)}` : "No summary rows"}
+            sub={row ? `Top strategy: ${formatStrategyLabel(row.Strategy, row.strategy_key)}` : "No summary rows"}
           />
         ))}
       </div>
@@ -3705,19 +3698,19 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
           label="Most Stable Sharpe"
           value={mostStable?.sharpeCi95 != null ? `±${mostStable.sharpeCi95.toFixed(2)}` : "—"}
           color={COLORS.green}
-          sub={mostStable ? formatStrategyLabel(mostStable.strategy) : "No estimate"}
+          sub={mostStable ? formatStrategyLabel(mostStable.strategy, mostStable.strategyKey) : "No estimate"}
         />
         <KpiCard
           label="Largest Edge vs Index"
           value={strongestEdge?.deltaVsIndex != null ? strongestEdge.deltaVsIndex.toFixed(2) : "—"}
           color={strongestEdge?.deltaVsIndex != null && strongestEdge.deltaVsIndex >= 0 ? COLORS.green : COLORS.red}
-          sub={strongestEdge ? formatStrategyLabel(strongestEdge.strategy) : "No comparison"}
+          sub={strongestEdge ? formatStrategyLabel(strongestEdge.strategy, strongestEdge.strategyKey) : "No comparison"}
         />
         <KpiCard
           label="Largest Sample"
           value={largestSample ? String(largestSample.n) : "—"}
           color={COLORS.cyan}
-          sub={largestSample ? formatStrategyLabel(largestSample.strategy) : "No estimate"}
+          sub={largestSample ? formatStrategyLabel(largestSample.strategy, largestSample.strategyKey) : "No estimate"}
         />
         <KpiCard
           label="Strategies Compared"
@@ -3733,11 +3726,11 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
         <>
           <Panel>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-              <p className="dashboard-label">Mean Sharpe with approximate confidence band</p>
+              <p className="dashboard-label">Mean Sharpe with Approximate Confidence Interval</p>
               <FigureExportControls
                 captureRef={statTestsChartRef}
                 slug="statistical-tests-mean-sharpe-ci"
-                caption="Mean Sharpe with approximate confidence band"
+                caption="Mean Sharpe with Approximate Confidence Interval"
                 experimentId={data.active_experiment_id}
               />
             </div>
@@ -3794,7 +3787,7 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">N</th>
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">95% CI</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Period Return</th>
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Delta vs Index</th>
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Effect Size</th>
                 </tr>
@@ -3802,7 +3795,7 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
               <tbody>
                 {statsRows.map((row) => (
                   <tr key={row.strategyKey} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{formatStrategyLabel(row.strategy)}</td>
+                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{formatStrategyLabel(row.strategy, row.strategyKey)}</td>
                     <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.n}</td>
                     <td className="px-3 py-2.5 text-right" style={{ color: sharpeColor(row.meanSharpe) }}>
                       {row.meanSharpe?.toFixed(2) ?? "—"}
@@ -4297,7 +4290,7 @@ export function DrawdownsTab({ data }: BaseTabProps) {
             onChange={selection.setSelectedStrategyKey}
             options={selection.strategyOptions.map((option) => ({
               value: option.strategy_key,
-              label: formatStrategyLabel(option.strategy),
+              label: formatStrategyLabel(option.strategy, option.strategy_key),
             }))}
           />
           <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">

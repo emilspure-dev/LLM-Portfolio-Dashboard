@@ -11,15 +11,13 @@ import {
   COLORS,
   INDEX_VS_PILL,
   MARKET_LABELS,
+  getMarketShortLabel,
   getStrategyColor,
+  getStrategyDisplayName,
   sharpeColor,
   fmt,
   fmtp,
 } from "@/lib/constants";
-
-const MARKET_SHORT: Record<string, string> = Object.fromEntries(
-  Object.entries(MARKET_LABELS).map(([k, v]) => [k, v.replace(/ \(.*\)$/, "")])
-);
 import type { EvaluationData, RunRow, Insight } from "@/lib/types";
 
 interface OverviewTabProps {
@@ -47,8 +45,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     }
     return {
       value: best.mean_sharpe as number,
-      name: best.Strategy.replace("GPT (", "").replace(")", "")
-        .replace(" (market-matched)", "").replace(" (buy-and-hold)", ""),
+      name: getStrategyDisplayName(best.Strategy, best.strategy_key),
     };
   }, [summary]);
 
@@ -72,8 +69,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       .filter((s) => s.pct_runs_beating_index_sharpe != null && !isNaN(s.pct_runs_beating_index_sharpe))
       .sort((a, b) => a.pct_runs_beating_index_sharpe - b.pct_runs_beating_index_sharpe)
       .map((s) => ({
-        name: s.Strategy.replace("GPT (", "").replace(")", "")
-          .replace(" (market-matched)", "").replace(" (buy-and-hold)", ""),
+        name: getStrategyDisplayName(s.Strategy, s.strategy_key),
         value: Number(s.pct_runs_beating_index_sharpe.toFixed(1)),
         color: getStrategyColor(s.strategy_key),
       }));
@@ -84,8 +80,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       .filter((s) => s.pct_runs_beating_sixty_forty_sharpe != null && !isNaN(s.pct_runs_beating_sixty_forty_sharpe))
       .sort((a, b) => a.pct_runs_beating_sixty_forty_sharpe - b.pct_runs_beating_sixty_forty_sharpe)
       .map((s) => ({
-        name: s.Strategy.replace("GPT (", "").replace(")", "")
-          .replace(" (market-matched)", "").replace(" (buy-and-hold)", ""),
+        name: getStrategyDisplayName(s.Strategy, s.strategy_key),
         value: Number(s.pct_runs_beating_sixty_forty_sharpe.toFixed(1)),
         color: getStrategyColor(s.strategy_key),
       }));
@@ -112,7 +107,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         const bs = b.mean_sharpe ?? -Infinity;
         return as > bs ? a : b;
       });
-      const gptName = bestGpt.Strategy.replace("GPT (", "").replace(")", "");
+      const gptName = getStrategyDisplayName(bestGpt.Strategy, bestGpt.strategy_key);
       const gptS = bestGpt.mean_sharpe;
       const benchS = bestBench.mean_sharpe;
       if (
@@ -125,13 +120,13 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
           result.push({
             type: "pos",
             title: "GPT outperforms benchmarks",
-            body: `${gptName} achieves a mean Sharpe of ${fmt(gptS, 2)}, beating the best benchmark (${bestBench.Strategy}: ${fmt(benchS, 2)}).`,
+            body: `${gptName} achieves a mean Sharpe of ${fmt(gptS, 2)}, beating the best benchmark (${getStrategyDisplayName(bestBench.Strategy, bestBench.strategy_key)}: ${fmt(benchS, 2)}).`,
           });
         } else {
           result.push({
             type: "neg",
             title: "Benchmarks lead on Sharpe",
-            body: `The best benchmark (${bestBench.Strategy}: ${fmt(benchS, 2)}) outperforms the best GPT strategy (${gptName}: ${fmt(gptS, 2)}).`,
+            body: `The best benchmark (${getStrategyDisplayName(bestBench.Strategy, bestBench.strategy_key)}: ${fmt(benchS, 2)}) outperforms the best GPT strategy (${gptName}: ${fmt(gptS, 2)}).`,
           });
         }
       }
@@ -140,11 +135,11 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     for (const gr of gptRows) {
       const br = gr.pct_runs_beating_index_sharpe;
       if (br != null && !isNaN(br)) {
-        const gn = gr.Strategy.replace("GPT (", "").replace(")", "");
+        const gn = getStrategyDisplayName(gr.Strategy, gr.strategy_key);
         const t = br > 50 ? "pos" : br > 30 ? "warn" : "neg";
         result.push({
           type: t,
-          title: `${gn}: ${br.toFixed(0)}% beat index`,
+          title: `${gn}: ${br.toFixed(0)}% Beat Index`,
           body: `${br > 50 ? "More than half" : "Less than half"} of ${gn} runs achieve a higher Sharpe ratio than the market index.`,
         });
       }
@@ -224,12 +219,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     const result = Array.from(groups.entries()).map(([key, rows]) => {
       const rep = rows[0];
       const totalObs = rows.reduce((s, r) => s + (r.observations ?? 0), 0);
-      const label = rep.strategy
-        .replace("GPT (", "")
-        .replace(")", "")
-        .replace(" (market-matched)", "")
-        .replace(" (buy-and-hold)", "")
-        .trim();
+      const label = getStrategyDisplayName(rep.strategy, rep.strategy_key);
       const byMarket = rows
         .map((r) => ({ market: r.market, sharpe: r.mean_sharpe, ret: r.mean_annualized_return }))
         .sort((a, b) => {
@@ -317,7 +307,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                       </p>
                     </div>
                     <span className="shrink-0 rounded-[8px] bg-[rgba(0,0,0,0.04)] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#b4aca5]">
-                      All mkts
+                      All Markets
                     </span>
                   </div>
 
@@ -330,7 +320,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                           className="min-w-[90px] flex-1 rounded-[10px] bg-[rgba(0,0,0,0.03)] px-3 py-2"
                         >
                           <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                            {MARKET_SHORT[m.market] ?? m.market}
+                            {getMarketShortLabel(m.market)}
                           </p>
                           <p
                             className="mt-1 text-[15px] font-semibold tabular-nums leading-none"
@@ -354,11 +344,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
             /* Fallback: flat grid when summary_rows is unavailable */
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
               {summary.map((s) => {
-                const short = s.Strategy
-                  .replace("GPT (", "")
-                  .replace(")", "")
-                  .replace(" (market-matched)", "")
-                  .replace(" (buy-and-hold)", "");
+                const short = getStrategyDisplayName(s.Strategy, s.strategy_key);
                 return (
                   <KpiCard
                     key={`${s.strategy_key}::${s.markets?.[0] ?? ""}`}
@@ -381,7 +367,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       {/* Beat rate charts */}
       {(beatIndexData.length > 0 || beat60Data.length > 0) && (
         <>
-          <SectionHeader>Beat Rates</SectionHeader>
+          <SectionHeader>Beat Rate Comparison</SectionHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {beatIndexData.length > 0 && (
               <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
@@ -485,7 +471,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       {/* Strategy summary table */}
       {summary.length > 0 && (
         <>
-          <SectionHeader>Strategy Summary Table</SectionHeader>
+          <SectionHeader>Strategy Summary</SectionHeader>
           <div className="dashboard-panel-strong overflow-hidden rounded-[20px]">
             <table className="w-full text-[11px]">
               <thead>
@@ -495,7 +481,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Beat Index %</th>
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Beat 60/40 %</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Period Return</th>
                   <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">N</th>
                 </tr>
               </thead>
@@ -505,8 +491,8 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                     <td className="px-3 py-2.5 font-medium text-[#5e5955]">{s.Strategy}</td>
                     <td className="px-3 py-2.5 text-[#8d857f]">
                       {s.markets && s.markets.length > 1
-                        ? "All"
-                        : (MARKET_SHORT[s.markets?.[0] ?? ""] ?? s.markets?.[0] ?? "—")}
+                        ? "All Markets"
+                        : getMarketShortLabel(s.markets?.[0] ?? "—")}
                     </td>
                     <td className="px-3 py-2.5 text-right font-medium tabular-nums" style={{ color: sharpeColor(s.mean_sharpe) }}>
                       {fmt(s.mean_sharpe, 2)}
@@ -580,7 +566,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         return (
           <>
             <SoftHr />
-            <SectionHeader>Period-by-period consistency</SectionHeader>
+            <SectionHeader>Period Consistency</SectionHeader>
             <p className="mb-2 text-[12px] leading-5 text-[#8f8780]">
               Each value is mean GPT Sharpe for that period.{" "}
               <span className="font-medium text-[#5a6f7a]">Teal</span> = above index Sharpe;{" "}
@@ -593,7 +579,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                     <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Period</th>
                     {columns.map((c) => (
                       <th key={c.col} className="px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                        <div>{MARKET_SHORT[c.market] ?? c.market}</div>
+                        <div>{getMarketShortLabel(c.market)}</div>
                         <div className="mt-0.5 text-[9px] font-normal normal-case opacity-70">
                           {c.gptKey === "gpt_advanced" ? "Advanced" : "Retail"}
                         </div>
@@ -705,7 +691,7 @@ function SharpeGapDiagnostic({
                 <table className="w-full min-w-[640px] text-[11px]">
                   <thead>
                     <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                      {["Strategy", "Market", "Sharpe", "Ann. Return", "Volatility", "Obs.", "Likely cause"].map((h) => (
+                      {["Strategy", "Market", "Sharpe", "Annualized Return", "Volatility", "Observations", "Likely cause"].map((h) => (
                         <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-[#b4aca5]">
                           {h}
                         </th>

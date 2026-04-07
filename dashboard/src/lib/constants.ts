@@ -23,19 +23,44 @@ export const STRATEGY_COLORS: Record<string, string> = {
   sixty_forty: COLORS.slate,
   index: COLORS.amber,
   fama_french: "#818CF8",
+  "GPT (Retail)": COLORS.accent,
+  "GPT (Advanced)": COLORS.orange,
+  "Mean-Variance": COLORS.purple,
+  "Equal Weight": COLORS.cyan,
+  "60/40": COLORS.slate,
+  "Market Index": COLORS.amber,
+  "Fama-French": "#818CF8",
   "GPT (Retail prompt)": COLORS.accent,
   "GPT (Advanced Prompting)": COLORS.orange,
   "Mean-variance": COLORS.purple,
   "Equal weight (1/N)": COLORS.cyan,
   "60/40 (market-matched)": COLORS.slate,
   "Market index (buy-and-hold)": COLORS.amber,
-  "Fama-French": "#818CF8",
 };
 
 export const MARKET_LABELS: Record<string, string> = {
   us: "S&P 500 (US)",
   germany: "DAX 40 (Germany)",
   japan: "Nikkei 225 (Japan)",
+};
+
+export const MARKET_SHORT_LABELS: Record<string, string> = Object.fromEntries(
+  Object.entries(MARKET_LABELS).map(([key, value]) => [key, value.replace(/ \(.*\)$/, "")])
+);
+
+export const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
+  gpt_retail: "GPT (Retail)",
+  gpt_advanced: "GPT (Advanced)",
+  mean_variance: "Mean-Variance",
+  equal_weight: "Equal Weight",
+  sixty_forty: "60/40",
+  index: "Market Index",
+  fama_french: "Fama-French",
+};
+
+export const SOURCE_DISPLAY_NAMES: Record<string, string> = {
+  benchmark: "Benchmark",
+  gpt_portfolio: "GPT Portfolio",
 };
 
 export const STRATEGY_KEY_MAP: Record<string, string> = {
@@ -48,6 +73,58 @@ export const STRATEGY_KEY_MAP: Record<string, string> = {
   "fama-french": "fama_french",
   "fama french": "fama_french",
 };
+
+function normalizeStrategyValue(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[–—]/g, "-");
+}
+
+export function getMarketShortLabel(value: string | null | undefined): string {
+  if (!value) return "—";
+  return MARKET_SHORT_LABELS[value] ?? String(value).replace(/ \(.*\)$/, "");
+}
+
+export function getSourceDisplayName(value: string | null | undefined): string {
+  if (!value) return "—";
+  return SOURCE_DISPLAY_NAMES[value] ?? String(value).replace(/_/g, " ");
+}
+
+export function getStrategyDisplayName(
+  value: string | null | undefined,
+  strategyKey?: string | null
+): string {
+  const key = String(strategyKey ?? "").trim();
+  if (key && STRATEGY_DISPLAY_NAMES[key]) {
+    return STRATEGY_DISPLAY_NAMES[key];
+  }
+
+  const raw = String(value ?? "").trim();
+  if (!raw) return "—";
+  const normalized = normalizeStrategyValue(raw);
+
+  if (normalized.includes("gpt") && normalized.includes("retail")) return "GPT (Retail)";
+  if (normalized.includes("gpt") && normalized.includes("advanced")) return "GPT (Advanced)";
+  if (normalized.includes("retail prompt")) return "GPT (Retail)";
+  if (normalized.includes("advanced prompt")) return "GPT (Advanced)";
+  if (normalized.includes("mean") && normalized.includes("variance")) return "Mean-Variance";
+  if (normalized.includes("equal") && normalized.includes("weight")) return "Equal Weight";
+  if (normalized.includes("1/n")) return "Equal Weight";
+  if (normalized.includes("60/40")) return "60/40";
+  if (normalized.includes("market index") || normalized.includes("buy-and-hold")) return "Market Index";
+  if (normalized.includes("fama") && normalized.includes("french")) return "Fama-French";
+
+  return raw
+    .replace("prompting", "Prompting")
+    .replace("Advanced Prompting", "Advanced")
+    .replace("Advanced prompting", "Advanced")
+    .replace("Retail prompt", "Retail")
+    .replace(" (market-matched)", "")
+    .replace(" (buy-and-hold)", "")
+    .replace(" proxy", "")
+    .trim();
+}
 
 export function getStrategyColor(key: string): string {
   return STRATEGY_COLORS[key] ?? COLORS.slate;

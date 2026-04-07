@@ -16,14 +16,19 @@ import {
 import { KpiCard } from "./KpiCard";
 import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
-import { COLORS, MARKET_LABELS, getStrategyColor, sharpeColor } from "@/lib/constants";
+import {
+  COLORS,
+  MARKET_LABELS,
+  MARKET_SHORT_LABELS,
+  getMarketShortLabel,
+  getSourceDisplayName,
+  getStrategyColor,
+  getStrategyDisplayName,
+  sharpeColor,
+} from "@/lib/constants";
 import { buildStrategySummaryWithRunSharpe } from "@/lib/data-loader";
 import type { FactorStyleSummaryRow } from "@/lib/api-types";
 import type { EvaluationData, RunRow } from "@/lib/types";
-
-const MARKET_SHORT: Record<string, string> = Object.fromEntries(
-  Object.entries(MARKET_LABELS).map(([k, v]) => [k, v.replace(/ \(.*\)$/, "")])
-);
 
 /** Stable [0, 1) for jitter so dots don’t jump on re-render. */
 function jitter01(run: RunRow): number {
@@ -48,19 +53,6 @@ function Panel({
       {children}
     </div>
   );
-}
-
-function formatStrategyLabel(label: string) {
-  return label
-    .replace("GPT (", "")
-    .replace(")", "")
-    .replace("prompting", "Prompt")
-    .replace("Advanced Prompting", "Advanced")
-    .replace("Advanced prompting", "Advanced")
-    .replace("Retail prompt", "Retail")
-    .replace(" (market-matched)", "")
-    .replace(" proxy", "")
-    .trim();
 }
 
 function formatPctFromRatio(value: number | null | undefined, digits = 1) {
@@ -246,13 +238,13 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
   const sharpeBarData = useMemo(
     () =>
       sortedBySharpe.map((row) => {
-        const base = formatStrategyLabel(row.Strategy);
+        const base = getStrategyDisplayName(row.Strategy, row.strategy_key);
         let marketSuffix = "";
         if (marketFilter === "All") {
           if (row.markets.length > 1) {
-            marketSuffix = " · all mkts";
+            marketSuffix = " · All Markets";
           } else if (row.markets.length === 1 && row.markets[0]) {
-            marketSuffix = ` · ${MARKET_SHORT[row.markets[0]] ?? row.markets[0]}`;
+            marketSuffix = ` · ${getMarketShortLabel(row.markets[0])}`;
           }
         }
         const barKey = `${row.strategy_key}|${[...row.markets].sort().join(",")}|${[...row.prompt_types].sort().join(",")}`;
@@ -277,12 +269,12 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             Number.isFinite(row.mean_annualized_return)
         )
         .map((row) => {
-          const name = formatStrategyLabel(row.Strategy);
+          const name = getStrategyDisplayName(row.Strategy, row.strategy_key);
           const market = row.market ?? "";
           const scatterKey = `${row.strategy_key}::${market}::${row.prompt_type ?? ""}`;
           const legendLabel =
             marketFilter === "All" && market
-              ? `${name} · ${MARKET_SHORT[market] ?? market}`
+              ? `${name} · ${MARKET_SHORT_LABELS[market] ?? market}`
               : name;
           return {
             scatterKey,
@@ -316,7 +308,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                 onChange={(e) => setMarketFilter(e.target.value)}
                 className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
               >
-                <option value="All">All markets</option>
+                <option value="All">All Markets</option>
                 {allMarkets.map((m) => (
                   <option key={m} value={m}>{MARKET_LABELS[m] ?? m}</option>
                 ))}
@@ -345,7 +337,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
               onChange={(e) => setMarketFilter(e.target.value)}
               className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
             >
-              <option value="All">All markets</option>
+              <option value="All">All Markets</option>
               {allMarkets.map((m) => (
                 <option key={m} value={m}>{MARKET_LABELS[m] ?? m}</option>
               ))}
@@ -356,39 +348,39 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
       <div>
         <SectionHeader>Strategies</SectionHeader>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
-          Aggregated performance, risk, run counts, and factor tilts by strategy — currently showing{" "}
+          Aggregated performance, risk, run counts, and factor tilts by strategy, currently showing{" "}
           <strong>{marketScope}</strong>.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <KpiCard
-          label="Top Sharpe (summary)"
+          label="Best Mean Sharpe"
           value={
             topSharpe?.mean_sharpe != null && Number.isFinite(topSharpe.mean_sharpe)
               ? topSharpe.mean_sharpe.toFixed(2)
               : "—"
           }
           color={sharpeColor(topSharpe?.mean_sharpe)}
-          sub={topSharpe ? formatStrategyLabel(topSharpe.Strategy) : "—"}
+          sub={topSharpe ? getStrategyDisplayName(topSharpe.Strategy, topSharpe.strategy_key) : "—"}
         />
         <KpiCard
-          label="Best ann. return"
+          label="Best Annualized Return"
           value={formatPctFromRatio(bestReturn?.mean_annualized_return, 1)}
           color={COLORS.green}
-          sub={bestReturn ? formatStrategyLabel(bestReturn.Strategy) : "—"}
+          sub={bestReturn ? getStrategyDisplayName(bestReturn.Strategy, bestReturn.strategy_key) : "—"}
         />
         <KpiCard
           label="Lowest volatility"
           value={formatPctFromRatio(lowestVol?.mean_volatility, 1)}
           color={COLORS.cyan}
-          sub={lowestVol ? formatStrategyLabel(lowestVol.Strategy) : "—"}
+          sub={lowestVol ? getStrategyDisplayName(lowestVol.Strategy, lowestVol.strategy_key) : "—"}
         />
         <KpiCard
-          label="Best beat index %"
+          label="Highest Beat-Index Rate"
           value={formatPctFromNumber(bestBeatIndex?.pct_runs_beating_index_sharpe, 0)}
           color={COLORS.amber}
-          sub={bestBeatIndex ? formatStrategyLabel(bestBeatIndex.Strategy) : "—"}
+          sub={bestBeatIndex ? getStrategyDisplayName(bestBeatIndex.Strategy, bestBeatIndex.strategy_key) : "—"}
         />
       </div>
 
@@ -439,11 +431,11 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
 
         <Panel>
           <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-            <p className="dashboard-label">Risk / return (summary)</p>
+            <p className="dashboard-label">Risk / Return Summary</p>
             <FigureExportControls
               captureRef={strategiesRiskReturnRef}
               slug="strategies-risk-return-summary"
-              caption="Strategies — Risk / return (summary)"
+              caption="Strategies — Risk / Return Summary"
               experimentId={data.active_experiment_id}
             />
           </div>
@@ -468,7 +460,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                 <YAxis
                   type="number"
                   dataKey="retPct"
-                  name="Ann. return"
+                  name="Annualized Return"
                   tickFormatter={(v) => `${Number(v).toFixed(1)}%`}
                   tick={{ fontSize: 10, fill: "#aca49d" }}
                   axisLine={false}
@@ -489,7 +481,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                       <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
                         <p style={{ fontWeight: 600, marginBottom: 4, color: "#5c534c" }}>{d.legendLabel}</p>
                         <p style={{ color: "#8f8780" }}>Volatility : {d.volPct.toFixed(1)}%</p>
-                        <p style={{ color: "#8f8780" }}>Ann. return : {d.retPct.toFixed(1)}%</p>
+                        <p style={{ color: "#8f8780" }}>Annualized Return: {d.retPct.toFixed(1)}%</p>
                       </div>
                     );
                   }}
@@ -513,7 +505,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
               </ScatterChart>
               </ResponsiveContainer>
               <p className="mt-2 text-[11px] text-[#9a928b]">
-                Hover a point for volatility and return. Strategy names are listed below to avoid overlapping labels on the chart.
+                Hover a point for details. Strategy names are listed below to avoid overlapping labels on the chart.
               </p>
               <div className="mt-3 max-h-[200px] space-y-1 overflow-y-auto pr-1 text-[11px] text-[#9a928b]">
                 {riskReturnLegendRows.map((row) => (
@@ -565,7 +557,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             return {
               strategyIdx,
               sharpe: r.sharpe_ratio as number,
-              label: formatStrategyLabel(r.strategy ?? r.strategy_key ?? ""),
+              label: getStrategyDisplayName(r.strategy ?? r.strategy_key ?? "", r.strategy_key),
               strategyKey: r.strategy_key ?? "",
             };
           })
@@ -576,11 +568,11 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         return (
           <Panel>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-              <p className="dashboard-label">Sharpe dispersion — GPT runs (Advanced & Retail)</p>
+              <p className="dashboard-label">Sharpe Dispersion — GPT Runs</p>
               <FigureExportControls
                 captureRef={strategiesDispersionRef}
                 slug="strategies-sharpe-dispersion-gpt"
-                caption="Strategies — Sharpe dispersion (GPT Advanced and Retail)"
+                caption="Strategies — Sharpe Dispersion (GPT Retail and GPT Advanced)"
                 experimentId={data.active_experiment_id}
               />
             </div>
@@ -601,7 +593,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                     const key = strategyOrder[idx];
                     if (!key) return "";
                     const row = summary.find((s) => s.strategy_key === key);
-                    return row ? formatStrategyLabel(row.Strategy) : formatStrategyLabel(key);
+                    return row ? getStrategyDisplayName(row.Strategy, row.strategy_key) : getStrategyDisplayName(key, key);
                   }}
                   tick={{ fontSize: 9, fill: "#8f8780" }}
                   axisLine={false}
@@ -655,7 +647,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         );
       })()}
 
-      <SectionHeader>Strategy master table</SectionHeader>
+      <SectionHeader>Strategy Details Table</SectionHeader>
       <Panel className="overflow-x-auto p-0">
         <table className="w-full min-w-[1080px] text-[11px]">
           <thead>
@@ -676,25 +668,25 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                 Sharpe
               </th>
               <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                Ann. ret.
+                Annualized Return
               </th>
               <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                Vol.
+                Volatility
               </th>
               <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                Beat idx
+                Beat Index
               </th>
               <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Beat 60/40
               </th>
               <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                Mean ret.
+                Mean Period Return
               </th>
               <th className="px-2 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                 Turnover
               </th>
               <th className="px-2 py-2.5 pr-4 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                Obs.
+                Observations
               </th>
             </tr>
           </thead>
@@ -702,18 +694,18 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             {sortedBySharpe.map((row) => {
               const marketLabel =
                 row.markets && row.markets.length === 1
-                  ? (MARKET_LABELS[row.markets[0]]?.replace(/ \(.*\)$/, "") ?? row.markets[0])
-                  : "All markets";
+                  ? getMarketShortLabel(row.markets[0])
+                  : "All Markets";
               return (
                 <tr
                   key={`${row.strategy_key}::${row.source_type}::${row.markets?.[0] ?? ""}`}
                   className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
                 >
                   <td className="px-3 py-2.5 font-medium text-[#5e5955]">
-                    {formatStrategyLabel(row.Strategy)}
+                    {getStrategyDisplayName(row.Strategy, row.strategy_key)}
                   </td>
                   <td className="whitespace-nowrap px-2 py-2.5 text-[#8d857f]">{marketLabel}</td>
-                  <td className="whitespace-nowrap px-2 py-2.5 text-[#8d857f]">{row.source_type}</td>
+                  <td className="whitespace-nowrap px-2 py-2.5 text-[#8d857f]">{getSourceDisplayName(row.source_type)}</td>
                   <td className="whitespace-nowrap px-2 py-2.5 text-right tabular-nums text-[#8d857f]">
                     {runCounts.get(row.strategy_key) ?? "—"}
                   </td>
@@ -753,14 +745,14 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         </table>
       </Panel>
 
-      <SectionHeader>Factor tilts (path-weighted average)</SectionHeader>
+      <SectionHeader>Factor Tilts Table</SectionHeader>
       {data.factor_style_error ? (
         <Panel>
           <p className="text-[12px] leading-5 text-[#8b5348]">
-            Factor-style API error: {data.factor_style_error}
+            Factor Style API error: {data.factor_style_error}
           </p>
           <p className="mt-2 text-[12px] leading-5 text-[#9b938b]">
-            Open the <strong>Factor style</strong> tab for full troubleshooting notes (backend deploy,
+            Open the <strong>Factor Style</strong> tab for full troubleshooting notes (backend deploy,
             API base URL, DB view).
           </p>
         </Panel>
@@ -787,7 +779,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                   Value
                 </th>
                 <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                  Mom.
+                  Momentum
                 </th>
                 <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
                   Low risk
@@ -804,7 +796,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                   className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
                 >
                   <td className="px-3 py-2.5 font-medium text-[#5e5955]">
-                    {formatStrategyLabel(row.strategy)}
+                    {getStrategyDisplayName(row.strategy, row.strategy_key)}
                   </td>
                   {(["size", "value", "momentum", "lowRisk", "quality"] as const).map((k, i) => (
                     <td key={k} className="px-3 py-2.5 text-right tabular-nums text-[#8d857f]">

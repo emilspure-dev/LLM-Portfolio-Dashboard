@@ -27,8 +27,8 @@ import type { EvaluationData, RunRow } from "@/lib/types";
 const TAB_NAMES = [
   "Overview",
   "Strategies",
-  "Factor style",
-  "Sharpe & Returns",
+  "Factor Style",
+  "Risk & Return",
   "Equity Curves",
   "Portfolios",
   "Run Explorer",

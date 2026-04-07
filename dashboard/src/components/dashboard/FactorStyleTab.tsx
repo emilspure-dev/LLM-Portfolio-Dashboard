@@ -15,7 +15,7 @@ import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
-import { CHART_COLORS, MARKET_LABELS } from "@/lib/constants";
+import { CHART_COLORS, MARKET_LABELS, getStrategyDisplayName } from "@/lib/constants";
 import { getApiBaseUrl, postFactorStyleAnalysis } from "@/lib/api-client";
 import {
   FACTOR_DEFINITIONS_BLURB,
@@ -41,15 +41,7 @@ function factorStyleSortKey(strategyKey: string): number {
 
 function buildFactorStyleLabel(row: FactorStyleSummaryRow): string {
   const m = MARKET_LABELS[row.market] ?? row.market;
-  let base = row.strategy
-    .replace("GPT (", "")
-    .replace(")", "")
-    .replace(" (market-matched)", "")
-    .replace(" (buy-and-hold)", "")
-    .trim();
-  if (row.prompt_type) {
-    base = `${base} (${row.prompt_type})`;
-  }
+  const base = getStrategyDisplayName(row.strategy, row.strategy_key);
   return `${base} · ${m}`;
 }
 
@@ -95,7 +87,7 @@ function FactorStyleAiSection({
     setError(null);
     try {
       const market_scope =
-        marketFilter === "All" ? "All markets" : (MARKET_LABELS[marketFilter] ?? marketFilter);
+        marketFilter === "All" ? "All Markets" : (MARKET_LABELS[marketFilter] ?? marketFilter);
       const rows = factorStyleFiltered.map((r) => ({
         strategy_key: r.strategy_key,
         strategy: r.strategy,
@@ -227,9 +219,9 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
   }, [factorStyleFiltered]);
 
   const strategyKeysInView = useMemo(() => {
-    const keys = new Set(factorStyleFiltered.map((r) => r.strategy_key));
+    const keys = new Set(factorStyleGptOnly.map((r) => r.strategy_key));
     return [...keys].sort((a, b) => factorStyleSortKey(a) - factorStyleSortKey(b));
-  }, [factorStyleFiltered]);
+  }, [factorStyleGptOnly]);
 
   return (
     <div className="space-y-4 pb-1">
@@ -246,7 +238,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
               onChange={(e) => setMarketFilter(e.target.value)}
               className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
             >
-              <option value="All">All markets</option>
+              <option value="All">All Markets</option>
               {allMarkets.map((m) => (
                 <option key={m} value={m}>{MARKET_LABELS[m] ?? m}</option>
               ))}
@@ -272,7 +264,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
         <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
           <InsightCard
             type="warn"
-            title="Factor-style request failed"
+            title="Factor Style request failed"
             body={`${data.factor_style_error} The dashboard calls ${getApiBaseUrl()}/summary/factor-style. Status 404 usually means the deployed API does not include this route yet—deploy the current backend or point VITE_API_BASE_URL / NEXT_PUBLIC_API_BASE_URL at a server that has GET /api/summary/factor-style.`}
           />
         </div>
@@ -283,7 +275,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
               <FigureExportControls
                 captureRef={factorStyleChartRef}
                 slug="factor-style-portfolio-tilts"
-                caption="Factor style — Portfolio factor tilts (size, value, momentum, low risk, quality)"
+                caption="Factor Style — Portfolio Factor Tilts (Size, Value, Momentum, Low Risk, Quality)"
                 experimentId={data.active_experiment_id}
               />
             </div>
@@ -375,7 +367,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             <Accordion type="multiple" className="dashboard-panel rounded-[16px] border border-[rgba(232,224,217,0.9)] px-3">
               {strategyKeysInView.map((key) => {
                 const g = STRATEGY_GLOSSARY[key];
-                const row0 = factorStyleFiltered.find((r) => r.strategy_key === key);
+                const row0 = factorStyleGptOnly.find((r) => r.strategy_key === key);
                 const title = g?.title ?? row0?.strategy ?? key;
                 const summary =
                   g?.summary ??
@@ -402,7 +394,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                 ? data.factor_style_from_exposure_fallback
                   ? `The dashboard fell back to ${getApiBaseUrl()}/charts/factor-exposures, which returned no usable rows. Factor exposures may be missing in daily path metrics for this experiment.`
                   : `The API at ${getApiBaseUrl()} returned an empty array for /summary/factor-style (HTTP 200, zero rows). That usually means daily path metrics have no factor-exposure data for this experiment. Fix: rebuild or reload analytics data, or pick an experiment that includes populated daily path metrics.`
-                : "Factor rows exist for this experiment, but every mean exposure is null for the selected market — try All markets."
+                : "Factor rows exist for this experiment, but every mean exposure is null for the selected market — try All Markets."
             }
           />
         </div>

@@ -58,7 +58,7 @@ export function DashboardSidebar({
             <BarChart3 className="h-4 w-4 text-[hsl(198_38%_38%)]" />
           </div>
           <div>
-            <p className="dashboard-label">Workspace</p>
+            <p className="dashboard-label">Research Workspace</p>
             <span className="mt-1 block text-[15px] font-semibold tracking-[-0.03em] text-[#5f5955]">
               LLM Portfolio
             </span>
@@ -98,7 +98,7 @@ export function DashboardSidebar({
                   (data?.factor_style_rows?.length ?? 0) > 0 && !data?.factor_style_error
                 ) && (
                 <p className="mt-2 text-[12px] leading-4 text-[#b45309]">
-                  Factor-style tab needs API route <span className="font-mono">GET /api/summary/factor-style</span>.
+                  Factor Style tab needs API route <span className="font-mono">GET /api/summary/factor-style</span>.
                   This response has no <span className="font-mono">routes.factor_style</span> flag or it is false — on
                   the VPS: <span className="font-mono">git pull</span>, restart the Node API, reload.
                 </p>
@@ -188,17 +188,17 @@ export function DashboardSidebar({
       </div>
 
       <div className="dashboard-panel mt-auto rounded-[18px] p-4">
-        <p className="dashboard-label mb-3">Thesis scope</p>
+        <p className="dashboard-label mb-3">Research Scope</p>
         <div className="space-y-1.5 text-[12px] leading-relaxed text-[#9c948c]">
           <p>Markets: S&amp;P 500, DAX 40, Nikkei 225</p>
-          <p>Prompts: Retail, Advanced</p>
-          <p>Benchmarks: MV, 1/N, 60/40, Index, FF</p>
+          <p>Prompts: GPT (Retail), GPT (Advanced)</p>
+          <p>Benchmarks: Mean-Variance, Equal Weight, 60/40, Market Index, Fama-French</p>
         </div>
         <p className="mt-3 border-t border-[rgba(232,224,217,0.75)] pt-3 text-[10px] leading-4 text-[#c4bcb4]">
           UI build <span className="font-mono text-[#9a928b]">{__DASHBOARD_BUILD_ID__}</span>
           {" · "}
           Latest tabs include <span className="text-[#9a928b]">Strategies</span> and{" "}
-          <span className="text-[#9a928b]">Factor style</span> after Overview. If you do not see them,
+          <span className="text-[#9a928b]">Factor Style</span> after Overview. If you do not see them,
           your browser or host is serving an old bundle—hard-refresh, redeploy, or run{" "}
           <code className="rounded bg-[rgba(0,0,0,0.04)] px-1">npm run dev</code> from{" "}
           <code className="rounded bg-[rgba(0,0,0,0.04)] px-1">dashboard/</code>.
