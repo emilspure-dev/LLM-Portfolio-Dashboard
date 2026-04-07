@@ -3802,7 +3802,7 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
   );
 }
 
-export function BehaviorTab({ data }: BaseTabProps) {
+export function BehaviorTab({ data, runs }: BaseTabProps) {
   const rows = data.behavior;
   const [reasoningPromptFilter, setReasoningPromptFilter] = useState<"all" | "retail" | "advanced">("all");
   const [reasoningSearch, setReasoningSearch] = useState("");
@@ -3821,40 +3821,93 @@ export function BehaviorTab({ data }: BaseTabProps) {
     realizedReturnPct: row.mean_realized_net_return * 100,
   }));
 
-  const gptRuns = useMemo(
-    () => data.runs.filter((run) => run.prompt_type === "retail" || run.prompt_type === "advanced"),
-    [data.runs]
-  );
-
   const modelComparisonData = useMemo(() => {
-    const models = Array.from(
-      new Set(gptRuns.map((run) => run.model).filter((value): value is string => typeof value === "string" && value.length > 0))
-    ).sort();
-    if (models.length < 2) return null;
+    const points = runs
+      .filter((run) => {
+        const prompt = String(run.prompt_type ?? "");
+        const model = String(run.model ?? "").trim();
+        return (prompt === "retail" || prompt === "advanced") && model.length > 0;
+      })
+      .map((run) => {
+        const model = String(run.model ?? "").trim();
+        const sharpe = asNumber(run.sharpe_ratio);
+        const returnRatio = asNumber(run.period_return ?? run.net_return ?? run.period_return_net);
+        const hhi = asNumber(run.hhi);
+        return {
+          model,
+          sharpe,
+          returnPct: returnRatio != null ? returnRatio * 100 : null,
+          hhi,
+          promptLabel:
+            run.prompt_type === "advanced"
+              ? "Advanced prompt"
+              : run.prompt_type === "retail"
+                ? "Retail prompt"
+                : "—",
+          marketLabel: MARKET_LABELS[run.market ?? ""] ?? run.market ?? "—",
+          periodLabel: run.period ?? "—",
+          strategyLabel: getStrategyDisplayName(run.strategy_key, run.strategy_key ?? ""),
+          runLabel:
+            run.run_id != null && String(run.run_id).length > 0
+              ? `Run ${run.run_id}`
+              : run.path_id != null && String(run.path_id).length > 0
+                ? `Path ${run.path_id}`
+                : "Run",
+        };
+      });
 
-    const colorMap = new Map(models.map((model, index) => [model, MODEL_SCATTER_COLORS[index % MODEL_SCATTER_COLORS.length]]));
-    const returnPoints = gptRuns
-      .filter((run) => run.model && asNumber(run.sharpe_ratio) != null)
-      .map((run) => ({
-        sharpe: asNumber(run.sharpe_ratio)!,
-        ret: (asNumber(run.period_return ?? run.net_return ?? run.period_return_net) ?? 0) * 100,
-        model: String(run.model),
-        color: colorMap.get(String(run.model)) ?? COLORS.accent,
-        ...runExplorerPointMeta(run),
+    const models = Array.from(new Set(points.map((point) => point.model))).sort();
+    if (models.length === 0) return null;
+
+    const colorMap = new Map(
+      models.map((model, index) => [model, MODEL_SCATTER_COLORS[index % MODEL_SCATTER_COLORS.length]])
+    );
+
+    const returnPoints = points
+      .filter((point) => point.sharpe != null && point.returnPct != null)
+      .map((point) => ({
+        ...point,
+        sharpe: point.sharpe as number,
+        returnPct: point.returnPct as number,
+        color: colorMap.get(point.model) ?? COLORS.accent,
       }));
-    const hhiPoints = gptRuns
-      .filter((run) => run.model && asNumber(run.hhi) != null && asNumber(run.sharpe_ratio) != null)
-      .map((run) => ({
-        sharpe: asNumber(run.sharpe_ratio)!,
-        hhi: asNumber(run.hhi)!,
-        model: String(run.model),
-        color: colorMap.get(String(run.model)) ?? COLORS.accent,
-        ...runExplorerPointMeta(run),
+
+    const hhiPoints = points
+      .filter((point) => point.sharpe != null && point.hhi != null)
+      .map((point) => ({
+        ...point,
+        sharpe: point.sharpe as number,
+        hhi: point.hhi as number,
+        color: colorMap.get(point.model) ?? COLORS.accent,
       }));
 
     if (returnPoints.length === 0 && hhiPoints.length === 0) return null;
-    return { models, colorMap, returnPoints, hhiPoints };
-  }, [gptRuns]);
+
+    return {
+      models,
+      colorMap,
+      returnPoints,
+      hhiPoints,
+    };
+  }, [runs]);
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7570/ingest/dc8c104d-3f8d-40d2-a9bc-ff989f22d16e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'edace0'},body:JSON.stringify({sessionId:'edace0',runId:'pre-fix',hypothesisId:'H1',location:'dashboard/src/components/dashboard/DetailTabs.tsx:3889',message:'BehaviorTab input sizes',data:{behaviorRows:rows.length,totalRuns:runs.length,hasBehaviorBranch:rows.length>0},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [rows.length, runs.length]);
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7570/ingest/dc8c104d-3f8d-40d2-a9bc-ff989f22d16e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'edace0'},body:JSON.stringify({sessionId:'edace0',runId:'pre-fix',hypothesisId:'H2',location:'dashboard/src/components/dashboard/DetailTabs.tsx:3894',message:'BehaviorTab GPT run field coverage',data:{gptLikeRuns:runs.filter((run)=>run.prompt_type==='retail'||run.prompt_type==='advanced').length,withModel:runs.filter((run)=>(run.prompt_type==='retail'||run.prompt_type==='advanced')&&typeof run.model==='string'&&run.model.trim().length>0).length,withSharpe:runs.filter((run)=>(run.prompt_type==='retail'||run.prompt_type==='advanced')&&typeof run.model==='string'&&run.model.trim().length>0&&typeof run.sharpe_ratio==='number').length,withReturn:runs.filter((run)=>(run.prompt_type==='retail'||run.prompt_type==='advanced')&&typeof run.model==='string'&&run.model.trim().length>0&&typeof (run.period_return ?? run.net_return ?? run.period_return_net)==='number').length,withHhi:runs.filter((run)=>(run.prompt_type==='retail'||run.prompt_type==='advanced')&&typeof run.model==='string'&&run.model.trim().length>0&&typeof run.hhi==='number').length},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [runs]);
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7570/ingest/dc8c104d-3f8d-40d2-a9bc-ff989f22d16e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'edace0'},body:JSON.stringify({sessionId:'edace0',runId:'pre-fix',hypothesisId:'H3',location:'dashboard/src/components/dashboard/DetailTabs.tsx:3900',message:'BehaviorTab model comparison summary',data:{hasModelComparison:Boolean(modelComparisonData),modelCount:modelComparisonData?.models.length??0,returnPointCount:modelComparisonData?.returnPoints.length??0,hhiPointCount:modelComparisonData?.hhiPoints.length??0,models:modelComparisonData?.models.slice(0,5)??[]},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [modelComparisonData]);
 
   // Compute post-loss runs: for each (strategy, market, model, prompt_type) group sorted by
   // period, find runs where the immediately preceding period had a negative return.
@@ -4039,6 +4092,221 @@ export function BehaviorTab({ data }: BaseTabProps) {
             ))}
           </div>
 
+          {modelComparisonData && (
+            <>
+              <SectionHeader>LLM model comparison</SectionHeader>
+              <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+                <p className="text-[12px] leading-5 text-[#8f8780]">
+                  GPT runs only. These charts compare the LLM families directly inside the Behavior view,
+                  so you can see whether higher Sharpe comes with higher return or more concentration.
+                </p>
+              </Panel>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                {modelComparisonData.returnPoints.length > 0 && (
+                  <Panel>
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                      <p className="dashboard-label">Model comparison — Sharpe vs return</p>
+                      <FigureExportControls
+                        captureRef={behaviorModelReturnRef}
+                        slug="behavior-model-comparison-sharpe-return"
+                        caption="Behavior — Model comparison (Sharpe vs return)"
+                        experimentId={data.active_experiment_id}
+                      />
+                    </div>
+                    <div ref={behaviorModelReturnRef} className="min-w-0">
+                      <ResponsiveContainer width="100%" height={300}>
+                        <ScatterChart margin={{ top: 22, right: 24, left: 8, bottom: 8 }}>
+                          <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
+                          <XAxis
+                            type="number"
+                            dataKey="sharpe"
+                            name="Sharpe"
+                            tick={{ fontSize: 10, fill: "#aca49d" }}
+                            axisLine={false}
+                            tickLine={false}
+                            label={{ value: "Sharpe ratio", position: "insideBottom", offset: -2, style: { fontSize: 10, fill: "#aca49d" } }}
+                          />
+                          <YAxis
+                            type="number"
+                            dataKey="returnPct"
+                            name="Return %"
+                            tick={{ fontSize: 10, fill: "#aca49d" }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(value: number) => `${value.toFixed(0)}%`}
+                            label={{ value: "Period return", angle: -90, position: "insideLeft", offset: 12, style: { fontSize: 10, fill: "#aca49d" } }}
+                          />
+                          <ZAxis range={[40, 40]} />
+                          <Tooltip
+                            {...tooltipStyle}
+                            content={({ payload }) => {
+                              if (!payload?.length) return null;
+                              const point = payload[0].payload as {
+                                model: string;
+                                sharpe: number;
+                                returnPct: number;
+                                runLabel: string;
+                                strategyLabel: string;
+                                promptLabel: string;
+                                marketLabel: string;
+                                periodLabel: string;
+                              };
+                              return (
+                                <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
+                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.runLabel}</p>
+                                  <p style={{ color: "#6b6560", marginBottom: 4 }}>{point.strategyLabel}</p>
+                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.model}</p>
+                                  <p style={{ color: "#8f8780", marginBottom: 4 }}>
+                                    {point.promptLabel} · {point.marketLabel} · {point.periodLabel}
+                                  </p>
+                                  <p style={{ color: "#8f8780" }}>Sharpe: {point.sharpe.toFixed(2)}</p>
+                                  <p style={{ color: "#8f8780" }}>Return: {point.returnPct.toFixed(1)}%</p>
+                                </div>
+                              );
+                            }}
+                          />
+                          <Scatter
+                            data={modelComparisonData.returnPoints}
+                            shape={(props: Record<string, unknown>) => {
+                              const cx = props.cx as number;
+                              const cy = props.cy as number;
+                              const point = props.payload as { color: string };
+                              return <circle cx={cx} cy={cy} r={5} fill={point.color} fillOpacity={0.72} stroke="white" strokeWidth={1} />;
+                            }}
+                          />
+                          <Legend
+                            verticalAlign="top"
+                            align="left"
+                            wrapperStyle={{ top: -6 }}
+                            content={() => (
+                              <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
+                                {modelComparisonData.models.map((model) => (
+                                  <span key={model} className="flex items-center gap-1">
+                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelComparisonData.colorMap.get(model) }} />
+                                    {model}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          />
+                        </ScatterChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Panel>
+                )}
+
+                {modelComparisonData.hhiPoints.length > 0 && (
+                  <Panel>
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                      <p className="dashboard-label">Model comparison — Sharpe vs HHI (concentration)</p>
+                      <FigureExportControls
+                        captureRef={behaviorModelHhiRef}
+                        slug="behavior-model-comparison-sharpe-hhi"
+                        caption="Behavior — Model comparison (Sharpe vs HHI)"
+                        experimentId={data.active_experiment_id}
+                      />
+                    </div>
+                    <div ref={behaviorModelHhiRef} className="min-w-0">
+                      <ResponsiveContainer width="100%" height={300}>
+                        <ScatterChart margin={{ top: 22, right: 24, left: 8, bottom: 8 }}>
+                          <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
+                          <XAxis
+                            type="number"
+                            dataKey="sharpe"
+                            name="Sharpe"
+                            tick={{ fontSize: 10, fill: "#aca49d" }}
+                            axisLine={false}
+                            tickLine={false}
+                            label={{ value: "Sharpe ratio", position: "insideBottom", offset: -2, style: { fontSize: 10, fill: "#aca49d" } }}
+                          />
+                          <YAxis
+                            type="number"
+                            dataKey="hhi"
+                            name="HHI"
+                            tick={{ fontSize: 10, fill: "#aca49d" }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(value: number) => value.toFixed(2)}
+                            label={{ value: "HHI (concentration)", angle: -90, position: "insideLeft", offset: 12, style: { fontSize: 10, fill: "#aca49d" } }}
+                          />
+                          <ZAxis range={[40, 40]} />
+                          <Tooltip
+                            {...tooltipStyle}
+                            content={({ payload }) => {
+                              if (!payload?.length) return null;
+                              const point = payload[0].payload as {
+                                model: string;
+                                sharpe: number;
+                                hhi: number;
+                                runLabel: string;
+                                strategyLabel: string;
+                                promptLabel: string;
+                                marketLabel: string;
+                                periodLabel: string;
+                              };
+                              return (
+                                <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
+                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.runLabel}</p>
+                                  <p style={{ color: "#6b6560", marginBottom: 4 }}>{point.strategyLabel}</p>
+                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.model}</p>
+                                  <p style={{ color: "#8f8780", marginBottom: 4 }}>
+                                    {point.promptLabel} · {point.marketLabel} · {point.periodLabel}
+                                  </p>
+                                  <p style={{ color: "#8f8780" }}>Sharpe: {point.sharpe.toFixed(2)}</p>
+                                  <p style={{ color: "#8f8780" }}>HHI: {point.hhi.toFixed(3)}</p>
+                                </div>
+                              );
+                            }}
+                          />
+                          <ReferenceLine
+                            y={0.15}
+                            stroke="rgba(179, 148, 114, 0.65)"
+                            strokeWidth={1.5}
+                            strokeDasharray="4 4"
+                            label={{
+                              value: "Concentrated (0.15)",
+                              position: "right",
+                              fontSize: 9,
+                              fill: "#9b7a56",
+                            }}
+                          />
+                          <Scatter
+                            data={modelComparisonData.hhiPoints}
+                            shape={(props: Record<string, unknown>) => {
+                              const cx = props.cx as number;
+                              const cy = props.cy as number;
+                              const point = props.payload as { color: string };
+                              return <circle cx={cx} cy={cy} r={5} fill={point.color} fillOpacity={0.72} stroke="white" strokeWidth={1} />;
+                            }}
+                          />
+                          <Legend
+                            verticalAlign="top"
+                            align="left"
+                            wrapperStyle={{ top: -6 }}
+                            content={() => (
+                              <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
+                                {modelComparisonData.models.map((model) => (
+                                  <span key={model} className="flex items-center gap-1">
+                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelComparisonData.colorMap.get(model) }} />
+                                    {model}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          />
+                        </ScatterChart>
+                      </ResponsiveContainer>
+                      <p className="mt-1 text-[10px] text-[#b4aca5]">
+                        Lower HHI means more diversified. Runs above the dashed line are concentrated portfolios.
+                      </p>
+                    </div>
+                  </Panel>
+                )}
+              </div>
+            </>
+          )}
+
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <Panel>
               <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
@@ -4133,221 +4401,6 @@ export function BehaviorTab({ data }: BaseTabProps) {
               </tbody>
             </table>
           </Panel>
-
-          {modelComparisonData && (
-            <>
-              <SectionHeader>Model comparison</SectionHeader>
-              <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-                <p className="text-[12px] leading-5 text-[#8f8780]">
-                  GPT runs only. These scatters compare model families across all visible behavior data to
-                  show whether better Sharpe tends to come with higher concentration or higher period return.
-                </p>
-              </Panel>
-
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                {modelComparisonData.returnPoints.length > 0 && (
-                  <Panel>
-                    <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-                      <p className="dashboard-label">Model comparison — Sharpe vs return</p>
-                      <FigureExportControls
-                        captureRef={behaviorModelReturnRef}
-                        slug="behavior-model-comparison-sharpe-return"
-                        caption="Behavior — Model comparison (Sharpe vs return)"
-                        experimentId={data.active_experiment_id}
-                      />
-                    </div>
-                    <div ref={behaviorModelReturnRef} className="min-w-0">
-                      <ResponsiveContainer width="100%" height={300}>
-                        <ScatterChart margin={{ top: 22, right: 24, left: 8, bottom: 8 }}>
-                          <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
-                          <XAxis
-                            type="number"
-                            dataKey="sharpe"
-                            name="Sharpe"
-                            tick={{ fontSize: 10, fill: "#aca49d" }}
-                            axisLine={false}
-                            tickLine={false}
-                            label={{ value: "Sharpe ratio", position: "insideBottom", offset: -2, style: { fontSize: 10, fill: "#aca49d" } }}
-                          />
-                          <YAxis
-                            type="number"
-                            dataKey="ret"
-                            name="Return %"
-                            tick={{ fontSize: 10, fill: "#aca49d" }}
-                            axisLine={false}
-                            tickLine={false}
-                            tickFormatter={(value: number) => `${value.toFixed(0)}%`}
-                            label={{ value: "Period return", angle: -90, position: "insideLeft", offset: 12, style: { fontSize: 10, fill: "#aca49d" } }}
-                          />
-                          <ZAxis range={[40, 40]} />
-                          <Tooltip
-                            {...tooltipStyle}
-                            content={({ payload }) => {
-                              if (!payload?.length) return null;
-                              const point = payload[0].payload as {
-                                model: string;
-                                sharpe: number;
-                                ret: number;
-                                runIdLabel: string;
-                                strategyLabel: string;
-                                promptLabel: string;
-                                marketLabel: string;
-                                period: string;
-                              };
-                              return (
-                                <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
-                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.runIdLabel}</p>
-                                  <p style={{ color: "#6b6560", marginBottom: 4 }}>{point.strategyLabel}</p>
-                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.model}</p>
-                                  <p style={{ color: "#8f8780", marginBottom: 4 }}>
-                                    {point.promptLabel} · {point.marketLabel} · {point.period}
-                                  </p>
-                                  <p style={{ color: "#8f8780" }}>Sharpe: {point.sharpe.toFixed(2)}</p>
-                                  <p style={{ color: "#8f8780" }}>Return: {point.ret.toFixed(1)}%</p>
-                                </div>
-                              );
-                            }}
-                          />
-                          <Scatter
-                            data={modelComparisonData.returnPoints}
-                            shape={(props: Record<string, unknown>) => {
-                              const cx = props.cx as number;
-                              const cy = props.cy as number;
-                              const point = props.payload as { color: string };
-                              return <circle cx={cx} cy={cy} r={5} fill={point.color} fillOpacity={0.72} stroke="white" strokeWidth={1} />;
-                            }}
-                          />
-                          <Legend
-                            verticalAlign="top"
-                            align="left"
-                            wrapperStyle={{ top: -6 }}
-                            content={() => (
-                              <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
-                                {modelComparisonData.models.map((model) => (
-                                  <span key={model} className="flex items-center gap-1">
-                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelComparisonData.colorMap.get(model) }} />
-                                    {model}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          />
-                        </ScatterChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </Panel>
-                )}
-
-                {modelComparisonData.hhiPoints.length > 0 && (
-                  <Panel>
-                    <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-                      <p className="dashboard-label">Model comparison — Sharpe vs HHI (concentration)</p>
-                      <FigureExportControls
-                        captureRef={behaviorModelHhiRef}
-                        slug="behavior-model-comparison-sharpe-hhi"
-                        caption="Behavior — Model comparison (Sharpe vs HHI)"
-                        experimentId={data.active_experiment_id}
-                      />
-                    </div>
-                    <div ref={behaviorModelHhiRef} className="min-w-0">
-                      <ResponsiveContainer width="100%" height={300}>
-                        <ScatterChart margin={{ top: 22, right: 24, left: 8, bottom: 8 }}>
-                          <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
-                          <XAxis
-                            type="number"
-                            dataKey="sharpe"
-                            name="Sharpe"
-                            tick={{ fontSize: 10, fill: "#aca49d" }}
-                            axisLine={false}
-                            tickLine={false}
-                            label={{ value: "Sharpe ratio", position: "insideBottom", offset: -2, style: { fontSize: 10, fill: "#aca49d" } }}
-                          />
-                          <YAxis
-                            type="number"
-                            dataKey="hhi"
-                            name="HHI"
-                            tick={{ fontSize: 10, fill: "#aca49d" }}
-                            axisLine={false}
-                            tickLine={false}
-                            tickFormatter={(value: number) => value.toFixed(2)}
-                            label={{ value: "HHI (concentration)", angle: -90, position: "insideLeft", offset: 12, style: { fontSize: 10, fill: "#aca49d" } }}
-                          />
-                          <ZAxis range={[40, 40]} />
-                          <Tooltip
-                            {...tooltipStyle}
-                            content={({ payload }) => {
-                              if (!payload?.length) return null;
-                              const point = payload[0].payload as {
-                                model: string;
-                                sharpe: number;
-                                hhi: number;
-                                runIdLabel: string;
-                                strategyLabel: string;
-                                promptLabel: string;
-                                marketLabel: string;
-                                period: string;
-                              };
-                              return (
-                                <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
-                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.runIdLabel}</p>
-                                  <p style={{ color: "#6b6560", marginBottom: 4 }}>{point.strategyLabel}</p>
-                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.model}</p>
-                                  <p style={{ color: "#8f8780", marginBottom: 4 }}>
-                                    {point.promptLabel} · {point.marketLabel} · {point.period}
-                                  </p>
-                                  <p style={{ color: "#8f8780" }}>Sharpe: {point.sharpe.toFixed(2)}</p>
-                                  <p style={{ color: "#8f8780" }}>HHI: {point.hhi.toFixed(3)}</p>
-                                </div>
-                              );
-                            }}
-                          />
-                          <ReferenceLine
-                            y={0.15}
-                            stroke="rgba(179, 148, 114, 0.65)"
-                            strokeWidth={1.5}
-                            strokeDasharray="4 4"
-                            label={{
-                              value: "Concentrated (0.15)",
-                              position: "right",
-                              fontSize: 9,
-                              fill: "#9b7a56",
-                            }}
-                          />
-                          <Scatter
-                            data={modelComparisonData.hhiPoints}
-                            shape={(props: Record<string, unknown>) => {
-                              const cx = props.cx as number;
-                              const cy = props.cy as number;
-                              const point = props.payload as { color: string };
-                              return <circle cx={cx} cy={cy} r={5} fill={point.color} fillOpacity={0.72} stroke="white" strokeWidth={1} />;
-                            }}
-                          />
-                          <Legend
-                            verticalAlign="top"
-                            align="left"
-                            wrapperStyle={{ top: -6 }}
-                            content={() => (
-                              <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
-                                {modelComparisonData.models.map((model) => (
-                                  <span key={model} className="flex items-center gap-1">
-                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelComparisonData.colorMap.get(model) }} />
-                                    {model}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          />
-                        </ScatterChart>
-                      </ResponsiveContainer>
-                      <p className="mt-1 text-[10px] text-[#b4aca5]">
-                        Lower HHI means more diversified. Runs above the dashed line are concentrated portfolios.
-                      </p>
-                    </div>
-                  </Panel>
-                )}
-              </div>
-            </>
-          )}
 
           <SectionHeader>Loss reaction & recovery</SectionHeader>
           <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
