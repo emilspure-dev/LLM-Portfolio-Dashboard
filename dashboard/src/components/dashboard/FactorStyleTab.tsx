@@ -249,58 +249,13 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
       <div>
         <SectionHeader>Portfolio factor style</SectionHeader>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
-          Main question for this page: <strong>what factor strategies are the GPT prompt portfolios implicitly
-          following</strong>, and <strong>how much might those tilts explain their returns</strong>?
-        </p>
-        <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#9d958d]">
-          The GPT rows are the primary object of interest. Benchmark rows are there as anchors, so you can judge
-          whether the models are behaving more like value, momentum, defensive, or passive constructions.
-        </p>
-        <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#9d958d]">
-          Values are means from{" "}
-          <code className="rounded bg-[rgba(0,0,0,0.04)] px-1 py-0.5 text-[10px]">
-            daily_path_metrics
-          </code>
-          : each portfolio path is averaged over trading days, then paths are averaged within each
-          strategy · prompt · market cell. This supports a <strong>plausible explanation</strong> of returns, not a
-          strict attribution model.
+          Shows which factor styles the GPT portfolios resemble, with benchmarks as comparison points.
         </p>
         {data.factor_style_from_exposure_fallback && (
-          <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#5a6d78]">
-            This view is built from <span className="font-mono text-[11px]">GET /charts/factor-exposures</span> because{" "}
-            <span className="font-mono text-[11px]">/summary/factor-style</span> returned 404 on this API. The math matches
-            the backend summary route; deploy the current Node API to use the dedicated endpoint and clear the health
-            warning.
+          <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#5a6d78]">
+            Using fallback data from <span className="font-mono text-[11px]">/charts/factor-exposures</span>.
           </p>
         )}
-        {nGptPaths > 0 && (
-          <p className="mt-2 text-[11px] text-[#9d958d]">
-            LLM paths in view (retail + advanced): <span className="font-medium text-[#6f6863]">{nGptPaths}</span>
-          </p>
-        )}
-      </div>
-
-      <div className="mt-4 space-y-3">
-        <SectionHeader>What The GPT Models Are Following</SectionHeader>
-        <p className="max-w-3xl text-[12px] leading-5 text-[#9d958d]">{FACTOR_DEFINITIONS_BLURB}</p>
-        <Accordion type="multiple" className="dashboard-panel rounded-[16px] border border-[rgba(232,224,217,0.9)] px-3">
-          {strategyKeysInView.map((key) => {
-            const g = STRATEGY_GLOSSARY[key];
-            const row0 = factorStyleFiltered.find((r) => r.strategy_key === key);
-            const title = g?.title ?? row0?.strategy ?? key;
-            const summary =
-              g?.summary ??
-              "Custom or auxiliary strategy in this experiment; use the factor bars versus index and 60/40 to see relative tilts.";
-            return (
-              <AccordionItem key={key} value={key} className="border-[rgba(227,220,214,0.75)]">
-                <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
-                  {title}
-                </AccordionTrigger>
-                <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">{summary}</AccordionContent>
-              </AccordionItem>
-            );
-          })}
-        </Accordion>
       </div>
 
       <SoftHr />
@@ -381,6 +336,31 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             marketFilter={marketFilter}
             factorStyleFiltered={factorStyleFiltered}
           />
+          <div className="mt-4 space-y-3">
+            <SectionHeader>How To Read This</SectionHeader>
+            <p className="max-w-3xl text-[12px] leading-5 text-[#9d958d]">
+              {FACTOR_DEFINITIONS_BLURB}
+              {nGptPaths > 0 ? ` GPT paths in view: ${nGptPaths}.` : ""}
+            </p>
+            <Accordion type="multiple" className="dashboard-panel rounded-[16px] border border-[rgba(232,224,217,0.9)] px-3">
+              {strategyKeysInView.map((key) => {
+                const g = STRATEGY_GLOSSARY[key];
+                const row0 = factorStyleFiltered.find((r) => r.strategy_key === key);
+                const title = g?.title ?? row0?.strategy ?? key;
+                const summary =
+                  g?.summary ??
+                  "Custom or auxiliary strategy in this experiment; use the factor bars versus index and 60/40 to see relative tilts.";
+                return (
+                  <AccordionItem key={key} value={key} className="border-[rgba(227,220,214,0.75)]">
+                    <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+                      {title}
+                    </AccordionTrigger>
+                    <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">{summary}</AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
+          </div>
         </>
       ) : (
         <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
