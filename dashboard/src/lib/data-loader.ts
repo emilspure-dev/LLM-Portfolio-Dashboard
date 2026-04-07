@@ -1,4 +1,5 @@
 import {
+  getFactorExposureChart,
   getFactorStyleSummary,
   getFilters,
   getPeriods,
@@ -7,6 +8,7 @@ import {
   getStrategySummary,
 } from "./api-client";
 import type {
+  FactorExposureRow,
   FactorStyleSummaryRow,
   MetaCurrentResponse,
   RunResultRow,
@@ -18,6 +20,110 @@ import type {
   RunRow,
   StrategyRow,
 } from "./types";
+
+/** Mirrors backend GET /summary/factor-style when that route is missing (older Node deploy). */
+export function buildFactorStyleSummaryFromExposureRows(
+  rows: FactorExposureRow[]
+): FactorStyleSummaryRow[] {
+  if (rows.length === 0) return [];
+
+  type PathAgg = {
+    strategy_key: string;
+    strategy: string;
+    prompt_type: string | null;
+    market: string;
+    mean_size: number | null;
+    mean_value: number | null;
+    mean_momentum: number | null;
+    mean_low_risk: number | null;
+    mean_quality: number | null;
+  };
+
+  const byPath = new Map<string, FactorExposureRow[]>();
+  for (const r of rows) {
+    const k = `${r.experiment_id}::${r.path_id}`;
+    const g = byPath.get(k);
+    if (g) g.push(r);
+    else byPath.set(k, [r]);
+  }
+
+  const meanCol = (
+    group: FactorExposureRow[],
+    pick: (row: FactorExposureRow) => number | null | undefined
+  ): number | null => {
+    const vals = group
+      .map(pick)
+      .filter((v): v is number => v != null && Number.isFinite(v));
+    if (vals.length === 0) return null;
+    return vals.reduce((a, b) => a + b, 0) / vals.length;
+  };
+
+  const pathAggs: PathAgg[] = [];
+  for (const group of byPath.values()) {
+    const first = group[0];
+    const ptRaw = first.prompt_type?.trim() ?? "";
+    const prompt_type = ptRaw === "" ? null : ptRaw;
+    pathAggs.push({
+      strategy_key: first.strategy_key,
+      strategy: first.strategy,
+      prompt_type,
+      market: first.market,
+      mean_size: meanCol(group, (r) => r.portfolio_size_exposure),
+      mean_value: meanCol(group, (r) => r.portfolio_value_exposure),
+      mean_momentum: meanCol(group, (r) => r.portfolio_momentum_exposure),
+      mean_low_risk: meanCol(group, (r) => r.portfolio_low_risk_exposure),
+      mean_quality: meanCol(group, (r) => r.portfolio_quality_exposure),
+    });
+  }
+
+  const cellKey = (p: PathAgg) =>
+    `${p.strategy_key}\0${p.strategy}\0${p.prompt_type ?? ""}\0${p.market}`;
+  const cells = new Map<string, PathAgg[]>();
+  for (const p of pathAggs) {
+    const k = cellKey(p);
+    const g = cells.get(k);
+    if (g) g.push(p);
+    else cells.set(k, [p]);
+  }
+
+  const out: FactorStyleSummaryRow[] = [];
+  for (const paths of cells.values()) {
+    const p0 = paths[0];
+    const avg = (fn: (p: PathAgg) => number | null) => {
+      const vals = paths.map(fn).filter((v): v is number => v != null && Number.isFinite(v));
+      if (vals.length === 0) return null;
+      return vals.reduce((a, b) => a + b, 0) / vals.length;
+    };
+    out.push({
+      strategy_key: p0.strategy_key,
+      strategy: p0.strategy,
+      prompt_type: p0.prompt_type,
+      market: p0.market,
+      path_count: paths.length,
+      mean_size_exposure: avg((p) => p.mean_size),
+      mean_value_exposure: avg((p) => p.mean_value),
+      mean_momentum_exposure: avg((p) => p.mean_momentum),
+      mean_low_risk_exposure: avg((p) => p.mean_low_risk),
+      mean_quality_exposure: avg((p) => p.mean_quality),
+    });
+  }
+
+  out.sort((a, b) => {
+    const ka = `${a.strategy_key}|${a.prompt_type ?? ""}|${a.market}`;
+    const kb = `${b.strategy_key}|${b.prompt_type ?? ""}|${b.market}`;
+    return ka.localeCompare(kb);
+  });
+  return out;
+}
+
+function factorStyleRouteLikelyMissing(err: unknown): boolean {
+  const m = err instanceof Error ? err.message : String(err);
+  return (
+    /\b404\b/.test(m) ||
+    m.includes("No route matches") ||
+    /not_found/i.test(m)
+  );
+}
 
 function getReturnCol(row: RunRow): number | null {
   return row.period_return ?? row.net_return ?? row.period_return_net ?? null;
@@ -335,10 +441,21 @@ export async function fetchEvaluationData({
 
   let factorStyleRows: FactorStyleSummaryRow[] = [];
   let factorStyleError: string | null = null;
+  let factorStyleFromExposureFallback = false;
   try {
     factorStyleRows = await getFactorStyleSummary({ experiment_id: experimentId });
   } catch (e) {
-    factorStyleError = e instanceof Error ? e.message : String(e);
+    if (factorStyleRouteLikelyMissing(e)) {
+      try {
+        const exposureRows = await getFactorExposureChart({ experiment_id: experimentId });
+        factorStyleRows = buildFactorStyleSummaryFromExposureRows(exposureRows);
+        factorStyleFromExposureFallback = true;
+      } catch {
+        factorStyleError = e instanceof Error ? e.message : String(e);
+      }
+    } else {
+      factorStyleError = e instanceof Error ? e.message : String(e);
+    }
   }
 
   return {
@@ -349,6 +466,7 @@ export async function fetchEvaluationData({
     summary: buildStrategySummaryWithRunSharpe(summaryRows, "All", runs),
     factor_style_rows: factorStyleRows,
     factor_style_error: factorStyleError,
+    factor_style_from_exposure_fallback: factorStyleFromExposureFallback,
     runs,
     behavior: computeBehavior(runs),
     run_quality: runQuality,

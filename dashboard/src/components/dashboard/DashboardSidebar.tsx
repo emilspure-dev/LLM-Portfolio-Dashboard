@@ -92,7 +92,11 @@ export function DashboardSidebar({
                   </span>
                 </p>
               )}
-              {health && health.routes?.factor_style !== true && (
+              {health &&
+                health.routes?.factor_style !== true &&
+                !(
+                  (data?.factor_style_rows?.length ?? 0) > 0 && !data?.factor_style_error
+                ) && (
                 <p className="mt-2 text-[12px] leading-4 text-[#b45309]">
                   Factor-style tab needs API route <span className="font-mono">GET /api/summary/factor-style</span>.
                   This response has no <span className="font-mono">routes.factor_style</span> flag or it is false — on

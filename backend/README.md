@@ -39,6 +39,8 @@ npm run dev
 
 ### Updating the API after pulling new routes (e.g. `/api/summary/factor-style`)
 
+The dashboard can **aggregate factor-style in the browser** from `GET /api/charts/factor-exposures` when `/api/summary/factor-style` returns 404 (same `daily_path_metrics` logic as the server). Deploying the current backend still removes the extra request and restores `routes.factor_style` on `/api/health`.
+
 If the Vercel dashboard proxies to this server but you see `No route matches GET /api/summary/factor-style`, the running Node process is an **older build**. On the VPS:
 
 ```bash

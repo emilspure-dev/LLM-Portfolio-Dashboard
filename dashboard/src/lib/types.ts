@@ -65,6 +65,8 @@ export interface EvaluationData {
   factor_style_rows: FactorStyleSummaryRow[];
   /** Set when GET /summary/factor-style fails (e.g. 404 on older backends). */
   factor_style_error?: string | null;
+  /** True when rows were built from GET /charts/factor-exposures because /summary/factor-style was missing. */
+  factor_style_from_exposure_fallback?: boolean;
   runs: RunRow[];
   behavior: BehaviorRow[];
   run_quality: RunQualityRow[];

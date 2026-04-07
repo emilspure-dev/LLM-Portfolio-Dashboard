@@ -153,6 +153,14 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
           : each portfolio path is averaged over trading days, then paths are averaged within each
           strategy · prompt · market cell.
         </p>
+        {data.factor_style_from_exposure_fallback && (
+          <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#5a6d78]">
+            This view is built from <span className="font-mono text-[11px]">GET /charts/factor-exposures</span> because{" "}
+            <span className="font-mono text-[11px]">/summary/factor-style</span> returned 404 on this API. The math matches
+            the backend summary route; deploy the current Node API to use the dedicated endpoint and clear the health
+            warning.
+          </p>
+        )}
         {nGptPaths > 0 && (
           <p className="mt-2 text-[11px] text-[#9d958d]">
             LLM paths in view (retail + advanced): <span className="font-medium text-[#6f6863]">{nGptPaths}</span>
@@ -238,7 +246,9 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             title="No factor-style aggregates for this view"
             body={
               factorStyleFiltered.length === 0
-                ? `The API at ${getApiBaseUrl()} returned an empty array for /summary/factor-style (HTTP 200, zero rows). That usually means daily path metrics have no factor-exposure data for this experiment. Fix: rebuild or reload analytics data, or pick an experiment that includes populated daily path metrics.`
+                ? data.factor_style_from_exposure_fallback
+                  ? `The dashboard fell back to ${getApiBaseUrl()}/charts/factor-exposures, which returned no usable rows. Factor exposures may be missing in daily path metrics for this experiment.`
+                  : `The API at ${getApiBaseUrl()} returned an empty array for /summary/factor-style (HTTP 200, zero rows). That usually means daily path metrics have no factor-exposure data for this experiment. Fix: rebuild or reload analytics data, or pick an experiment that includes populated daily path metrics.`
                 : "Factor rows exist for this experiment, but every mean exposure is null for the selected market — try All markets."
             }
           />
