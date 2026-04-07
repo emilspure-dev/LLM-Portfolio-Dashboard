@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -18,8 +18,18 @@ import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import { COLORS, MARKET_LABELS, getStrategyColor, sharpeColor } from "@/lib/constants";
 import { buildStrategySummaryWithRunSharpe } from "@/lib/data-loader";
+import {
+  computeScatterLabelLayouts,
+  type ScatterLabelLayout,
+} from "@/lib/scatter-label-layout";
 import type { FactorStyleSummaryRow } from "@/lib/api-types";
 import type { EvaluationData, RunRow } from "@/lib/types";
+
+const RISK_RETURN_SCATTER = {
+  height: 320,
+  /** Room for labels on left/right of the plot (greedy placement uses both sides). */
+  margin: { top: 10, right: 84, left: 84, bottom: 12 },
+} as const;
 
 /** Stable [0, 1) for jitter so dots don’t jump on re-render. */
 function jitter01(run: RunRow): number {
@@ -268,6 +278,61 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
     [summary]
   );
 
+  const riskReturnDomains = useMemo(() => {
+    if (scatterData.length === 0) return null;
+    const vols = scatterData.map((d) => d.volPct);
+    const rets = scatterData.map((d) => d.retPct);
+    let v0 = Math.min(...vols);
+    let v1 = Math.max(...vols);
+    let r0 = Math.min(...rets);
+    let r1 = Math.max(...rets);
+    if (v0 === v1) {
+      v0 -= 1;
+      v1 += 1;
+    }
+    if (r0 === r1) {
+      r0 -= 1;
+      r1 += 1;
+    }
+    return { vol: [v0, v1] as [number, number], ret: [r0, r1] as [number, number] };
+  }, [scatterData]);
+
+  const [riskReturnPlotW, setRiskReturnPlotW] = useState(520);
+
+  useLayoutEffect(() => {
+    if (scatterData.length === 0) return;
+    const el = strategiesRiskReturnRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const apply = (w: number) => {
+      if (w >= 80) setRiskReturnPlotW(Math.floor(w));
+    };
+    apply(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) apply(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [scatterData]);
+
+  const riskReturnLabelLayouts = useMemo(() => {
+    if (scatterData.length === 0) return new Map<string, ScatterLabelLayout>();
+    return computeScatterLabelLayouts(
+      scatterData.map((d) => ({
+        key: d.strategy_key,
+        name: d.name,
+        x: d.volPct,
+        y: d.retPct,
+      })),
+      {
+        width: riskReturnPlotW,
+        height: RISK_RETURN_SCATTER.height,
+        margin: { ...RISK_RETURN_SCATTER.margin },
+        dotR: 6,
+      }
+    );
+  }, [scatterData, riskReturnPlotW]);
+
   const marketScope =
     marketFilter === "All" ? "all markets" : (MARKET_LABELS[marketFilter] ?? marketFilter);
 
@@ -420,14 +485,15 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             </p>
           ) : (
             <div ref={strategiesRiskReturnRef} className="min-w-0">
-              <ResponsiveContainer width="100%" height={320}>
-                <ScatterChart margin={{ top: 8, right: 120, left: 8, bottom: 8 }}>
+              <ResponsiveContainer width="100%" height={RISK_RETURN_SCATTER.height}>
+                <ScatterChart margin={{ ...RISK_RETURN_SCATTER.margin }}>
                 <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
                 <XAxis
                   type="number"
                   dataKey="volPct"
                   name="Volatility"
                   unit="%"
+                  domain={riskReturnDomains?.vol}
                   tick={{ fontSize: 10, fill: "#aca49d" }}
                   axisLine={false}
                   tickLine={false}
@@ -437,6 +503,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                   dataKey="retPct"
                   name="Ann. return"
                   unit="%"
+                  domain={riskReturnDomains?.ret}
                   tick={{ fontSize: 10, fill: "#aca49d" }}
                   axisLine={false}
                   tickLine={false}
@@ -466,12 +533,21 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                     const payload = props.payload as { strategy_key: string; name: string };
                     const color = getStrategyColor(payload.strategy_key);
                     const r = 6;
+                    const lay =
+                      riskReturnLabelLayouts.get(payload.strategy_key) ?? {
+                        textAnchor: "start" as const,
+                        dominantBaseline: "middle" as const,
+                        offsetX: r + 6,
+                        offsetY: 3,
+                      };
                     return (
                       <g key={payload.strategy_key}>
                         <circle cx={cx} cy={cy} r={r} fill={color} stroke="white" strokeWidth={1.5} />
                         <text
-                          x={cx + r + 5}
-                          y={cy + 4}
+                          x={cx + lay.offsetX}
+                          y={cy + lay.offsetY}
+                          textAnchor={lay.textAnchor}
+                          dominantBaseline={lay.dominantBaseline}
                           fontSize={10}
                           fill={color}
                           fontWeight={500}
