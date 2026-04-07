@@ -3804,6 +3804,7 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
 
 export function BehaviorTab({ data, runs }: BaseTabProps) {
   const rows = data.behavior;
+  const [modelMarketFilter, setModelMarketFilter] = useState("All");
   const [reasoningPromptFilter, setReasoningPromptFilter] = useState<"all" | "retail" | "advanced">("all");
   const [reasoningSearch, setReasoningSearch] = useState("");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -3838,6 +3839,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
           sharpe,
           returnPct: returnRatio != null ? returnRatio * 100 : null,
           hhi,
+          marketKey: run.market ?? "unknown",
           promptLabel:
             run.prompt_type === "advanced"
               ? "Advanced prompt"
@@ -3890,6 +3892,55 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       hhiPoints,
     };
   }, [runs]);
+
+  const modelMarketOptions = useMemo(() => {
+    const markets = Array.from(
+      new Set(
+        runs
+          .map((run) => run.market)
+          .filter((market): market is string => typeof market === "string" && market.length > 0)
+      )
+    ).sort((left, right) => {
+      const leftLabel = MARKET_LABELS[left] ?? left;
+      const rightLabel = MARKET_LABELS[right] ?? right;
+      return leftLabel.localeCompare(rightLabel);
+    });
+
+    return [
+      { value: "All", label: "All Markets" },
+      ...markets.map((market) => ({
+        value: market,
+        label: MARKET_LABELS[market] ?? market,
+      })),
+    ];
+  }, [runs]);
+
+  useEffect(() => {
+    if (!modelMarketOptions.some((option) => option.value === modelMarketFilter)) {
+      setModelMarketFilter("All");
+    }
+  }, [modelMarketFilter, modelMarketOptions]);
+
+  const filteredModelComparisonData = useMemo(() => {
+    if (!modelComparisonData) return null;
+    const filterFn = <T extends { marketKey: string }>(point: T) =>
+      modelMarketFilter === "All" || point.marketKey === modelMarketFilter;
+
+    const returnPoints = modelComparisonData.returnPoints.filter(filterFn);
+    const hhiPoints = modelComparisonData.hhiPoints.filter(filterFn);
+    if (returnPoints.length === 0 && hhiPoints.length === 0) return null;
+
+    return {
+      ...modelComparisonData,
+      returnPoints,
+      hhiPoints,
+    };
+  }, [modelComparisonData, modelMarketFilter]);
+
+  const modelMarketReference = useMemo(
+    () => computeMarketIndexReference(runs, data.summary_rows, modelMarketFilter, "All"),
+    [runs, data.summary_rows, modelMarketFilter]
+  );
 
   // Compute post-loss runs: for each (strategy, market, model, prompt_type) group sorted by
   // period, find runs where the immediately preceding period had a negative return.
@@ -4074,18 +4125,30 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
             ))}
           </div>
 
-          {modelComparisonData && (
+          {filteredModelComparisonData && (
             <>
               <SectionHeader>LLM model comparison</SectionHeader>
               <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-                <p className="text-[12px] leading-5 text-[#8f8780]">
-                  GPT runs only. These charts compare the LLM families directly inside the Behavior view,
-                  so you can see whether higher Sharpe comes with higher return or more concentration.
-                </p>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="min-w-[220px] flex-1">
+                    <p className="text-[12px] leading-5 text-[#8f8780]">
+                      GPT runs only. Filter by market and compare each model against the selected market's
+                      benchmark Sharpe line.
+                    </p>
+                  </div>
+                  <div className="min-w-[220px]">
+                    <FilterSelect
+                      label="Market"
+                      value={modelMarketFilter}
+                      onChange={setModelMarketFilter}
+                      options={modelMarketOptions}
+                    />
+                  </div>
+                </div>
               </Panel>
 
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                {modelComparisonData.returnPoints.length > 0 && (
+              <div className="space-y-4">
+                {filteredModelComparisonData.returnPoints.length > 0 && (
                   <Panel>
                     <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
                       <p className="dashboard-label">Model comparison — Sharpe vs return</p>
@@ -4097,7 +4160,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                       />
                     </div>
                     <div ref={behaviorModelReturnRef} className="min-w-0">
-                      <ResponsiveContainer width="100%" height={300}>
+                      <ResponsiveContainer width="100%" height={380}>
                         <ScatterChart margin={{ top: 22, right: 24, left: 8, bottom: 8 }}>
                           <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
                           <XAxis
@@ -4148,8 +4211,22 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                               );
                             }}
                           />
+                          {modelMarketReference.sharpe != null && (
+                            <ReferenceLine
+                              x={modelMarketReference.sharpe}
+                              stroke={MARKET_REF_LINE.stroke}
+                              strokeWidth={MARKET_REF_LINE.width}
+                              strokeDasharray={MARKET_REF_LINE.dash}
+                              label={{
+                                value: `${modelMarketFilter === "All" ? "All markets" : (MARKET_LABELS[modelMarketFilter] ?? modelMarketFilter)} Sharpe ${modelMarketReference.sharpe.toFixed(2)}`,
+                                position: "top",
+                                fontSize: 9,
+                                fill: "#5a6d8c",
+                              }}
+                            />
+                          )}
                           <Scatter
-                            data={modelComparisonData.returnPoints}
+                            data={filteredModelComparisonData.returnPoints}
                             shape={(props: Record<string, unknown>) => {
                               const cx = props.cx as number;
                               const cy = props.cy as number;
@@ -4163,9 +4240,9 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                             wrapperStyle={{ top: -6 }}
                             content={() => (
                               <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
-                                {modelComparisonData.models.map((model) => (
+                                {filteredModelComparisonData.models.map((model) => (
                                   <span key={model} className="flex items-center gap-1">
-                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelComparisonData.colorMap.get(model) }} />
+                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: filteredModelComparisonData.colorMap.get(model) }} />
                                     {model}
                                   </span>
                                 ))}
@@ -4174,11 +4251,12 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                           />
                         </ScatterChart>
                       </ResponsiveContainer>
+                      <p className="mt-2 text-[10px] text-[#b4aca5]">{modelMarketReference.caption}</p>
                     </div>
                   </Panel>
                 )}
 
-                {modelComparisonData.hhiPoints.length > 0 && (
+                {filteredModelComparisonData.hhiPoints.length > 0 && (
                   <Panel>
                     <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
                       <p className="dashboard-label">Model comparison — Sharpe vs HHI (concentration)</p>
@@ -4190,7 +4268,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                       />
                     </div>
                     <div ref={behaviorModelHhiRef} className="min-w-0">
-                      <ResponsiveContainer width="100%" height={300}>
+                      <ResponsiveContainer width="100%" height={380}>
                         <ScatterChart margin={{ top: 22, right: 24, left: 8, bottom: 8 }}>
                           <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
                           <XAxis
@@ -4253,8 +4331,22 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                               fill: "#9b7a56",
                             }}
                           />
+                          {modelMarketReference.sharpe != null && (
+                            <ReferenceLine
+                              x={modelMarketReference.sharpe}
+                              stroke={MARKET_REF_LINE.stroke}
+                              strokeWidth={MARKET_REF_LINE.width}
+                              strokeDasharray={MARKET_REF_LINE.dash}
+                              label={{
+                                value: `${modelMarketFilter === "All" ? "All markets" : (MARKET_LABELS[modelMarketFilter] ?? modelMarketFilter)} Sharpe ${modelMarketReference.sharpe.toFixed(2)}`,
+                                position: "top",
+                                fontSize: 9,
+                                fill: "#5a6d8c",
+                              }}
+                            />
+                          )}
                           <Scatter
-                            data={modelComparisonData.hhiPoints}
+                            data={filteredModelComparisonData.hhiPoints}
                             shape={(props: Record<string, unknown>) => {
                               const cx = props.cx as number;
                               const cy = props.cy as number;
@@ -4268,9 +4360,9 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                             wrapperStyle={{ top: -6 }}
                             content={() => (
                               <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
-                                {modelComparisonData.models.map((model) => (
+                                {filteredModelComparisonData.models.map((model) => (
                                   <span key={model} className="flex items-center gap-1">
-                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelComparisonData.colorMap.get(model) }} />
+                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: filteredModelComparisonData.colorMap.get(model) }} />
                                     {model}
                                   </span>
                                 ))}
@@ -4280,7 +4372,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                         </ScatterChart>
                       </ResponsiveContainer>
                       <p className="mt-1 text-[10px] text-[#b4aca5]">
-                        Lower HHI means more diversified. Runs above the dashed line are concentrated portfolios.
+                        Lower HHI means more diversified. Runs above the dashed line are concentrated portfolios. {modelMarketReference.caption}
                       </p>
                     </div>
                   </Panel>
