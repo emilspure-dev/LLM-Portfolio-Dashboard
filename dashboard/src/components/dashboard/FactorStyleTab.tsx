@@ -189,8 +189,16 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
     });
   }, [data.factor_style_rows, marketFilter]);
 
+  const factorStyleGptOnly = useMemo(
+    () =>
+      factorStyleFiltered.filter(
+        (r) => r.strategy_key === "gpt_retail" || r.strategy_key === "gpt_advanced"
+      ),
+    [factorStyleFiltered]
+  );
+
   const factorBarChartData = useMemo(() => {
-    return factorStyleFiltered
+    return factorStyleGptOnly
       .filter((r) =>
         [
           r.mean_size_exposure,
@@ -210,7 +218,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
         "Low risk": r.mean_low_risk_exposure ?? 0,
         Quality: r.mean_quality_exposure ?? 0,
       }));
-  }, [factorStyleFiltered]);
+  }, [factorStyleGptOnly]);
 
   const nGptPaths = useMemo(() => {
     return factorStyleFiltered
@@ -249,7 +257,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
       <div>
         <SectionHeader>Portfolio factor style</SectionHeader>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
-          Shows which factor styles the GPT portfolios resemble, with benchmarks as comparison points.
+          Shows only the GPT portfolios, so you can compare how the retail and advanced prompts tilt across markets.
         </p>
         {data.factor_style_from_exposure_fallback && (
           <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#5a6d78]">
@@ -356,7 +364,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
           <FactorStyleAiSection
             experimentId={data.active_experiment_id}
             marketFilter={marketFilter}
-            factorStyleFiltered={factorStyleFiltered}
+            factorStyleFiltered={factorStyleGptOnly}
           />
           <div className="mt-4 space-y-3">
             <SectionHeader>How To Read This</SectionHeader>
