@@ -114,6 +114,16 @@ const tooltipStyle = {
   itemStyle: { color: "#6f6762" },
 };
 
+const MODEL_SCATTER_COLORS = [
+  CHART_COLORS[0],
+  CHART_COLORS[1],
+  CHART_COLORS[2],
+  CHART_COLORS[3],
+  CHART_COLORS[4],
+  COLORS.accent,
+  COLORS.amber,
+];
+
 function Panel({
   children,
   className = "",
@@ -253,6 +263,24 @@ function formatPctFromNumber(value: number | null | undefined, digits = 1) {
   }
 
   return `${value.toFixed(digits)}%`;
+}
+
+function formatSignedPctFromRatio(value: number | null | undefined, digits = 1) {
+  if (value == null || Number.isNaN(value)) {
+    return "—";
+  }
+
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${(value * 100).toFixed(digits)}%`;
+}
+
+function formatSignedNumber(value: number | null | undefined, digits = 1) {
+  if (value == null || Number.isNaN(value)) {
+    return "—";
+  }
+
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(digits)}`;
 }
 
 function formatDateLabel(value: string) {
@@ -3781,6 +3809,8 @@ export function BehaviorTab({ data }: BaseTabProps) {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const behaviorDiversificationRef = useRef<HTMLDivElement>(null);
   const behaviorForecastRef = useRef<HTMLDivElement>(null);
+  const behaviorModelReturnRef = useRef<HTMLDivElement>(null);
+  const behaviorModelHhiRef = useRef<HTMLDivElement>(null);
 
   const chartData = rows.map((row) => ({
     prompt: row.prompt_type,
@@ -3790,6 +3820,41 @@ export function BehaviorTab({ data }: BaseTabProps) {
     forecastAbsErrorPct: row.mean_forecast_abs_error * 100,
     realizedReturnPct: row.mean_realized_net_return * 100,
   }));
+
+  const gptRuns = useMemo(
+    () => data.runs.filter((run) => run.prompt_type === "retail" || run.prompt_type === "advanced"),
+    [data.runs]
+  );
+
+  const modelComparisonData = useMemo(() => {
+    const models = Array.from(
+      new Set(gptRuns.map((run) => run.model).filter((value): value is string => typeof value === "string" && value.length > 0))
+    ).sort();
+    if (models.length < 2) return null;
+
+    const colorMap = new Map(models.map((model, index) => [model, MODEL_SCATTER_COLORS[index % MODEL_SCATTER_COLORS.length]]));
+    const returnPoints = gptRuns
+      .filter((run) => run.model && asNumber(run.sharpe_ratio) != null)
+      .map((run) => ({
+        sharpe: asNumber(run.sharpe_ratio)!,
+        ret: (asNumber(run.period_return ?? run.net_return ?? run.period_return_net) ?? 0) * 100,
+        model: String(run.model),
+        color: colorMap.get(String(run.model)) ?? COLORS.accent,
+        ...runExplorerPointMeta(run),
+      }));
+    const hhiPoints = gptRuns
+      .filter((run) => run.model && asNumber(run.hhi) != null && asNumber(run.sharpe_ratio) != null)
+      .map((run) => ({
+        sharpe: asNumber(run.sharpe_ratio)!,
+        hhi: asNumber(run.hhi)!,
+        model: String(run.model),
+        color: colorMap.get(String(run.model)) ?? COLORS.accent,
+        ...runExplorerPointMeta(run),
+      }));
+
+    if (returnPoints.length === 0 && hhiPoints.length === 0) return null;
+    return { models, colorMap, returnPoints, hhiPoints };
+  }, [gptRuns]);
 
   // Compute post-loss runs: for each (strategy, market, model, prompt_type) group sorted by
   // period, find runs where the immediately preceding period had a negative return.
@@ -3802,7 +3867,7 @@ export function BehaviorTab({ data }: BaseTabProps) {
       group.push(run);
       groups.set(key, group);
     }
-    const result: Array<{ run: RunRow; priorReturn: number; key: string }> = [];
+    const result: Array<{ run: RunRow; priorRun: RunRow; priorReturn: number; key: string }> = [];
     for (const group of groups.values()) {
       const sorted = [...group].sort((a, b) =>
         String(a.period ?? "").localeCompare(String(b.period ?? ""))
@@ -3818,6 +3883,7 @@ export function BehaviorTab({ data }: BaseTabProps) {
           const run = sorted[i];
           result.push({
             run,
+            priorRun: prior,
             priorReturn,
             key: `${String(run.strategy_key ?? "")}::${String(run.market ?? "")}::${String(run.period ?? "")}::${String(run.prompt_type ?? "")}`,
           });
@@ -3826,6 +3892,122 @@ export function BehaviorTab({ data }: BaseTabProps) {
     }
     return result;
   }, [data.runs]);
+
+  const lossReactionRows = useMemo(() => {
+    type LossReactionRow = {
+      promptType: string;
+      label: string;
+      sampleCount: number;
+      recoveryRate: number | null;
+      meanPriorLoss: number | null;
+      meanNextReturn: number | null;
+      meanTurnoverDelta: number | null;
+      meanHhiDelta: number | null;
+      meanHoldingsDelta: number | null;
+    };
+
+    const buckets = new Map<string, {
+      sampleCount: number;
+      recovered: number;
+      priorLosses: number[];
+      nextReturns: number[];
+      turnoverDeltas: number[];
+      hhiDeltas: number[];
+      holdingsDeltas: number[];
+    }>();
+
+    for (const entry of postLossRuns) {
+      const promptType = entry.run.prompt_type ?? "unknown";
+      const bucket = buckets.get(promptType) ?? {
+        sampleCount: 0,
+        recovered: 0,
+        priorLosses: [],
+        nextReturns: [],
+        turnoverDeltas: [],
+        hhiDeltas: [],
+        holdingsDeltas: [],
+      };
+      bucket.sampleCount += 1;
+      bucket.priorLosses.push(entry.priorReturn);
+
+      const nextReturn =
+        asNumber(entry.run.period_return) ??
+        asNumber(entry.run.net_return) ??
+        asNumber(entry.run.period_return_net);
+      if (nextReturn != null) {
+        bucket.nextReturns.push(nextReturn);
+        if (nextReturn > 0) {
+          bucket.recovered += 1;
+        }
+      }
+
+      const priorTurnover = asNumber(entry.priorRun.turnover);
+      const currentTurnover = asNumber(entry.run.turnover);
+      if (priorTurnover != null && currentTurnover != null) {
+        bucket.turnoverDeltas.push(currentTurnover - priorTurnover);
+      }
+
+      const priorHhi = asNumber(entry.priorRun.hhi);
+      const currentHhi = asNumber(entry.run.hhi);
+      if (priorHhi != null && currentHhi != null) {
+        bucket.hhiDeltas.push(currentHhi - priorHhi);
+      }
+
+      const priorHoldings =
+        asNumber(entry.priorRun.effective_n_holdings) ??
+        asNumber(entry.priorRun.n_holdings);
+      const currentHoldings =
+        asNumber(entry.run.effective_n_holdings) ??
+        asNumber(entry.run.n_holdings);
+      if (priorHoldings != null && currentHoldings != null) {
+        bucket.holdingsDeltas.push(currentHoldings - priorHoldings);
+      }
+
+      buckets.set(promptType, bucket);
+    }
+
+    return Array.from(buckets.entries())
+      .map(([promptType, bucket]) => ({
+        promptType,
+        label: promptType === "advanced" ? "Advanced prompt" : promptType === "retail" ? "Retail prompt" : promptType,
+        sampleCount: bucket.sampleCount,
+        recoveryRate: bucket.sampleCount > 0 ? bucket.recovered / bucket.sampleCount : null,
+        meanPriorLoss: mean(bucket.priorLosses),
+        meanNextReturn: mean(bucket.nextReturns),
+        meanTurnoverDelta: mean(bucket.turnoverDeltas),
+        meanHhiDelta: mean(bucket.hhiDeltas),
+        meanHoldingsDelta: mean(bucket.holdingsDeltas),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [postLossRuns]);
+
+  const lossReactionOverall = useMemo(() => {
+    if (lossReactionRows.length === 0) return null;
+    const totalSamples = lossReactionRows.reduce((sum, row) => sum + row.sampleCount, 0);
+    if (!totalSamples) return null;
+
+    const weightedMean = (
+      accessor: (row: (typeof lossReactionRows)[number]) => number | null
+    ) => {
+      let weightedSum = 0;
+      let weightedCount = 0;
+      for (const row of lossReactionRows) {
+        const value = accessor(row);
+        if (value == null || Number.isNaN(value)) continue;
+        weightedSum += value * row.sampleCount;
+        weightedCount += row.sampleCount;
+      }
+      return weightedCount > 0 ? weightedSum / weightedCount : null;
+    };
+
+    return {
+      totalSamples,
+      recoveryRate: weightedMean((row) => row.recoveryRate),
+      meanNextReturn: weightedMean((row) => row.meanNextReturn),
+      meanTurnoverDelta: weightedMean((row) => row.meanTurnoverDelta),
+      meanHhiDelta: weightedMean((row) => row.meanHhiDelta),
+    };
+  }, [lossReactionRows]);
 
   const filteredPostLoss = useMemo(() => {
     return postLossRuns.filter(({ run }) => {
@@ -3951,6 +4133,305 @@ export function BehaviorTab({ data }: BaseTabProps) {
               </tbody>
             </table>
           </Panel>
+
+          {modelComparisonData && (
+            <>
+              <SectionHeader>Model comparison</SectionHeader>
+              <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+                <p className="text-[12px] leading-5 text-[#8f8780]">
+                  GPT runs only. These scatters compare model families across all visible behavior data to
+                  show whether better Sharpe tends to come with higher concentration or higher period return.
+                </p>
+              </Panel>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                {modelComparisonData.returnPoints.length > 0 && (
+                  <Panel>
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                      <p className="dashboard-label">Model comparison — Sharpe vs return</p>
+                      <FigureExportControls
+                        captureRef={behaviorModelReturnRef}
+                        slug="behavior-model-comparison-sharpe-return"
+                        caption="Behavior — Model comparison (Sharpe vs return)"
+                        experimentId={data.active_experiment_id}
+                      />
+                    </div>
+                    <div ref={behaviorModelReturnRef} className="min-w-0">
+                      <ResponsiveContainer width="100%" height={300}>
+                        <ScatterChart margin={{ top: 22, right: 24, left: 8, bottom: 8 }}>
+                          <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
+                          <XAxis
+                            type="number"
+                            dataKey="sharpe"
+                            name="Sharpe"
+                            tick={{ fontSize: 10, fill: "#aca49d" }}
+                            axisLine={false}
+                            tickLine={false}
+                            label={{ value: "Sharpe ratio", position: "insideBottom", offset: -2, style: { fontSize: 10, fill: "#aca49d" } }}
+                          />
+                          <YAxis
+                            type="number"
+                            dataKey="ret"
+                            name="Return %"
+                            tick={{ fontSize: 10, fill: "#aca49d" }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(value: number) => `${value.toFixed(0)}%`}
+                            label={{ value: "Period return", angle: -90, position: "insideLeft", offset: 12, style: { fontSize: 10, fill: "#aca49d" } }}
+                          />
+                          <ZAxis range={[40, 40]} />
+                          <Tooltip
+                            {...tooltipStyle}
+                            content={({ payload }) => {
+                              if (!payload?.length) return null;
+                              const point = payload[0].payload as {
+                                model: string;
+                                sharpe: number;
+                                ret: number;
+                                runIdLabel: string;
+                                strategyLabel: string;
+                                promptLabel: string;
+                                marketLabel: string;
+                                period: string;
+                              };
+                              return (
+                                <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
+                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.runIdLabel}</p>
+                                  <p style={{ color: "#6b6560", marginBottom: 4 }}>{point.strategyLabel}</p>
+                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.model}</p>
+                                  <p style={{ color: "#8f8780", marginBottom: 4 }}>
+                                    {point.promptLabel} · {point.marketLabel} · {point.period}
+                                  </p>
+                                  <p style={{ color: "#8f8780" }}>Sharpe: {point.sharpe.toFixed(2)}</p>
+                                  <p style={{ color: "#8f8780" }}>Return: {point.ret.toFixed(1)}%</p>
+                                </div>
+                              );
+                            }}
+                          />
+                          <Scatter
+                            data={modelComparisonData.returnPoints}
+                            shape={(props: Record<string, unknown>) => {
+                              const cx = props.cx as number;
+                              const cy = props.cy as number;
+                              const point = props.payload as { color: string };
+                              return <circle cx={cx} cy={cy} r={5} fill={point.color} fillOpacity={0.72} stroke="white" strokeWidth={1} />;
+                            }}
+                          />
+                          <Legend
+                            verticalAlign="top"
+                            align="left"
+                            wrapperStyle={{ top: -6 }}
+                            content={() => (
+                              <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
+                                {modelComparisonData.models.map((model) => (
+                                  <span key={model} className="flex items-center gap-1">
+                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelComparisonData.colorMap.get(model) }} />
+                                    {model}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          />
+                        </ScatterChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Panel>
+                )}
+
+                {modelComparisonData.hhiPoints.length > 0 && (
+                  <Panel>
+                    <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                      <p className="dashboard-label">Model comparison — Sharpe vs HHI (concentration)</p>
+                      <FigureExportControls
+                        captureRef={behaviorModelHhiRef}
+                        slug="behavior-model-comparison-sharpe-hhi"
+                        caption="Behavior — Model comparison (Sharpe vs HHI)"
+                        experimentId={data.active_experiment_id}
+                      />
+                    </div>
+                    <div ref={behaviorModelHhiRef} className="min-w-0">
+                      <ResponsiveContainer width="100%" height={300}>
+                        <ScatterChart margin={{ top: 22, right: 24, left: 8, bottom: 8 }}>
+                          <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" strokeDasharray="3 6" />
+                          <XAxis
+                            type="number"
+                            dataKey="sharpe"
+                            name="Sharpe"
+                            tick={{ fontSize: 10, fill: "#aca49d" }}
+                            axisLine={false}
+                            tickLine={false}
+                            label={{ value: "Sharpe ratio", position: "insideBottom", offset: -2, style: { fontSize: 10, fill: "#aca49d" } }}
+                          />
+                          <YAxis
+                            type="number"
+                            dataKey="hhi"
+                            name="HHI"
+                            tick={{ fontSize: 10, fill: "#aca49d" }}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(value: number) => value.toFixed(2)}
+                            label={{ value: "HHI (concentration)", angle: -90, position: "insideLeft", offset: 12, style: { fontSize: 10, fill: "#aca49d" } }}
+                          />
+                          <ZAxis range={[40, 40]} />
+                          <Tooltip
+                            {...tooltipStyle}
+                            content={({ payload }) => {
+                              if (!payload?.length) return null;
+                              const point = payload[0].payload as {
+                                model: string;
+                                sharpe: number;
+                                hhi: number;
+                                runIdLabel: string;
+                                strategyLabel: string;
+                                promptLabel: string;
+                                marketLabel: string;
+                                period: string;
+                              };
+                              return (
+                                <div style={{ ...(tooltipStyle.contentStyle as React.CSSProperties), padding: "8px 12px", fontSize: 11 }}>
+                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.runIdLabel}</p>
+                                  <p style={{ color: "#6b6560", marginBottom: 4 }}>{point.strategyLabel}</p>
+                                  <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.model}</p>
+                                  <p style={{ color: "#8f8780", marginBottom: 4 }}>
+                                    {point.promptLabel} · {point.marketLabel} · {point.period}
+                                  </p>
+                                  <p style={{ color: "#8f8780" }}>Sharpe: {point.sharpe.toFixed(2)}</p>
+                                  <p style={{ color: "#8f8780" }}>HHI: {point.hhi.toFixed(3)}</p>
+                                </div>
+                              );
+                            }}
+                          />
+                          <ReferenceLine
+                            y={0.15}
+                            stroke="rgba(179, 148, 114, 0.65)"
+                            strokeWidth={1.5}
+                            strokeDasharray="4 4"
+                            label={{
+                              value: "Concentrated (0.15)",
+                              position: "right",
+                              fontSize: 9,
+                              fill: "#9b7a56",
+                            }}
+                          />
+                          <Scatter
+                            data={modelComparisonData.hhiPoints}
+                            shape={(props: Record<string, unknown>) => {
+                              const cx = props.cx as number;
+                              const cy = props.cy as number;
+                              const point = props.payload as { color: string };
+                              return <circle cx={cx} cy={cy} r={5} fill={point.color} fillOpacity={0.72} stroke="white" strokeWidth={1} />;
+                            }}
+                          />
+                          <Legend
+                            verticalAlign="top"
+                            align="left"
+                            wrapperStyle={{ top: -6 }}
+                            content={() => (
+                              <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
+                                {modelComparisonData.models.map((model) => (
+                                  <span key={model} className="flex items-center gap-1">
+                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelComparisonData.colorMap.get(model) }} />
+                                    {model}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          />
+                        </ScatterChart>
+                      </ResponsiveContainer>
+                      <p className="mt-1 text-[10px] text-[#b4aca5]">
+                        Lower HHI means more diversified. Runs above the dashed line are concentrated portfolios.
+                      </p>
+                    </div>
+                  </Panel>
+                )}
+              </div>
+            </>
+          )}
+
+          <SectionHeader>Loss reaction & recovery</SectionHeader>
+          <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+            <p className="text-[12px] leading-5 text-[#8f8780]">
+              These metrics compare each GPT run with the immediately prior run in the same
+              strategy-market-model sequence after that prior period lost money. This shows whether
+              the prompt becomes more active, more concentrated, or more diversified after a loss,
+              and how often the next period recovers.
+            </p>
+          </Panel>
+
+          {lossReactionOverall == null ? (
+            <Panel>
+              <p className="py-8 text-center text-[12px] text-[#9b938b]">
+                No post-loss sequences were found for the current experiment, so there is no loss-reaction sample to summarize.
+              </p>
+            </Panel>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
+                <KpiCard
+                  label="Post-loss samples"
+                  value={lossReactionOverall.totalSamples.toString()}
+                  color={COLORS.red}
+                  sub="Runs immediately after a negative prior period"
+                />
+                <KpiCard
+                  label="Recovery rate"
+                  value={formatPctFromRatio(lossReactionOverall.recoveryRate, 1)}
+                  color={COLORS.green}
+                  sub="Share of post-loss runs with a positive next return"
+                />
+                <KpiCard
+                  label="Avg next return"
+                  value={formatPctFromRatio(lossReactionOverall.meanNextReturn, 1)}
+                  color={COLORS.accent}
+                  sub="Mean return in the period after the loss"
+                />
+                <KpiCard
+                  label="Turnover change"
+                  value={formatSignedPctFromRatio(lossReactionOverall.meanTurnoverDelta, 1)}
+                  color={COLORS.amber}
+                  sub="Current turnover minus prior turnover"
+                />
+                <KpiCard
+                  label="HHI change"
+                  value={formatSignedNumber(lossReactionOverall.meanHhiDelta, 3)}
+                  color={COLORS.purple}
+                  sub="Negative means broader diversification after the loss"
+                />
+              </div>
+
+              <Panel className="overflow-x-auto p-0">
+                <table className="w-full min-w-[860px] text-[11px]">
+                  <thead>
+                    <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Samples</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Avg prior loss</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Recovery rate</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Avg next return</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Turnover delta</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">HHI delta</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Effective holdings delta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lossReactionRows.map((row) => (
+                      <tr key={row.promptType} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                        <td className="px-3 py-2.5 font-medium text-[#5e5955]">{row.label}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.sampleCount}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanPriorLoss, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.recoveryRate, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanNextReturn, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatSignedPctFromRatio(row.meanTurnoverDelta, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatSignedNumber(row.meanHhiDelta, 3)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatSignedNumber(row.meanHoldingsDelta, 1)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Panel>
+            </>
+          )}
 
           {/* ── Reasoning keyword frequency ── */}
           {(() => {

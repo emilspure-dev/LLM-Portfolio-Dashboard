@@ -2,6 +2,14 @@
  * All browser `/api/*` requests are rewritten here (see vercel.json). The previous rewrite
  * used a regex negative lookahead that Vercel did not apply, so every `/api/*` route 404’d.
  */
+async function readRequestBody(req) {
+  const chunks = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+  }
+  return chunks.length > 0 ? Buffer.concat(chunks) : null;
+}
+
 export default async function handler(req, res) {
   const base = (process.env.BACKEND_API_ORIGIN || "http://204.168.227.31").replace(
     /\/$/,
@@ -18,11 +26,22 @@ export default async function handler(req, res) {
   const target = `${base}${pathname}${search}`;
 
   try {
+    const method = req.method || "GET";
+    const hasBody = method !== "GET" && method !== "HEAD";
+    const body = hasBody ? await readRequestBody(req) : null;
+    const headers = {
+      Accept: req.headers.accept || "application/json",
+    };
+    const contentType = req.headers["content-type"];
+    if (contentType) {
+      headers["Content-Type"] = contentType;
+    }
+
     const upstream = await fetch(target, {
-      method: req.method,
-      headers: {
-        Accept: req.headers.accept || "application/json",
-      },
+      method,
+      headers,
+      body: body && body.length > 0 ? body : undefined,
+      duplex: hasBody ? "half" : undefined,
     });
 
     const ct = upstream.headers.get("content-type");
