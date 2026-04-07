@@ -5,7 +5,6 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -17,19 +16,10 @@ import { SectionHeader, SoftHr } from "./SectionHeader";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { CHART_COLORS, MARKET_LABELS, getStrategyDisplayName } from "@/lib/constants";
-import { getApiBaseUrl, getEquityChart, postFactorStyleAnalysis } from "@/lib/api-client";
-import {
-  FACTOR_DEFINITIONS_BLURB,
-  STRATEGY_GLOSSARY,
-} from "@/lib/strategy-factor-glossary";
-import {
-  computeFactorRegression,
-  REGRESSION_FACTOR_KEYS,
-  type FactorRegressionResult,
-  type RegressionFactorKey,
-} from "@/lib/factor-regression";
-import type { FactorStyleSummaryRow, StrategyDailyRow } from "@/lib/api-types";
-import type { EvaluationData } from "@/lib/types";
+import { getDailyHoldings, postFactorStyleAnalysis } from "@/lib/api-client";
+import { FACTOR_DEFINITIONS_BLURB, STRATEGY_GLOSSARY } from "@/lib/strategy-factor-glossary";
+import type { FactorStyleSummaryRow, HoldingDailyRow } from "@/lib/api-types";
+import type { EvaluationData, RunRow } from "@/lib/types";
 
 const FACTOR_STYLE_ORDER = [
   "gpt_retail",
@@ -41,19 +31,7 @@ const FACTOR_STYLE_ORDER = [
   "fama_french",
 ] as const;
 
-function factorStyleSortKey(strategyKey: string): number {
-  const i = (FACTOR_STYLE_ORDER as readonly string[]).indexOf(strategyKey);
-  return i === -1 ? 50 : i;
-}
-
 const GPT_STRATEGY_KEYS = ["gpt_retail", "gpt_advanced"] as const;
-const FACTOR_LABELS: Record<RegressionFactorKey, string> = {
-  size: "Size",
-  value: "Value",
-  momentum: "Momentum",
-  lowRisk: "Low risk",
-  quality: "Quality",
-};
 const STRATEGY_COLORS = {
   gpt_retail: CHART_COLORS[0],
   gpt_advanced: CHART_COLORS[2],
@@ -79,148 +57,382 @@ const tooltipStyle = {
 
 interface FactorStyleTabProps {
   data: EvaluationData;
-  runs?: unknown;
+  runs?: RunRow[];
 }
 
 type GptStrategyKey = (typeof GPT_STRATEGY_KEYS)[number];
+type SelectionFactorKey = "size" | "value" | "momentum" | "low_risk" | "quality";
 
-type FactorStyleAggregateRow = {
-  strategy_key: GptStrategyKey;
-  strategy: string;
-  prompt_type: string | null;
-  path_count: number;
-  mean_size_exposure: number | null;
-  mean_value_exposure: number | null;
-  mean_momentum_exposure: number | null;
-  mean_low_risk_exposure: number | null;
-  mean_quality_exposure: number | null;
+type SelectionRow = {
+  strategyKey: GptStrategyKey;
+  runKey: string;
+  date: string;
+  period: string;
+  label: string;
 };
 
-function weightedMean(values: Array<{ value: number | null | undefined; weight: number | null | undefined }>) {
-  let weightedSum = 0;
-  let weightSum = 0;
-  for (const item of values) {
-    if (item.value == null || Number.isNaN(item.value)) continue;
-    const weight = item.weight != null && Number.isFinite(item.weight) && item.weight > 0 ? item.weight : 1;
-    weightedSum += item.value * weight;
-    weightSum += weight;
-  }
-  return weightSum > 0 ? weightedSum / weightSum : null;
+type RegimeContextRow = {
+  market: string;
+  period: string;
+  periodStartDate: string | null;
+  periodEndDate: string | null;
+  marketRegimeLabel: string | null;
+  volRegimeLabel: string | null;
+  rateRegimeLabel: string | null;
+};
+
+type RunProfile = {
+  strategyKey: GptStrategyKey;
+  runKey: string;
+  totalSelections: number;
+  labelCounts: Record<string, number>;
+  dominantLabel: string;
+};
+
+const FACTOR_CONFIG: Record<
+  SelectionFactorKey,
+  { label: string; field: keyof HoldingDailyRow; definition: string }
+> = {
+  size: {
+    label: "Size",
+    field: "size_label",
+    definition: "Counts whether the prompt is selecting more small-cap or large-cap names.",
+  },
+  value: {
+    label: "Value",
+    field: "value_label",
+    definition: "Counts how often the prompt selects cheaper/value names versus richer/growth ones.",
+  },
+  momentum: {
+    label: "Momentum",
+    field: "momentum_label",
+    definition: "Counts whether the prompt is leaning into recent winners or weaker trend names.",
+  },
+  low_risk: {
+    label: "Low risk",
+    field: "low_risk_label",
+    definition: "Counts how often the prompt prefers more defensive/low-volatility names.",
+  },
+  quality: {
+    label: "Quality",
+    field: "quality_label",
+    definition: "Counts whether the prompt is selecting more profitable, higher-quality names.",
+  },
+};
+
+function factorStyleSortKey(strategyKey: string): number {
+  const i = (FACTOR_STYLE_ORDER as readonly string[]).indexOf(strategyKey);
+  return i === -1 ? 50 : i;
 }
 
-function aggregateGptFactorRows(rows: FactorStyleSummaryRow[]): FactorStyleAggregateRow[] {
-  const grouped = new Map<GptStrategyKey, FactorStyleSummaryRow[]>();
+function formatPromptLabel(strategyKey: GptStrategyKey) {
+  return getStrategyDisplayName(strategyKey, strategyKey);
+}
+
+function getFactorLabelValue(row: HoldingDailyRow, factorKey: SelectionFactorKey) {
+  const raw = row[FACTOR_CONFIG[factorKey].field];
+  return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+}
+
+async function fetchAllDailyHoldings(query: Record<string, string | number | undefined>) {
+  let page = 1;
+  let totalPages = 1;
+  const items: HoldingDailyRow[] = [];
+
+  while (page <= totalPages) {
+    const response = await getDailyHoldings({
+      ...query,
+      page,
+      page_size: 1000,
+    });
+    items.push(...response.items);
+    totalPages = response.total_pages;
+    page += 1;
+  }
+
+  return items;
+}
+
+function buildSelectionRows(
+  holdingsByStrategy: Record<GptStrategyKey, HoldingDailyRow[]> | undefined,
+  factorKey: SelectionFactorKey
+) {
+  if (!holdingsByStrategy) return [];
+
+  const rows: SelectionRow[] = [];
+  for (const strategyKey of GPT_STRATEGY_KEYS) {
+    for (const row of holdingsByStrategy[strategyKey] ?? []) {
+      const label = getFactorLabelValue(row, factorKey);
+      if (!label) continue;
+      rows.push({
+        strategyKey,
+        runKey: String(row.run_id ?? row.path_id ?? `${strategyKey}-${row.date}`),
+        date: row.date,
+        period: row.period || "Unknown period",
+        label,
+      });
+    }
+  }
+  return rows;
+}
+
+function getLabelOrder(rows: SelectionRow[]) {
+  const counts = new Map<string, number>();
   for (const row of rows) {
-    if (!GPT_STRATEGY_KEYS.includes(row.strategy_key as GptStrategyKey)) continue;
-    const key = row.strategy_key as GptStrategyKey;
-    const bucket = grouped.get(key) ?? [];
-    bucket.push(row);
-    grouped.set(key, bucket);
+    counts.set(row.label, (counts.get(row.label) ?? 0) + 1);
   }
-
-  return GPT_STRATEGY_KEYS.map((key) => {
-    const bucket = grouped.get(key) ?? [];
-    const first = bucket[0];
-    return {
-      strategy_key: key,
-      strategy: first?.strategy ?? getStrategyDisplayName(key, key),
-      prompt_type: first?.prompt_type ?? null,
-      path_count: bucket.reduce((sum, row) => sum + (row.path_count ?? 0), 0),
-      mean_size_exposure: weightedMean(bucket.map((row) => ({ value: row.mean_size_exposure, weight: row.path_count }))),
-      mean_value_exposure: weightedMean(bucket.map((row) => ({ value: row.mean_value_exposure, weight: row.path_count }))),
-      mean_momentum_exposure: weightedMean(bucket.map((row) => ({ value: row.mean_momentum_exposure, weight: row.path_count }))),
-      mean_low_risk_exposure: weightedMean(bucket.map((row) => ({ value: row.mean_low_risk_exposure, weight: row.path_count }))),
-      mean_quality_exposure: weightedMean(bucket.map((row) => ({ value: row.mean_quality_exposure, weight: row.path_count }))),
-    };
-  }).filter((row) =>
-    [
-      row.mean_size_exposure,
-      row.mean_value_exposure,
-      row.mean_momentum_exposure,
-      row.mean_low_risk_exposure,
-      row.mean_quality_exposure,
-    ].some((value) => value != null && !Number.isNaN(value))
-  );
+  return Array.from(counts.entries())
+    .sort((left, right) => right[1] - left[1])
+    .map(([label]) => label);
 }
 
-function formatPercentFromRatio(value: number | null | undefined, digits = 1) {
+function getDisplayedLabels(labelOrder: string[]) {
+  if (labelOrder.length <= 4) return labelOrder;
+  return [...labelOrder.slice(0, 4), "Other"];
+}
+
+function buildAggregateCountData(rows: SelectionRow[], displayedLabels: string[]) {
+  const runProfiles = buildRunProfiles(rows, displayedLabels);
+  const grouped = new Map<string, { label: string; retail: number; advanced: number }>();
+
+  for (const profile of runProfiles) {
+    const bucket = grouped.get(profile.dominantLabel) ?? { label: profile.dominantLabel, retail: 0, advanced: 0 };
+    if (profile.strategyKey === "gpt_retail") bucket.retail += 1;
+    if (profile.strategyKey === "gpt_advanced") bucket.advanced += 1;
+    grouped.set(profile.dominantLabel, bucket);
+  }
+
+  return displayedLabels
+    .map((label) => grouped.get(label) ?? { label, retail: 0, advanced: 0 })
+    .filter((row) => row.retail > 0 || row.advanced > 0);
+}
+
+function buildRunProfiles(rows: SelectionRow[], displayedLabels: string[]) {
+  const topLabelSet = new Set(displayedLabels.filter((label) => label !== "Other"));
+  const grouped = new Map<string, RunProfile>();
+
+  for (const row of rows) {
+    const label = topLabelSet.has(row.label) ? row.label : "Other";
+    const profileKey = `${row.strategyKey}__${row.runKey}`;
+    const profile =
+      grouped.get(profileKey) ??
+      {
+        strategyKey: row.strategyKey,
+        runKey: row.runKey,
+        totalSelections: 0,
+        labelCounts: {},
+        dominantLabel: label,
+      };
+    profile.totalSelections += 1;
+    profile.labelCounts[label] = (profile.labelCounts[label] ?? 0) + 1;
+    grouped.set(profileKey, profile);
+  }
+
+  return Array.from(grouped.values()).map((profile) => {
+    const dominant = displayedLabels
+      .map((label) => ({ label, value: profile.labelCounts[label] ?? 0 }))
+      .sort((left, right) => right.value - left.value)[0];
+    return {
+      ...profile,
+      dominantLabel: dominant?.label ?? "Other",
+    };
+  });
+}
+
+function buildPromptSummary(rows: SelectionRow[], strategyKey: GptStrategyKey) {
+  const promptRows = rows.filter((row) => row.strategyKey === strategyKey);
+  const labels = Array.from(new Set(promptRows.map((row) => row.label)));
+  const profiles = buildRunProfiles(promptRows, labels);
+  const dominantCounts = new Map<string, number>();
+  const dates = new Set<string>(promptRows.map((row) => row.date));
+  const periods = new Set<string>(promptRows.map((row) => row.period));
+  for (const profile of profiles) {
+    dominantCounts.set(profile.dominantLabel, (dominantCounts.get(profile.dominantLabel) ?? 0) + 1);
+  }
+
+  const dominantEntry = Array.from(dominantCounts.entries()).sort((left, right) => right[1] - left[1])[0];
+  const runCount = profiles.length;
+  return {
+    runCount,
+    dominantLabel: dominantEntry?.[0] ?? "—",
+    dominantCount: dominantEntry?.[1] ?? 0,
+    dominantShare: runCount > 0 ? (dominantEntry?.[1] ?? 0) / runCount : 0,
+    dateCount: dates.size,
+    periodCount: periods.size,
+  };
+}
+
+function formatPerRun(value: number | null | undefined, digits = 1) {
+  if (value == null || Number.isNaN(value)) return "—";
+  return value.toFixed(digits);
+}
+
+function formatPct(value: number | null | undefined, digits = 0) {
   if (value == null || Number.isNaN(value)) return "—";
   return `${(value * 100).toFixed(digits)}%`;
 }
 
-function formatPercentPoints(value: number | null | undefined, digits = 2) {
-  if (value == null || Number.isNaN(value)) return "—";
-  const pctPoints = value * 100;
-  const sign = pctPoints > 0 ? "+" : "";
-  return `${sign}${pctPoints.toFixed(digits)} pp`;
-}
-
-function formatExposure(value: number | null | undefined) {
-  if (value == null || Number.isNaN(value)) return "—";
-  return value.toFixed(2);
-}
-
-function getExposureValue(row: FactorStyleAggregateRow, key: RegressionFactorKey) {
-  switch (key) {
-    case "size":
-      return row.mean_size_exposure;
-    case "value":
-      return row.mean_value_exposure;
-    case "momentum":
-      return row.mean_momentum_exposure;
-    case "lowRisk":
-      return row.mean_low_risk_exposure;
-    case "quality":
-      return row.mean_quality_exposure;
-  }
-}
-
-function topExposureKeys(row: FactorStyleAggregateRow) {
-  return REGRESSION_FACTOR_KEYS
-    .map((key) => ({ key, value: getExposureValue(row, key) ?? -Infinity }))
+function getTopTwoLabels(values: Record<string, number>, labels: string[]) {
+  return labels
+    .map((label) => ({ label, value: values[label] ?? 0 }))
     .sort((left, right) => right.value - left.value)
-    .filter((item) => item.value !== -Infinity)
-    .slice(0, 2)
-    .map((item) => item.key);
+    .slice(0, 2);
 }
 
-function describeFingerprint(row: FactorStyleAggregateRow) {
-  const [first, second] = topExposureKeys(row);
-  if (!first) return "No usable factor exposure summary is available for this strategy.";
-  if (!second) {
-    return `The strongest style tilt is ${FACTOR_LABELS[first].toLowerCase()} (${formatExposure(
-      getExposureValue(row, first)
-    )}).`;
-  }
-  return `The clearest factor signature is ${FACTOR_LABELS[first].toLowerCase()} plus ${FACTOR_LABELS[
-    second
-  ].toLowerCase()} (${formatExposure(getExposureValue(row, first))} / ${formatExposure(
-    getExposureValue(row, second)
-  )}).`;
+function buildOverallAnalysis(
+  aggregateCountData: Array<{ label: string; retail: number; advanced: number }>
+) {
+  const labels = aggregateCountData.map((row) => row.label);
+  if (labels.length === 0) return "No run-normalized selection pattern is available yet.";
+
+  const retailTop = getTopTwoLabels(
+    Object.fromEntries(aggregateCountData.map((row) => [row.label, row.retail])),
+    labels
+  );
+  const advancedTop = getTopTwoLabels(
+    Object.fromEntries(aggregateCountData.map((row) => [row.label, row.advanced])),
+    labels
+  );
+
+  const retailLead = retailTop[0];
+  const advancedLead = advancedTop[0];
+  if (!retailLead || !advancedLead) return "No run-normalized selection pattern is available yet.";
+
+  const retailGap = retailLead.value - (retailTop[1]?.value ?? 0);
+  const advancedGap = advancedLead.value - (advancedTop[1]?.value ?? 0);
+  const sameLeader = retailLead.label === advancedLead.label;
+
+  return sameLeader
+    ? `Both prompts most often finish with ${retailLead.label} as the dominant full-run bucket. This looks sensible if the prompts share a common strategy, although the lead over the next bucket is only ${formatPerRun(
+        Math.max(retailGap, advancedGap),
+        0
+      )} runs.`
+    : `GPT (Retail) most often ends with ${retailLead.label} as its dominant full-run bucket, while GPT (Advanced) most often ends with ${advancedLead.label}. That looks like a real prompt difference because the lead over the next bucket is ${formatPerRun(
+        Math.max(retailGap, advancedGap),
+        0
+      )} runs.`;
 }
 
-function describeRegression(result: FactorRegressionResult | null) {
-  if (!result) {
-    return "Not enough daily observations with valid exposures to estimate a stable regression.";
+function buildRunMixData(profiles: RunProfile[], displayedLabels: string[]) {
+  const grouped = new Map<GptStrategyKey, { runCount: number; sums: Record<string, number> }>();
+  for (const strategyKey of GPT_STRATEGY_KEYS) {
+    grouped.set(strategyKey, { runCount: 0, sums: Object.fromEntries(displayedLabels.map((label) => [label, 0])) });
   }
 
-  const ranked = REGRESSION_FACTOR_KEYS
-    .map((key) => ({ key, value: result.coefficients[key] }))
-    .sort((left, right) => Math.abs(right.value) - Math.abs(left.value));
-  const leader = ranked[0];
-  const runnerUp = ranked[1];
-  if (!leader) {
-    return `The regression is available, but no dominant factor stands out.`;
+  for (const profile of profiles) {
+    const bucket = grouped.get(profile.strategyKey);
+    if (!bucket) continue;
+    bucket.runCount += 1;
+    for (const label of displayedLabels) {
+      const share = profile.totalSelections > 0 ? (profile.labelCounts[label] ?? 0) / profile.totalSelections : 0;
+      bucket.sums[label] = (bucket.sums[label] ?? 0) + share;
+    }
   }
 
-  const leaderDirection = leader.value >= 0 ? "supports" : "works against";
-  const runnerText = runnerUp
-    ? ` Secondary signal: ${FACTOR_LABELS[runnerUp.key]} (${formatPercentPoints(runnerUp.value)}).`
-    : "";
+  return displayedLabels.map((label) => ({
+    label,
+    retail:
+      (grouped.get("gpt_retail")?.sums[label] ?? 0) / Math.max(grouped.get("gpt_retail")?.runCount ?? 0, 1),
+    advanced:
+      (grouped.get("gpt_advanced")?.sums[label] ?? 0) / Math.max(grouped.get("gpt_advanced")?.runCount ?? 0, 1),
+  }));
+}
 
-  return `${FACTOR_LABELS[leader.key]} most strongly ${leaderDirection} daily returns (${formatPercentPoints(
-    leader.value
-  )}); the model explains ${formatPercentFromRatio(result.rSquared, 0)} of daily variation.${runnerText}`;
+function buildMixAnalysis(
+  mixData: Array<{ label: string; retail: number; advanced: number }>
+) {
+  if (mixData.length === 0) return "No full-run bucket mix is available yet.";
+  const biggestGap = [...mixData].sort((left, right) => Math.abs(right.retail - right.advanced) - Math.abs(left.retail - left.advanced))[0];
+  if (!biggestGap) return "No full-run bucket mix is available yet.";
+  const leader = biggestGap.retail >= biggestGap.advanced ? "GPT (Retail)" : "GPT (Advanced)";
+  return `${leader} allocates a larger share of its full-run selection mix to ${biggestGap.label}. The gap is ${formatPct(
+    Math.abs(biggestGap.retail - biggestGap.advanced),
+    0
+  )}, which is the clearest cross-prompt difference in the full-run mix.`;
+}
+
+function buildOutcomeLinkageRows(profiles: RunProfile[], runs: RunRow[]) {
+  const runLookup = new Map(
+    runs.map((run) => [
+      String(run.run_id ?? run.path_id ?? `${run.strategy_key ?? ""}::${run.market ?? ""}::${run.period ?? ""}`),
+      run,
+    ])
+  );
+  const grouped = new Map<string, {
+    dominantLabel: string;
+    model: string;
+    promptType: string;
+    sharpeValues: number[];
+    returnValues: number[];
+    count: number;
+  }>();
+
+  for (const profile of profiles) {
+    const run = runLookup.get(profile.runKey);
+    if (!run) continue;
+    const model = String(run.model ?? "").trim() || "unknown";
+    const promptType = String(run.prompt_type ?? "").trim() || "unknown";
+    const key = `${profile.dominantLabel}::${model}::${promptType}`;
+    const bucket = grouped.get(key) ?? {
+      dominantLabel: profile.dominantLabel,
+      model,
+      promptType,
+      sharpeValues: [],
+      returnValues: [],
+      count: 0,
+    };
+    if (run.sharpe_ratio != null && Number.isFinite(run.sharpe_ratio)) bucket.sharpeValues.push(run.sharpe_ratio);
+    const realized = run.annualized_return ?? run.period_return ?? run.net_return ?? run.period_return_net;
+    if (realized != null && Number.isFinite(realized)) bucket.returnValues.push(realized);
+    bucket.count += 1;
+    grouped.set(key, bucket);
+  }
+
+  return Array.from(grouped.values())
+    .map((row) => ({
+      ...row,
+      meanSharpe: row.sharpeValues.length ? row.sharpeValues.reduce((sum, value) => sum + value, 0) / row.sharpeValues.length : null,
+      meanReturn: row.returnValues.length ? row.returnValues.reduce((sum, value) => sum + value, 0) / row.returnValues.length : null,
+    }))
+    .sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity));
+}
+
+function buildRegimeContextRows(holdingsByStrategy: Record<GptStrategyKey, HoldingDailyRow[]> | undefined) {
+  if (!holdingsByStrategy) return [];
+
+  const grouped = new Map<string, RegimeContextRow>();
+  for (const strategyKey of GPT_STRATEGY_KEYS) {
+    for (const row of holdingsByStrategy[strategyKey] ?? []) {
+      const key = `${row.market}__${row.period}`;
+      if (grouped.has(key)) continue;
+      grouped.set(key, {
+        market: row.market,
+        period: row.period,
+        periodStartDate: row.period_start_date,
+        periodEndDate: row.period_end_date,
+        marketRegimeLabel: row.market_regime_label,
+        volRegimeLabel: row.vol_regime_label,
+        rateRegimeLabel: row.rate_regime_label,
+      });
+    }
+  }
+
+  return Array.from(grouped.values()).sort((left, right) => {
+    const startCompare = (left.periodStartDate ?? left.period).localeCompare(right.periodStartDate ?? right.period);
+    if (startCompare !== 0) return startCompare;
+    return (MARKET_LABELS[left.market] ?? left.market).localeCompare(MARKET_LABELS[right.market] ?? right.market);
+  });
+}
+
+function formatPeriodWindow(startDate: string | null, endDate: string | null) {
+  if (!startDate || !endDate) return "—";
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `${startDate} - ${endDate}`;
+  return `${start.toLocaleString("en-US", { month: "short", year: "2-digit" })} - ${end.toLocaleString("en-US", {
+    month: "short",
+    year: "2-digit",
+  })}`;
 }
 
 function FactorStyleAiSection({
@@ -277,8 +489,7 @@ function FactorStyleAiSection({
     <div className="dashboard-panel-strong mt-4 rounded-[20px] p-4 md:p-5">
       <p className="dashboard-label mb-2">Optional AI narrative</p>
       <p className="mb-3 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
-        Use this after reviewing the regression summary if you want an extra natural-language interpretation. It builds
-        on the same GPT factor rows but remains suggestive, not causal.
+        Use this after reviewing the count-based charts if you want an extra natural-language interpretation.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -317,16 +528,16 @@ function FactorStyleAiSection({
   );
 }
 
-export function FactorStyleTab({ data }: FactorStyleTabProps) {
+export function FactorStyleTab({ data, runs = [] }: FactorStyleTabProps) {
   const allMarkets: string[] = data.filters?.markets ?? [];
   const [marketFilter, setMarketFilter] = useState("All");
-  const fingerprintChartRef = useRef<HTMLDivElement>(null);
-  const regressionChartRef = useRef<HTMLDivElement>(null);
+  const [factorFilter, setFactorFilter] = useState<SelectionFactorKey>("value");
+  const countSummaryRef = useRef<HTMLDivElement>(null);
+  const runMixRef = useRef<HTMLDivElement>(null);
 
   const factorStyleFiltered = useMemo(() => {
     const rows = data.factor_style_rows ?? [];
-    const scoped =
-      marketFilter === "All" ? rows : rows.filter((r) => r.market === marketFilter);
+    const scoped = marketFilter === "All" ? rows : rows.filter((r) => r.market === marketFilter);
     return [...scoped].sort((a, b) => {
       const sk = factorStyleSortKey(a.strategy_key) - factorStyleSortKey(b.strategy_key);
       if (sk !== 0) return sk;
@@ -334,47 +545,19 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
     });
   }, [data.factor_style_rows, marketFilter]);
 
-  const factorStyleGptOnly = useMemo(() => {
-    return factorStyleFiltered.filter((r) => GPT_STRATEGY_KEYS.includes(r.strategy_key as GptStrategyKey));
-  }, [factorStyleFiltered]);
-
-  const aggregatedGptRows = useMemo(
-    () => aggregateGptFactorRows(factorStyleGptOnly),
-    [factorStyleGptOnly]
+  const factorStyleGptOnly = useMemo(
+    () => factorStyleFiltered.filter((r) => GPT_STRATEGY_KEYS.includes(r.strategy_key as GptStrategyKey)),
+    [factorStyleFiltered]
   );
 
-  const fingerprintChartData = useMemo(() => {
-    return aggregatedGptRows.map((row) => ({
-      label: getStrategyDisplayName(row.strategy, row.strategy_key),
-      strategy_key: row.strategy_key,
-      path_count: row.path_count,
-      Size: row.mean_size_exposure ?? 0,
-      Value: row.mean_value_exposure ?? 0,
-      Momentum: row.mean_momentum_exposure ?? 0,
-      "Low risk": row.mean_low_risk_exposure ?? 0,
-      Quality: row.mean_quality_exposure ?? 0,
-    }));
-  }, [aggregatedGptRows]);
-
-  const nGptPaths = useMemo(() => {
-    return factorStyleFiltered
-      .filter((r) => r.strategy_key === "gpt_retail" || r.strategy_key === "gpt_advanced")
-      .reduce((acc, r) => acc + (r.path_count ?? 0), 0);
-  }, [factorStyleFiltered]);
-
-  const strategyKeysInView = useMemo(() => {
-    const keys = new Set(aggregatedGptRows.map((r) => r.strategy_key));
-    return [...keys].sort((a, b) => factorStyleSortKey(a) - factorStyleSortKey(b));
-  }, [aggregatedGptRows]);
-
-  const equityRegressionQuery = useQuery({
-    queryKey: ["factor-style-regression", data.active_experiment_id, marketFilter],
+  const holdingsQuery = useQuery({
+    queryKey: ["factor-style-holdings", data.active_experiment_id, marketFilter],
     queryFn: async () => {
       const market = marketFilter === "All" ? undefined : marketFilter;
       const rows = await Promise.all(
         GPT_STRATEGY_KEYS.map(async (strategyKey) => ({
           strategyKey,
-          rows: await getEquityChart({
+          rows: await fetchAllDailyHoldings({
             experiment_id: data.active_experiment_id,
             strategy_key: strategyKey,
             market,
@@ -387,105 +570,180 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
           acc[item.strategyKey] = item.rows;
           return acc;
         },
-        {} as Record<GptStrategyKey, StrategyDailyRow[]>
+        {} as Record<GptStrategyKey, HoldingDailyRow[]>
       );
     },
     enabled: Boolean(data.active_experiment_id),
     staleTime: 60_000,
   });
 
-  const regressionByStrategy = useMemo(() => {
-    const dataRows = equityRegressionQuery.data;
-    if (!dataRows) return null;
-    return GPT_STRATEGY_KEYS.reduce(
-      (acc, key) => {
-        acc[key] = computeFactorRegression(dataRows[key] ?? []);
-        return acc;
-      },
-      {} as Record<GptStrategyKey, FactorRegressionResult | null>
-    );
-  }, [equityRegressionQuery.data]);
+  const selectionRows = useMemo(
+    () => buildSelectionRows(holdingsQuery.data, factorFilter),
+    [holdingsQuery.data, factorFilter]
+  );
 
-  const regressionChartData = useMemo(() => {
-    if (!regressionByStrategy) return [];
-    return REGRESSION_FACTOR_KEYS.map((key) => ({
-      factor: FACTOR_LABELS[key],
-      retail: ((regressionByStrategy.gpt_retail?.coefficients[key] ?? 0) * 100),
-      advanced: ((regressionByStrategy.gpt_advanced?.coefficients[key] ?? 0) * 100),
-    }));
-  }, [regressionByStrategy]);
+  const labelOrder = useMemo(() => getLabelOrder(selectionRows), [selectionRows]);
+  const displayedLabels = useMemo(() => getDisplayedLabels(labelOrder), [labelOrder]);
+  const labelColors = useMemo(
+    () =>
+      displayedLabels.reduce(
+        (acc, label, index) => {
+          acc[label] = CHART_COLORS[index % CHART_COLORS.length];
+          return acc;
+        },
+        {} as Record<string, string>
+      ),
+    [displayedLabels]
+  );
+
+  const aggregateCountData = useMemo(
+    () => buildAggregateCountData(selectionRows, displayedLabels),
+    [selectionRows, displayedLabels]
+  );
+
+  const runProfiles = useMemo(
+    () => buildRunProfiles(selectionRows, displayedLabels),
+    [selectionRows, displayedLabels]
+  );
+
+  const promptSummaries = useMemo(
+    () =>
+      GPT_STRATEGY_KEYS.reduce(
+        (acc, key) => {
+          acc[key] = buildPromptSummary(selectionRows, key);
+          return acc;
+        },
+        {} as Record<GptStrategyKey, ReturnType<typeof buildPromptSummary>>
+      ),
+    [selectionRows]
+  );
+
+  const regimeContextRows = useMemo(
+    () => buildRegimeContextRows(holdingsQuery.data),
+    [holdingsQuery.data]
+  );
+
+  const overallAnalysis = useMemo(
+    () => buildOverallAnalysis(aggregateCountData),
+    [aggregateCountData]
+  );
+
+  const runMixData = useMemo(
+    () => buildRunMixData(runProfiles, displayedLabels),
+    [runProfiles, displayedLabels]
+  );
+
+  const runMixAnalysis = useMemo(
+    () => buildMixAnalysis(runMixData),
+    [runMixData]
+  );
+
+  const outcomeLinkageRows = useMemo(
+    () => buildOutcomeLinkageRows(runProfiles, runs),
+    [runProfiles, runs]
+  );
 
   return (
     <div className="space-y-4 pb-1">
-      {allMarkets.length > 0 && (
-        <div className="dashboard-panel rounded-[18px] px-4 py-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <span
-              className="shrink-0 text-[11px] font-bold uppercase tracking-[0.16em] text-[#8f8780]"
-            >
-              Market
-            </span>
+      <div className="dashboard-panel rounded-[18px] px-4 py-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <label className="flex flex-col gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#8f8780]">Market</span>
             <select
               value={marketFilter}
               onChange={(e) => setMarketFilter(e.target.value)}
-              className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+              className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-2 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
             >
               <option value="All">All Markets</option>
-              {allMarkets.map((m) => (
-                <option key={m} value={m}>{MARKET_LABELS[m] ?? m}</option>
+              {allMarkets.map((market) => (
+                <option key={market} value={market}>
+                  {MARKET_LABELS[market] ?? market}
+                </option>
               ))}
             </select>
-          </div>
+          </label>
+
+          <label className="flex flex-col gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#8f8780]">Factor bucket</span>
+            <select
+              value={factorFilter}
+              onChange={(e) => setFactorFilter(e.target.value as SelectionFactorKey)}
+              className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-2 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+            >
+              {Object.entries(FACTOR_CONFIG).map(([value, config]) => (
+                <option key={value} value={value}>
+                  {config.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-      )}
+      </div>
+
       <div>
-        <SectionHeader>Factor strategy diagnosis</SectionHeader>
+        <SectionHeader>Prompt selection counts</SectionHeader>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
-          Which factor strategy is each GPT portfolio following in this market, and how much of its return pattern does
-          that explain? This page starts with the average factor fingerprint, then estimates a simple daily regression
-          using the same five exposure series.
+          The main question here is what each prompt actually selects over the full backtest. Each run is first collapsed
+          into one whole-run profile, so the charts below reflect full-run behavior rather than repeated half-year slices.
         </p>
-        {data.factor_style_from_exposure_fallback && (
-          <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#5a6d78]">
-            Using fallback data from <span className="font-mono text-[11px]">/charts/factor-exposures</span>.
+        <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#8f8780]">
+          {FACTOR_CONFIG[factorFilter].label}: {FACTOR_CONFIG[factorFilter].definition}
+        </p>
+        {data.factor_style_error && (
+          <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#a85a52]">
+            Factor-style summary route warning: {data.factor_style_error}
           </p>
         )}
       </div>
 
       <SoftHr />
 
-      {data.factor_style_error ? (
+      {holdingsQuery.isLoading ? (
+        <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+          <InsightCard
+            type="info"
+            title="Loading prompt selection counts"
+            body="Fetching GPT daily holdings so the page can count how each prompt selects names across factor buckets."
+          />
+        </div>
+      ) : holdingsQuery.error ? (
         <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
           <InsightCard
             type="warn"
-            title="Factor Style request failed"
-            body={`${data.factor_style_error} The dashboard calls ${getApiBaseUrl()}/summary/factor-style. Status 404 usually means the deployed API does not include this route yet—deploy the current backend or point VITE_API_BASE_URL / NEXT_PUBLIC_API_BASE_URL at a server that has GET /api/summary/factor-style.`}
+            title="Holdings request failed"
+            body={holdingsQuery.error instanceof Error ? holdingsQuery.error.message : "Unable to load daily holdings."}
           />
         </div>
-      ) : aggregatedGptRows.length > 0 ? (
+      ) : selectionRows.length === 0 ? (
+        <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+          <InsightCard
+            type="info"
+            title="No labeled holdings for this factor"
+            body={`No ${FACTOR_CONFIG[factorFilter].label.toLowerCase()} labels were returned for the selected market. Try another market or factor bucket.`}
+          />
+        </div>
+      ) : (
         <>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {aggregatedGptRows.map((row) => {
-              const regression = regressionByStrategy?.[row.strategy_key];
+            {GPT_STRATEGY_KEYS.map((strategyKey) => {
+              const summary = promptSummaries[strategyKey];
               return (
-                <div key={row.strategy_key} className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
-                  <p className="dashboard-label mb-2">{getStrategyDisplayName(row.strategy, row.strategy_key)}</p>
-                  <p className="text-[18px] font-semibold text-[#534b45]">
-                    {topExposureKeys(row)
-                      .map((key) => FACTOR_LABELS[key])
-                      .join(" + ")}
+                <div key={strategyKey} className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+                  <p className="dashboard-label mb-2">{formatPromptLabel(strategyKey)}</p>
+                  <p className="text-[18px] font-semibold text-[#534b45]">{summary.dominantLabel}</p>
+                  <p className="mt-2 text-[12px] leading-5 text-[#7b736e]">
+                    Most common dominant full-run {FACTOR_CONFIG[factorFilter].label.toLowerCase()} bucket, leading in{" "}
+                    {summary.dominantCount} of {summary.runCount} runs ({formatPct(summary.dominantShare, 0)}).
                   </p>
-                  <p className="mt-2 text-[12px] leading-5 text-[#7b736e]">{describeFingerprint(row)}</p>
-                  <p className="mt-2 text-[12px] leading-5 text-[#8f8780]">{describeRegression(regression ?? null)}</p>
                   <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#9d958d]">
                     <span className="rounded-full border border-[rgba(232,224,217,0.9)] px-2.5 py-1">
-                      Paths: {row.path_count || 0}
+                      Runs: {summary.runCount}
                     </span>
                     <span className="rounded-full border border-[rgba(232,224,217,0.9)] px-2.5 py-1">
-                      R²: {formatPercentFromRatio(regression?.rSquared ?? null, 0)}
+                      Dates: {summary.dateCount}
                     </span>
                     <span className="rounded-full border border-[rgba(232,224,217,0.9)] px-2.5 py-1">
-                      Daily rows: {regression?.sampleSize ?? 0}
+                      Periods: {summary.periodCount}
                     </span>
                   </div>
                 </div>
@@ -496,27 +754,28 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
           <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="dashboard-label">Strategy fingerprint</p>
+                <p className="dashboard-label">What each prompt selects</p>
                 <p className="mt-1 text-[12px] leading-5 text-[#8f8780]">
-                  Average factor exposures show what style each GPT portfolio most resembles in the selected market.
+                  Count of full runs by dominant bucket. Each run contributes once, based on the bucket that dominates its
+                  full backtest selection profile.
                 </p>
               </div>
               <FigureExportControls
-                captureRef={fingerprintChartRef}
-                slug="factor-style-strategy-fingerprint"
-                caption="Factor Style — GPT strategy fingerprint"
+                captureRef={countSummaryRef}
+                slug="factor-style-selection-counts"
+                caption="Factor Style — Selection counts by prompt"
                 experimentId={data.active_experiment_id}
               />
             </div>
-            <div ref={fingerprintChartRef} className="min-w-0">
-              <ResponsiveContainer width="100%" height={Math.max(260, aggregatedGptRows.length * 82 + 80)}>
-                <BarChart data={fingerprintChartData} layout="vertical" margin={{ left: 8, right: 20, top: 8, bottom: 8 }}>
+            <div ref={countSummaryRef} className="min-w-0">
+              <ResponsiveContainer width="100%" height={Math.max(240, aggregateCountData.length * 56 + 90)}>
+                <BarChart data={aggregateCountData} layout="vertical" margin={{ left: 8, right: 20, top: 8, bottom: 8 }}>
                   <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical strokeDasharray="3 6" />
-                  <XAxis type="number" domain={[0, 1]} axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#aca49d" }} />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#aca49d" }} />
                   <YAxis
                     type="category"
                     dataKey="label"
-                    width={160}
+                    width={150}
                     interval={0}
                     axisLine={false}
                     tickLine={false}
@@ -524,243 +783,161 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                   />
                   <Tooltip
                     {...tooltipStyle}
-                    labelFormatter={(label, payload) => {
-                      const row = payload?.[0]?.payload as { path_count?: number } | undefined;
-                      return row?.path_count != null ? `${label} · ${row.path_count} paths` : label;
-                    }}
-                    formatter={(value: number) => (Number.isFinite(value) ? value.toFixed(3) : "—")}
+                    formatter={(value: number) => `${Number(value).toFixed(0)} runs`}
                   />
                   <Legend wrapperStyle={{ fontSize: 10, color: "#9b938b", paddingTop: 10 }} iconType="circle" iconSize={8} />
-                  <Bar dataKey="Size" fill={CHART_COLORS[0]} radius={[0, 4, 4, 0]} barSize={10} />
-                  <Bar dataKey="Value" fill={CHART_COLORS[1]} radius={[0, 4, 4, 0]} barSize={10} />
-                  <Bar dataKey="Momentum" fill={CHART_COLORS[2]} radius={[0, 4, 4, 0]} barSize={10} />
-                  <Bar dataKey="Low risk" fill={CHART_COLORS[3]} radius={[0, 4, 4, 0]} barSize={10} />
-                  <Bar dataKey="Quality" fill={CHART_COLORS[4]} radius={[0, 4, 4, 0]} barSize={10} />
+                  <Bar dataKey="retail" name="GPT (Retail)" fill={STRATEGY_COLORS.gpt_retail} radius={[0, 4, 4, 0]} barSize={14} />
+                  <Bar dataKey="advanced" name="GPT (Advanced)" fill={STRATEGY_COLORS.gpt_advanced} radius={[0, 4, 4, 0]} barSize={14} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
+            <p className="mt-3 text-[12px] leading-5 text-[#7b736e]">{overallAnalysis}</p>
           </div>
 
           <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
               <div>
-                <p className="dashboard-label">Return explanation (five-factor regression)</p>
-                <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
-                  Daily returns are regressed on the five portfolio exposure series. This is an explanatory model using
-                  portfolio tilts, not classical factor-return attribution and not a causal claim.
+                <p className="dashboard-label">Average full-run mix</p>
+                <p className="mt-1 text-[12px] leading-5 text-[#8f8780]">
+                  Average bucket share inside the full-run profile. This shows how much of the total run each prompt spends
+                  in each bucket, after collapsing each run to one whole-run mix.
                 </p>
               </div>
               <FigureExportControls
-                captureRef={regressionChartRef}
-                slug="factor-style-regression-coefficients"
-                caption="Factor Style — Regression coefficients"
+                captureRef={runMixRef}
+                slug="factor-style-full-run-mix"
+                caption="Factor Style — Average full-run mix"
                 experimentId={data.active_experiment_id}
               />
             </div>
-
-            {equityRegressionQuery.isLoading ? (
-              <InsightCard
-                type="info"
-                title="Loading regression data"
-                body="Fetching daily GPT portfolio paths to estimate how the five factor exposures relate to daily returns."
-              />
-            ) : equityRegressionQuery.error ? (
-              <InsightCard
-                type="warn"
-                title="Regression data request failed"
-                body={equityRegressionQuery.error instanceof Error ? equityRegressionQuery.error.message : "Unable to load daily equity rows."}
-              />
-            ) : regressionChartData.length === 0 ? (
-              <InsightCard
-                type="info"
-                title="Not enough data for regression"
-                body="The selected market does not have enough daily GPT rows with valid return and factor exposure values to estimate the regression."
-              />
-            ) : (
-              <>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {GPT_STRATEGY_KEYS.map((key) => {
-                    const result = regressionByStrategy?.[key] ?? null;
-                    return (
-                      <div
-                        key={key}
-                        className="rounded-[16px] border border-[rgba(232,224,217,0.8)] bg-[rgba(255,255,252,0.62)] px-4 py-3"
-                      >
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#9d958d]">
-                          {getStrategyDisplayName(key, key)}
-                        </p>
-                        <p className="mt-2 text-[12px] leading-5 text-[#6f6863]">{describeRegression(result)}</p>
-                        <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
-                          <div>
-                            <p className="text-[#b4aca5]">R²</p>
-                            <p className="font-semibold text-[#534b45]">{formatPercentFromRatio(result?.rSquared ?? null, 0)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[#b4aca5]">Mean daily return</p>
-                            <p className="font-semibold text-[#534b45]">{formatPercentFromRatio(result?.meanDailyReturn ?? null, 2)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[#b4aca5]">Rows</p>
-                            <p className="font-semibold text-[#534b45]">{result?.sampleSize ?? 0}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div ref={regressionChartRef} className="mt-4 min-w-0">
-                  <ResponsiveContainer width="100%" height={360}>
-                    <BarChart data={regressionChartData} layout="vertical" margin={{ left: 8, right: 20, top: 8, bottom: 8 }}>
-                      <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical strokeDasharray="3 6" />
-                      <XAxis
-                        type="number"
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 10, fill: "#aca49d" }}
-                        tickFormatter={(value: number) => `${value.toFixed(1)}pp`}
-                      />
-                      <YAxis
-                        type="category"
-                        dataKey="factor"
-                        width={110}
-                        interval={0}
-                        axisLine={false}
-                        tickLine={false}
-                        tick={{ fontSize: 11, fill: "#8f8780" }}
-                      />
-                      <ReferenceLine x={0} stroke="rgba(192, 180, 170, 0.85)" strokeDasharray="4 4" />
-                      <Tooltip
-                        {...tooltipStyle}
-                        formatter={(value: number) => `${value.toFixed(2)} pp`}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 10, color: "#9b938b", paddingTop: 10 }} iconType="circle" iconSize={8} />
-                      <Bar
-                        dataKey="retail"
-                        name="GPT (Retail)"
-                        fill={STRATEGY_COLORS.gpt_retail}
-                        radius={[0, 4, 4, 0]}
-                        barSize={12}
-                      />
-                      <Bar
-                        dataKey="advanced"
-                        name="GPT (Advanced)"
-                        fill={STRATEGY_COLORS.gpt_advanced}
-                        radius={[0, 4, 4, 0]}
-                        barSize={12}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <Accordion
-                  type="multiple"
-                  className="mt-4 rounded-[16px] border border-[rgba(232,224,217,0.9)] bg-[rgba(255,255,252,0.62)] px-3"
-                >
-                  {GPT_STRATEGY_KEYS.map((key) => {
-                    const result = regressionByStrategy?.[key];
-                    return (
-                      <AccordionItem key={key} value={`technical-${key}`} className="border-[rgba(227,220,214,0.75)]">
-                        <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
-                          Technical details — {getStrategyDisplayName(key, key)}
-                        </AccordionTrigger>
-                        <AccordionContent className="pb-4">
-                          {!result ? (
-                            <p className="text-[12px] leading-5 text-[#8f8780]">
-                              Not enough usable daily observations to compute the regression for this strategy.
-                            </p>
-                          ) : (
-                            <div className="space-y-3">
-                              <div className="grid grid-cols-2 gap-3 text-[12px] md:grid-cols-4">
-                                <div>
-                                  <p className="text-[#b4aca5]">Sample size</p>
-                                  <p className="font-semibold text-[#534b45]">{result.sampleSize}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[#b4aca5]">R²</p>
-                                  <p className="font-semibold text-[#534b45]">{formatPercentFromRatio(result.rSquared, 1)}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[#b4aca5]">Intercept</p>
-                                  <p className="font-semibold text-[#534b45]">{formatPercentPoints(result.intercept, 2)}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[#b4aca5]">Mean daily return</p>
-                                  <p className="font-semibold text-[#534b45]">{formatPercentFromRatio(result.meanDailyReturn, 2)}</p>
-                                </div>
-                              </div>
-                              <div className="overflow-x-auto">
-                                <table className="w-full min-w-[460px] text-[11px]">
-                                  <thead>
-                                    <tr className="border-b border-[rgba(227,220,214,0.8)] text-left text-[#b4aca5]">
-                                      <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Factor</th>
-                                      <th className="py-2 pr-3 text-right font-semibold uppercase tracking-[0.12em]">Coefficient</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {REGRESSION_FACTOR_KEYS.map((factorKey) => (
-                                      <tr key={factorKey} className="border-b border-[rgba(227,220,214,0.55)] last:border-0">
-                                        <td className="py-2 pr-3 text-[#5e5955]">{FACTOR_LABELS[factorKey]}</td>
-                                        <td className="py-2 text-right text-[#8d857f]">
-                                          {formatPercentPoints(result.coefficients[factorKey], 2)}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          )}
-                        </AccordionContent>
-                      </AccordionItem>
-                    );
-                  })}
-                </Accordion>
-              </>
-            )}
+            <div ref={runMixRef} className="min-w-0">
+              <ResponsiveContainer width="100%" height={Math.max(240, runMixData.length * 56 + 90)}>
+                <BarChart data={runMixData} layout="vertical" margin={{ left: 8, right: 20, top: 8, bottom: 8 }}>
+                  <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical strokeDasharray="3 6" />
+                  <XAxis
+                    type="number"
+                    domain={[0, 1]}
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: "#aca49d" }}
+                    tickFormatter={(value: number) => `${Math.round(value * 100)}%`}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={150}
+                    interval={0}
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: "#8f8780" }}
+                  />
+                  <Tooltip {...tooltipStyle} formatter={(value: number) => formatPct(Number(value), 1)} />
+                  <Legend wrapperStyle={{ fontSize: 10, color: "#9b938b", paddingTop: 10 }} iconType="circle" iconSize={8} />
+                  <Bar dataKey="retail" name="GPT (Retail)" fill={STRATEGY_COLORS.gpt_retail} radius={[0, 4, 4, 0]} barSize={14} />
+                  <Bar dataKey="advanced" name="GPT (Advanced)" fill={STRATEGY_COLORS.gpt_advanced} radius={[0, 4, 4, 0]} barSize={14} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="mt-3 text-[12px] leading-5 text-[#7b736e]">{runMixAnalysis}</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {REGRESSION_FACTOR_KEYS.map((factorKey) => (
-              <div
-                key={factorKey}
-                className="rounded-[14px] border border-[rgba(232,224,217,0.8)] bg-[rgba(255,255,252,0.62)] px-3 py-2"
-              >
-                <p className="text-[11px] font-semibold text-[#6f6863]">{FACTOR_LABELS[factorKey]}</p>
-                <p className="mt-1 text-[11px] leading-5 text-[#9d958d]">
-                  {{
-                    size: "Higher = more tilt toward smaller companies.",
-                    value: "Higher = more tilt toward cheaper / value stocks.",
-                    momentum: "Higher = more tilt toward recent winners / trend-following names.",
-                    lowRisk: "Higher = more defensive, lower-volatility exposure.",
-                    quality: "Higher = more tilt toward profitable, financially stronger firms.",
-                  }[factorKey]}
+          {outcomeLinkageRows.length > 0 && (
+            <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+              <div className="mb-3">
+                <p className="dashboard-label">Outcome linkage by dominant full-run bucket</p>
+                <p className="mt-1 text-[12px] leading-5 text-[#8f8780]">
+                  This links each run&apos;s dominant full-run bucket to realized outcomes, so you can see whether certain
+                  selection styles tend to coincide with stronger Sharpe or return profiles.
                 </p>
               </div>
-            ))}
-          </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[820px] text-[11px]">
+                  <thead>
+                    <tr className="border-b border-[rgba(227,220,214,0.8)] text-left text-[#b4aca5]">
+                      <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Dominant bucket</th>
+                      <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Model</th>
+                      <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Prompt</th>
+                      <th className="py-2 pr-3 text-right font-semibold uppercase tracking-[0.12em]">Runs</th>
+                      <th className="py-2 pr-3 text-right font-semibold uppercase tracking-[0.12em]">Mean Sharpe</th>
+                      <th className="py-2 text-right font-semibold uppercase tracking-[0.12em]">Mean realized return</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {outcomeLinkageRows.slice(0, 18).map((row) => (
+                      <tr key={`${row.dominantLabel}-${row.model}-${row.promptType}`} className="border-b border-[rgba(227,220,214,0.55)] last:border-0">
+                        <td className="py-2 pr-3 text-[#5e5955]">{row.dominantLabel}</td>
+                        <td className="py-2 pr-3 text-[#8d857f]">{row.model}</td>
+                        <td className="py-2 pr-3 text-[#8d857f]">{row.promptType}</td>
+                        <td className="py-2 pr-3 text-right text-[#8d857f]">{row.count}</td>
+                        <td className="py-2 pr-3 text-right text-[#8d857f]">{row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}</td>
+                        <td className="py-2 text-right text-[#8d857f]">{formatPct(row.meanReturn, 1)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
-          <FactorStyleAiSection
-            experimentId={data.active_experiment_id}
-            marketFilter={marketFilter}
-            factorStyleFiltered={factorStyleGptOnly}
-          />
+          {regimeContextRows.length > 0 && (
+            <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+              <div className="mb-3">
+                <p className="dashboard-label">Regime context</p>
+                <p className="mt-1 text-[12px] leading-5 text-[#8f8780]">
+                  Period-level `Mkt / Vol / Rate` labels for the counts above, so you can read prompt selection shifts
+                  against the regime backdrop.
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[680px] text-[11px]">
+                  <thead>
+                    <tr className="border-b border-[rgba(227,220,214,0.8)] text-left text-[#b4aca5]">
+                      <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Market</th>
+                      <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Period</th>
+                      <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Window</th>
+                      <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Mkt</th>
+                      <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Vol</th>
+                      <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {regimeContextRows.map((row) => (
+                      <tr key={`${row.market}-${row.period}`} className="border-b border-[rgba(227,220,214,0.55)] last:border-0">
+                        <td className="py-2 pr-3 text-[#5e5955]">{MARKET_LABELS[row.market] ?? row.market}</td>
+                        <td className="py-2 pr-3 text-[#5e5955]">{row.period}</td>
+                        <td className="py-2 pr-3 text-[#8d857f]">
+                          {formatPeriodWindow(row.periodStartDate, row.periodEndDate)}
+                        </td>
+                        <td className="py-2 pr-3 text-[#8d857f]">{row.marketRegimeLabel ?? "—"}</td>
+                        <td className="py-2 pr-3 text-[#8d857f]">{row.volRegimeLabel ?? "—"}</td>
+                        <td className="py-2 pr-3 text-[#8d857f]">{row.rateRegimeLabel ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {factorStyleGptOnly.length > 0 && (
+            <FactorStyleAiSection
+              experimentId={data.active_experiment_id}
+              marketFilter={marketFilter}
+              factorStyleFiltered={factorStyleGptOnly}
+            />
+          )}
 
           <div className="mt-4 space-y-3">
             <SectionHeader>Method notes</SectionHeader>
             <p className="max-w-3xl text-[12px] leading-5 text-[#9d958d]">
-              {FACTOR_DEFINITIONS_BLURB} The regression uses daily portfolio returns and daily exposure values from the
-              same path data. It helps explain return patterns, but it is not a causal decomposition and it does not use
-              classical factor return series. {nGptPaths > 0 ? `GPT paths in view: ${nGptPaths}.` : ""}
+              {FACTOR_DEFINITIONS_BLURB} Each run is collapsed into one full-run selection profile before charting, so the
+              main view reflects whole-backtest behavior instead of repeated half-year windows.
             </p>
             <Accordion type="multiple" className="dashboard-panel rounded-[16px] border border-[rgba(232,224,217,0.9)] px-3">
-              {strategyKeysInView.map((key) => {
+              {GPT_STRATEGY_KEYS.map((key) => {
                 const g = STRATEGY_GLOSSARY[key];
-                const row0 = aggregatedGptRows.find((r) => r.strategy_key === key);
-                const title = g?.title ?? row0?.strategy ?? key;
-                const summary =
-                  g?.summary ??
-                  "Custom or auxiliary strategy in this experiment; compare factor fingerprint and regression coefficients to see what it behaves like.";
+                const title = g?.title ?? key;
+                const summary = g?.summary ?? "Use the count panels above to see what this prompt selects over time.";
                 return (
                   <AccordionItem key={key} value={key} className="border-[rgba(227,220,214,0.75)]">
                     <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
@@ -773,20 +950,6 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             </Accordion>
           </div>
         </>
-      ) : (
-        <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
-          <InsightCard
-            type="info"
-            title="No factor-style aggregates for this view"
-            body={
-              factorStyleFiltered.length === 0
-                ? data.factor_style_from_exposure_fallback
-                  ? `The dashboard fell back to ${getApiBaseUrl()}/charts/factor-exposures, which returned no usable rows. Factor exposures may be missing in daily path metrics for this experiment.`
-                  : `The API at ${getApiBaseUrl()} returned an empty array for /summary/factor-style (HTTP 200, zero rows). That usually means daily path metrics have no factor-exposure data for this experiment. Fix: rebuild or reload analytics data, or pick an experiment that includes populated daily path metrics.`
-                : "Factor rows exist for this experiment, but every mean exposure is null for the selected market — try All Markets."
-            }
-          />
-        </div>
       )}
     </div>
   );

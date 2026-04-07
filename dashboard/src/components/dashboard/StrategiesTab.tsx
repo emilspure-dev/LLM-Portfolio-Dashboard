@@ -29,7 +29,13 @@ import {
   getStrategyDisplayName,
   sharpeColor,
 } from "@/lib/constants";
-import { buildStrategySummaryWithRunSharpe } from "@/lib/data-loader";
+import {
+  buildBenchmarkComparisonRows,
+  buildStrategySummaryWithRunSharpe,
+  excludeJapan25H2Runs,
+  percentile,
+  stdDev,
+} from "@/lib/data-loader";
 import type { EvaluationData, RunRow } from "@/lib/types";
 
 /** Stable [0, 1) for jitter so dots don’t jump on re-render. */
@@ -154,7 +160,10 @@ interface StrategiesTabProps {
 export function StrategiesTab({ data, runs }: StrategiesTabProps) {
   const allMarkets: string[] = data.filters?.markets ?? [];
   const [marketFilter, setMarketFilter] = useState("All");
+  const [excludeJapan25H2, setExcludeJapan25H2] = useState(false);
   const strategiesDistributionRef = useRef<HTMLDivElement>(null);
+  const strategiesBenchmarkRef = useRef<HTMLDivElement>(null);
+  const strategiesCumulativeRef = useRef<HTMLDivElement>(null);
   const strategiesMeanSharpeRef = useRef<HTMLDivElement>(null);
   const strategiesRiskReturnRef = useRef<HTMLDivElement>(null);
   const strategiesDispersionRef = useRef<HTMLDivElement>(null);
@@ -163,9 +172,13 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
     () => buildStrategySummaryWithRunSharpe(data.summary_rows, marketFilter, runs),
     [data.summary_rows, marketFilter, runs]
   );
-  const localRuns = useMemo(
+  const scopedRuns = useMemo(
     () => (marketFilter === "All" ? runs : runs.filter((r) => r.market === marketFilter)),
     [runs, marketFilter]
+  );
+  const localRuns = useMemo(
+    () => (excludeJapan25H2 ? excludeJapan25H2Runs(scopedRuns) : scopedRuns),
+    [scopedRuns, excludeJapan25H2]
   );
   const runCounts = useMemo(() => runCountByStrategy(localRuns), [localRuns]);
 
@@ -243,6 +256,122 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
       ),
     };
   }, [localRuns, summary]);
+
+  const dispersionStats = useMemo(() => {
+    const retail = sharpeHistogramModel.retail;
+    const advanced = sharpeHistogramModel.advanced;
+    const build = (values: number[]) => {
+      const q1 = percentile(values, 0.25);
+      const q3 = percentile(values, 0.75);
+      return {
+        mean: mean(values),
+        std: stdDev(values),
+        iqr: q1 != null && q3 != null ? q3 - q1 : null,
+      };
+    };
+    return {
+      retail: build(retail),
+      advanced: build(advanced),
+    };
+  }, [sharpeHistogramModel]);
+
+  const sharpeOutliers = useMemo(() => {
+    const rows = [
+      ...localRuns
+        .filter((run) => run.strategy_key === "gpt_retail" || run.strategy_key === "gpt_advanced")
+        .map((run) => ({
+          runLabel:
+            run.run_id != null && String(run.run_id).length > 0
+              ? `Run ${run.run_id}`
+              : run.path_id != null
+                ? `Path ${run.path_id}`
+                : "Run",
+          strategyLabel: getStrategyDisplayName(run.strategy ?? run.strategy_key ?? "", run.strategy_key),
+          strategyKey: run.strategy_key ?? "",
+          prompt: run.prompt_type ?? "—",
+          market: run.market ?? "—",
+          period: run.period ?? "—",
+          sharpe: run.sharpe_ratio,
+        }))
+        .filter((row): row is typeof row & { sharpe: number } => row.sharpe != null && Number.isFinite(row.sharpe)),
+    ];
+    const values = rows.map((row) => row.sharpe);
+    const q1 = percentile(values, 0.25);
+    const q3 = percentile(values, 0.75);
+    if (q1 == null || q3 == null) return [];
+    const iqr = q3 - q1;
+    const lower = q1 - 1.5 * iqr;
+    const upper = q3 + 1.5 * iqr;
+    return rows
+      .filter((row) => row.sharpe < lower || row.sharpe > upper)
+      .sort((left, right) => right.sharpe - left.sharpe)
+      .slice(0, 10);
+  }, [localRuns]);
+
+  const benchmarkComparisonRows = useMemo(
+    () => buildBenchmarkComparisonRows(localRuns),
+    [localRuns]
+  );
+
+  const cumulativePathData = useMemo(() => {
+    const strategyKeys = ["gpt_retail", "gpt_advanced", "index", "equal_weight", "mean_variance", "sixty_forty", "fama_french"];
+    const grouped = new Map<string, Map<string, number[]>>();
+    for (const run of localRuns) {
+      const strategyKey = String(run.strategy_key ?? "");
+      if (!strategyKeys.includes(strategyKey)) continue;
+      const period = String(run.period ?? "");
+      const ret = run.period_return ?? run.net_return ?? run.period_return_net;
+      if (ret == null || !Number.isFinite(ret)) continue;
+      const periodBucket = grouped.get(strategyKey) ?? new Map<string, number[]>();
+      const values = periodBucket.get(period) ?? [];
+      values.push(ret);
+      periodBucket.set(period, values);
+      grouped.set(strategyKey, periodBucket);
+    }
+
+    const orderedPeriods = Array.from(
+      new Set(
+        localRuns.map((run) => run.period).filter((value): value is string => Boolean(value))
+      )
+    ).sort();
+    const cumulative = new Map<string, number>(strategyKeys.map((key) => [key, 1]));
+    return orderedPeriods.map((period) => {
+      const row: Record<string, string | number | null> = { period };
+      for (const key of strategyKeys) {
+        const values = grouped.get(key)?.get(period) ?? [];
+        const avg = mean(values);
+        const next = avg != null ? (cumulative.get(key) ?? 1) * (1 + avg) : cumulative.get(key) ?? 1;
+        cumulative.set(key, next);
+        row[key] = (next - 1) * 100;
+      }
+      return row;
+    });
+  }, [localRuns]);
+
+  const periodContributionRows = useMemo(() => {
+    const targetKeys = ["gpt_retail", "gpt_advanced", "index"];
+    const grouped = new Map<string, Map<string, number[]>>();
+    for (const run of localRuns) {
+      const strategyKey = String(run.strategy_key ?? "");
+      if (!targetKeys.includes(strategyKey)) continue;
+      const period = String(run.period ?? "");
+      const sharpe = run.sharpe_ratio;
+      if (sharpe == null || !Number.isFinite(sharpe)) continue;
+      const strategyMap = grouped.get(period) ?? new Map<string, number[]>();
+      const bucket = strategyMap.get(strategyKey) ?? [];
+      bucket.push(sharpe);
+      strategyMap.set(strategyKey, bucket);
+      grouped.set(period, strategyMap);
+    }
+    return Array.from(grouped.entries())
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([period, strategyMap]) => ({
+        period,
+        gpt_retail: mean(strategyMap.get("gpt_retail") ?? []),
+        gpt_advanced: mean(strategyMap.get("gpt_advanced") ?? []),
+        index: mean(strategyMap.get("index") ?? []),
+      }));
+  }, [localRuns]);
 
   const sharpeBarData = useMemo(
     () =>
@@ -351,6 +480,14 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                 <option key={m} value={m}>{MARKET_LABELS[m] ?? m}</option>
               ))}
             </select>
+            <label className="ml-auto flex items-center gap-2 text-[12px] font-medium text-[#6f6863]">
+              <input
+                type="checkbox"
+                checked={excludeJapan25H2}
+                onChange={(e) => setExcludeJapan25H2(e.target.checked)}
+              />
+              Exclude Japan H2 2025
+            </label>
           </div>
         </div>
       )}
@@ -361,6 +498,11 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
           distributed in{" "}
           <strong>{marketScope}</strong>.
         </p>
+        {excludeJapan25H2 && (
+          <p className="mt-2 text-[11px] leading-5 text-[#8f8780]">
+            Sensitivity mode is active: runs from `Japan · H2 2025` are excluded from run-level charts and tables below.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -521,12 +663,163 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
           <p className="mt-2 text-[10px] text-[#a39b93]">
             X-axis: Sharpe ratio. Y-axis: run count per bin.
           </p>
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="rounded-[14px] border border-[rgba(232,224,217,0.8)] bg-[rgba(255,255,252,0.62)] px-3 py-2">
+              <p className="text-[11px] font-semibold text-[#6f6863]">Distribution width</p>
+              <p className="mt-1 text-[11px] text-[#8d857f]">
+                GPT (Retail): sd {dispersionStats.retail.std?.toFixed(2) ?? "—"} | IQR {dispersionStats.retail.iqr?.toFixed(2) ?? "—"}
+              </p>
+              <p className="text-[11px] text-[#8d857f]">
+                GPT (Advanced): sd {dispersionStats.advanced.std?.toFixed(2) ?? "—"} | IQR {dispersionStats.advanced.iqr?.toFixed(2) ?? "—"}
+              </p>
+            </div>
+            <div className="rounded-[14px] border border-[rgba(232,224,217,0.8)] bg-[rgba(255,255,252,0.62)] px-3 py-2">
+              <p className="text-[11px] font-semibold text-[#6f6863]">Outlier flagging</p>
+              <p className="mt-1 text-[11px] text-[#8d857f]">
+                {sharpeOutliers.length > 0
+                  ? `${sharpeOutliers.length} GPT run outliers flagged with the 1.5×IQR rule.`
+                  : "No GPT run outliers were flagged in this market scope."}
+              </p>
+            </div>
+          </div>
+          {sharpeOutliers.length > 0 && (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[620px] text-[11px]">
+                <thead>
+                  <tr className="border-b border-[rgba(227,220,214,0.7)] text-left text-[#b4aca5]">
+                    <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Run</th>
+                    <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Strategy</th>
+                    <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Market</th>
+                    <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Period</th>
+                    <th className="py-2 text-right font-semibold uppercase tracking-[0.12em]">Sharpe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sharpeOutliers.map((row) => (
+                    <tr key={`${row.runLabel}-${row.strategyKey}-${row.period}`} className="border-b border-[rgba(227,220,214,0.45)] last:border-0">
+                      <td className="py-2 pr-3 text-[#5e5955]">{row.runLabel}</td>
+                      <td className="py-2 pr-3 text-[#5e5955]">{row.strategyLabel}</td>
+                      <td className="py-2 pr-3 text-[#8d857f]">{row.market}</td>
+                      <td className="py-2 pr-3 text-[#8d857f]">{row.period}</td>
+                      <td className="py-2 text-right text-[#8d857f]">{row.sharpe.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </Panel>
       ) : (
         <Panel>
           <p className="text-[12px] leading-5 text-[#8a827a]">
             No GPT run-level Sharpe observations are available for this market scope.
           </p>
+        </Panel>
+      )}
+
+      <SoftHr />
+
+      {benchmarkComparisonRows.length > 0 && (
+        <Panel>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <p className="dashboard-label">Benchmark win rates with confidence intervals</p>
+            <FigureExportControls
+              captureRef={strategiesBenchmarkRef}
+              slug="performance-benchmark-win-rates"
+              caption="Performance — Benchmark win rates with confidence intervals"
+              experimentId={data.active_experiment_id}
+            />
+          </div>
+          <div ref={strategiesBenchmarkRef} className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-[11px]">
+              <thead>
+                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Strategy</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Benchmark</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Wins</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Win rate</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">95% CI</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe delta</th>
+                </tr>
+              </thead>
+              <tbody>
+                {benchmarkComparisonRows.map((row) => (
+                  <tr key={`${row.strategyKey}-${row.benchmarkKey}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{getStrategyDisplayName(row.strategyLabel, row.strategyKey)}</td>
+                    <td className="px-3 py-2.5 text-[#8d857f]">{getStrategyDisplayName(row.benchmarkKey, row.benchmarkKey)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{`${row.wins}/${row.total}`}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.winRate, 0)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                      {row.ciLow != null && row.ciHigh != null
+                        ? `${formatPctFromRatio(row.ciLow, 0)} - ${formatPctFromRatio(row.ciHigh, 0)}`
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanDelta != null ? row.meanDelta.toFixed(2) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      )}
+
+      {cumulativePathData.length > 0 && (
+        <Panel>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <p className="dashboard-label">Cumulative benchmark comparison</p>
+            <FigureExportControls
+              captureRef={strategiesCumulativeRef}
+              slug="performance-cumulative-benchmark-comparison"
+              caption="Performance — Cumulative benchmark comparison"
+              experimentId={data.active_experiment_id}
+            />
+          </div>
+          <div ref={strategiesCumulativeRef} className="min-w-0">
+            <ResponsiveContainer width="100%" height={320}>
+              <AreaChart data={cumulativePathData} margin={{ top: 8, right: 14, left: 6, bottom: 8 }}>
+                <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v.toFixed(0)}%`} />
+                <Tooltip {...tooltipStyle} formatter={(value: number) => `${value.toFixed(1)}%`} />
+                <Legend />
+                <Area type="monotone" dataKey="gpt_retail" name="GPT (Retail)" stroke={SHARPE_HIST_COLORS.gptRetail} fill={SHARPE_HIST_COLORS.gptRetail} fillOpacity={0.08} />
+                <Area type="monotone" dataKey="gpt_advanced" name="GPT (Advanced)" stroke={SHARPE_HIST_COLORS.gptAdvanced} fill={SHARPE_HIST_COLORS.gptAdvanced} fillOpacity={0.08} />
+                <Area type="monotone" dataKey="index" name="Market Index" stroke={SHARPE_HIST_COLORS.index} fill={SHARPE_HIST_COLORS.index} fillOpacity={0.03} />
+                <Area type="monotone" dataKey="equal_weight" name="Equal Weight" stroke={SHARPE_HIST_COLORS.equalWeight} fillOpacity={0} fill="transparent" />
+                <Area type="monotone" dataKey="mean_variance" name="Mean-Variance" stroke={SHARPE_HIST_COLORS.meanVariance} fillOpacity={0} fill="transparent" />
+                <Area type="monotone" dataKey="sixty_forty" name="60/40" stroke={SHARPE_HIST_COLORS.sixtyForty} fillOpacity={0} fill="transparent" />
+                <Area type="monotone" dataKey="fama_french" name="Fama-French" stroke={SHARPE_HIST_COLORS.famaFrench} fillOpacity={0} fill="transparent" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="mt-2 text-[10px] text-[#a39b93]">
+            Approximate cumulative path from average run-level period returns in the selected market scope.
+          </p>
+        </Panel>
+      )}
+
+      {periodContributionRows.length > 0 && (
+        <Panel>
+          <div className="mb-4">
+            <p className="dashboard-label">Per-period Sharpe contribution proxy</p>
+            <p className="mt-1 text-[11px] leading-5 text-[#8a827a]">
+              This is a descriptive proxy, not an additive decomposition of total Sharpe: it shows mean period Sharpe by period so you can see which windows dominate the headline profile.
+            </p>
+          </div>
+          <div className="min-w-0">
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={periodContributionRows} margin={{ top: 8, right: 12, left: 8, bottom: 8 }}>
+                <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")} />
+                <Legend />
+                <Bar dataKey="gpt_retail" name="GPT (Retail)" fill={SHARPE_HIST_COLORS.gptRetail} radius={[6, 6, 0, 0]} />
+                <Bar dataKey="gpt_advanced" name="GPT (Advanced)" fill={SHARPE_HIST_COLORS.gptAdvanced} radius={[6, 6, 0, 0]} />
+                <Bar dataKey="index" name="Market Index" fill={SHARPE_HIST_COLORS.index} radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </Panel>
       )}
 

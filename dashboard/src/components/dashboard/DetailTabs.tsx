@@ -24,8 +24,15 @@ import { AlertCircle, ChevronLeft, ChevronRight, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getDailyHoldings, getEquityChart, getFactorExposureChart, getRegimeChart } from "@/lib/api-client";
 import {
+  buildCoverageRows,
+  buildFeatureRegression,
+  buildRegimePerformanceRows,
+  buildRunFailureSummary,
   buildStrategySummaryWithRunSharpe,
+  computeAutocorrelation,
   collectPathIdsForStrategyMarket,
+  ljungBoxStatistic,
+  rollingMetricSeries,
 } from "@/lib/data-loader";
 import {
   CHART_COLORS,
@@ -356,6 +363,25 @@ function singlePathEquitySeries(rows: StrategyDailyRow[]) {
   }));
 }
 
+async function fetchAllDailyHoldings(
+  query: Record<string, string | number | undefined>
+): Promise<HoldingDailyRow[]> {
+  let page = 1;
+  let totalPages = 1;
+  const items: HoldingDailyRow[] = [];
+  while (page <= totalPages) {
+    const response = await getDailyHoldings({
+      ...query,
+      page,
+      page_size: 1000,
+    });
+    items.push(...response.items);
+    totalPages = response.total_pages;
+    page += 1;
+  }
+  return items;
+}
+
 function mean(values: number[]) {
   return values.length
     ? values.reduce((sum, value) => sum + value, 0) / values.length
@@ -518,6 +544,101 @@ function stdDev(values: number[]) {
     (values.length - 1);
 
   return Math.sqrt(variance);
+}
+
+function wilsonInterval(successes: number, total: number, z = 1.96) {
+  if (total <= 0) return { low: null, high: null };
+  const phat = successes / total;
+  const denom = 1 + (z ** 2) / total;
+  const center = (phat + (z ** 2) / (2 * total)) / denom;
+  const margin =
+    (z / denom) *
+    Math.sqrt((phat * (1 - phat)) / total + (z ** 2) / (4 * total ** 2));
+  return {
+    low: Math.max(0, center - margin),
+    high: Math.min(1, center + margin),
+  };
+}
+
+function buildPromptModelBenchmarkRows(runs: RunRow[]) {
+  const benchmarks = ["index", "equal_weight", "mean_variance", "sixty_forty", "fama_french"];
+  const benchmarkLookup = new Map<string, number[]>();
+  for (const run of runs) {
+    if (!benchmarks.includes(String(run.strategy_key ?? ""))) continue;
+    const sharpe = asNumber(run.sharpe_ratio);
+    if (sharpe == null) continue;
+    const key = `${run.strategy_key ?? ""}::${run.market ?? ""}::${run.period ?? ""}`;
+    const bucket = benchmarkLookup.get(key) ?? [];
+    bucket.push(sharpe);
+    benchmarkLookup.set(key, bucket);
+  }
+
+  const grouped = new Map<string, {
+    model: string;
+    promptType: string;
+    benchmarkKey: string;
+    wins: number;
+    total: number;
+    deltas: number[];
+  }>();
+  for (const run of runs) {
+    const strategyKey = String(run.strategy_key ?? "");
+    if (strategyKey !== "gpt_retail" && strategyKey !== "gpt_advanced") continue;
+    const model = String(run.model ?? "").trim();
+    const promptType = String(run.prompt_type ?? "").trim();
+    const sharpe = asNumber(run.sharpe_ratio);
+    if (!model || !promptType || sharpe == null) continue;
+    for (const benchmarkKey of benchmarks) {
+      const benchmarkValues = benchmarkLookup.get(`${benchmarkKey}::${run.market ?? ""}::${run.period ?? ""}`) ?? [];
+      const benchmarkMean = mean(benchmarkValues);
+      if (benchmarkMean == null) continue;
+      const key = `${model}::${promptType}::${benchmarkKey}`;
+      const bucket = grouped.get(key) ?? { model, promptType, benchmarkKey, wins: 0, total: 0, deltas: [] };
+      bucket.total += 1;
+      if (sharpe > benchmarkMean) bucket.wins += 1;
+      bucket.deltas.push(sharpe - benchmarkMean);
+      grouped.set(key, bucket);
+    }
+  }
+
+  return Array.from(grouped.values())
+    .map((row) => {
+      const ci = wilsonInterval(row.wins, row.total);
+      return {
+        ...row,
+        winRate: row.total > 0 ? row.wins / row.total : null,
+        ciLow: ci.low,
+        ciHigh: ci.high,
+        meanDelta: mean(row.deltas),
+      };
+    })
+    .sort((left, right) =>
+      `${left.model}|${left.promptType}|${left.benchmarkKey}`.localeCompare(
+        `${right.model}|${right.promptType}|${right.benchmarkKey}`
+      )
+    );
+}
+
+function aggregateRollingMetricSeries(rows: StrategyDailyRow[]) {
+  const grouped = new Map<string, StrategyDailyRow[]>();
+  for (const row of rows) {
+    const model = String(row.model ?? "").trim() || "unknown";
+    const prompt = String(row.prompt_type ?? "").trim() || "unknown";
+    const key = `${model}::${prompt}`;
+    const bucket = grouped.get(key) ?? [];
+    bucket.push(row);
+    grouped.set(key, bucket);
+  }
+
+  return Array.from(grouped.entries()).flatMap(([key, bucket]) => {
+    const [model, prompt] = key.split("::");
+    return rollingMetricSeries(bucket).map((row) => ({
+      ...row,
+      model,
+      prompt,
+      seriesLabel: `${model} · ${prompt}`,
+    }));
+  });
 }
 
 /** GPT run-level Sharpe histogram (light-theme friendly blues / ambers) */
@@ -3453,6 +3574,49 @@ export function ByMarketTab({ data }: BaseTabProps) {
   const markets = getMarketOptions(data);
   const byMarketSharpeHeatmapRef = useRef<HTMLDivElement>(null);
   const byMarketPeriodConsistencyRef = useRef<HTMLDivElement>(null);
+  const regimePerformanceRows = useMemo(
+    () =>
+      buildRegimePerformanceRows(data.runs).filter(
+        (row) =>
+          row.model !== "unknown" &&
+          (row.promptType === "retail" || row.promptType === "advanced")
+      ),
+    [data.runs]
+  );
+  const marketRegimeRows = useMemo(() => {
+    const grouped = new Map<string, {
+      market: string;
+      marketRegimeLabel: string | null;
+      model: string;
+      promptType: string;
+      sharpeValues: number[];
+      returnValues: number[];
+      count: number;
+    }>();
+    for (const row of regimePerformanceRows) {
+      const key = `${row.market}::${row.marketRegimeLabel ?? "Unknown"}::${row.model}::${row.promptType}`;
+      const bucket = grouped.get(key) ?? {
+        market: row.market,
+        marketRegimeLabel: row.marketRegimeLabel,
+        model: row.model,
+        promptType: row.promptType,
+        sharpeValues: [],
+        returnValues: [],
+        count: 0,
+      };
+      if (row.meanSharpe != null) bucket.sharpeValues.push(row.meanSharpe);
+      if (row.meanReturn != null) bucket.returnValues.push(row.meanReturn);
+      bucket.count += row.count;
+      grouped.set(key, bucket);
+    }
+    return Array.from(grouped.values())
+      .map((row) => ({
+        ...row,
+        meanSharpe: mean(row.sharpeValues),
+        meanReturn: mean(row.returnValues),
+      }))
+      .sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity));
+  }, [regimePerformanceRows]);
   const perMarketSummary = markets.map((market) => ({
     market,
     summary: buildStrategySummaryWithRunSharpe(
@@ -3650,6 +3814,91 @@ export function ByMarketTab({ data }: BaseTabProps) {
           </>
         );
       })()}
+
+      {regimePerformanceRows.length > 0 && (
+        <>
+          <SectionHeader>Regime-Conditional Performance</SectionHeader>
+          <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+            <p className="text-[12px] leading-5 text-[#8f8780]">
+              These tables condition GPT performance on the regime labels already stored on each run, so you can inspect
+              which model/prompt combinations look strongest inside specific market states.
+            </p>
+          </Panel>
+
+          <Panel className="overflow-x-auto p-0">
+            <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+              <p className="dashboard-label">27-cell regime view</p>
+            </div>
+            <table className="w-full min-w-[980px] text-[11px]">
+              <thead>
+                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Regime code</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mkt</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Vol</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Rate</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {regimePerformanceRows
+                  .sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity))
+                  .slice(0, 20)
+                  .map((row) => (
+                    <tr key={`${row.market}-${row.regimeCode}-${row.model}-${row.promptType}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                      <td className="px-3 py-2.5 text-[#5e5955]">{MARKET_LABELS[row.market] ?? row.market}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.regimeCode}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.marketRegimeLabel ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.volRegimeLabel ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.rateRegimeLabel ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.model}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanReturn, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.count}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </Panel>
+
+          <Panel className="overflow-x-auto p-0">
+            <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+              <p className="dashboard-label">Market regime by model</p>
+            </div>
+            <table className="w-full min-w-[860px] text-[11px]">
+              <thead>
+                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market regime</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {marketRegimeRows.slice(0, 24).map((row) => (
+                  <tr key={`${row.market}-${row.marketRegimeLabel}-${row.model}-${row.promptType}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                    <td className="px-3 py-2.5 text-[#5e5955]">{MARKET_LABELS[row.market] ?? row.market}</td>
+                    <td className="px-3 py-2.5 text-[#8d857f]">{row.marketRegimeLabel ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-[#8d857f]">{row.model}</td>
+                    <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanReturn, 1)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        </>
+      )}
     </div>
   );
 }
@@ -3657,6 +3906,9 @@ export function ByMarketTab({ data }: BaseTabProps) {
 export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
   const statTestsChartRef = useRef<HTMLDivElement>(null);
   const statsRows = useMemo(() => buildStrategyStats(runs), [runs]);
+  const benchmarkRows = useMemo(() => buildPromptModelBenchmarkRows(runs), [runs]);
+  const sharpeRegression = useMemo(() => buildFeatureRegression(runs, "sharpe_ratio"), [runs]);
+  const returnRegression = useMemo(() => buildFeatureRegression(runs, "annualized_return"), [runs]);
   const strongestEdge = statsRows
     .filter((row) => row.deltaVsIndex != null)
     .sort((left, right) => (right.deltaVsIndex ?? -Infinity) - (left.deltaVsIndex ?? -Infinity))[0];
@@ -3796,6 +4048,79 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
               </tbody>
             </table>
           </Panel>
+
+          {benchmarkRows.length > 0 && (
+            <Panel className="overflow-x-auto p-0">
+              <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+                <p className="dashboard-label">Prompt/model benchmark significance layer</p>
+              </div>
+              <table className="w-full min-w-[940px] text-[11px]">
+                <thead>
+                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Benchmark</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Win rate</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">95% CI</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe delta</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Pairs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {benchmarkRows.map((row) => (
+                    <tr key={`${row.model}-${row.promptType}-${row.benchmarkKey}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                      <td className="px-3 py-2.5 text-[#5e5955]">{row.model}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{formatStrategyLabel(row.benchmarkKey, row.benchmarkKey)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.winRate, 0)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                        {row.ciLow != null && row.ciHigh != null
+                          ? `${formatPctFromRatio(row.ciLow, 0)} - ${formatPctFromRatio(row.ciHigh, 0)}`
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanDelta != null ? row.meanDelta.toFixed(2) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Panel>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {[{ title: "Sharpe feature regression", result: sharpeRegression }, { title: "Annualized return feature regression", result: returnRegression }].map(({ title, result }) => (
+              <Panel key={title} className="overflow-x-auto">
+                <p className="dashboard-label">{title}</p>
+                {!result ? (
+                  <p className="mt-3 text-[12px] leading-5 text-[#8f8780]">
+                    Not enough complete run rows with holdings, HHI, expected return, and turnover to estimate this regression.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mt-2 text-[11px] text-[#8f8780]">
+                      Sample size {result.sampleSize} · R² {result.rSquared != null ? result.rSquared.toFixed(2) : "—"}
+                    </p>
+                    <table className="mt-3 w-full min-w-[320px] text-[11px]">
+                      <thead>
+                        <tr className="border-b border-[rgba(227,220,214,0.8)] text-left text-[#b4aca5]">
+                          <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Feature</th>
+                          <th className="py-2 text-right font-semibold uppercase tracking-[0.12em]">Coefficient</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {result.coefficients.map((row) => (
+                          <tr key={row.feature} className="border-b border-[rgba(227,220,214,0.55)] last:border-0">
+                            <td className="py-2 pr-3 text-[#5e5955]">{row.feature}</td>
+                            <td className="py-2 text-right text-[#8d857f]">{row.coefficient.toFixed(4)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </>
+                )}
+              </Panel>
+            ))}
+          </div>
         </>
       )}
     </div>
@@ -3812,6 +4137,8 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
   const behaviorForecastRef = useRef<HTMLDivElement>(null);
   const behaviorModelReturnRef = useRef<HTMLDivElement>(null);
   const behaviorModelHhiRef = useRef<HTMLDivElement>(null);
+  const behaviorHhiTimeRef = useRef<HTMLDivElement>(null);
+  const behaviorRationaleRef = useRef<HTMLDivElement>(null);
 
   const chartData = rows.map((row) => ({
     prompt: row.prompt_type,
@@ -3941,6 +4268,176 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
     () => computeMarketIndexReference(runs, data.summary_rows, modelMarketFilter, "All"),
     [runs, data.summary_rows, modelMarketFilter]
   );
+
+  const structuralRows = useMemo(() => {
+    const grouped = new Map<string, {
+      model: string;
+      promptType: string;
+      holdings: number[];
+      hhi: number[];
+      turnover: number[];
+      forecastAbs: number[];
+      rationaleLengths: number[];
+      equalWeightLike: number;
+      runCount: number;
+    }>();
+    for (const run of runs) {
+      const promptType = String(run.prompt_type ?? "").trim();
+      const model = String(run.model ?? "").trim();
+      if (!model || (promptType !== "retail" && promptType !== "advanced")) continue;
+      if (modelMarketFilter !== "All" && run.market !== modelMarketFilter) continue;
+      const key = `${model}::${promptType}`;
+      const bucket = grouped.get(key) ?? {
+        model,
+        promptType,
+        holdings: [],
+        hhi: [],
+        turnover: [],
+        forecastAbs: [],
+        rationaleLengths: [],
+        equalWeightLike: 0,
+        runCount: 0,
+      };
+      const holdings = asNumber(run.effective_n_holdings) ?? asNumber(run.n_holdings);
+      const hhi = asNumber(run.hhi);
+      const turnover = asNumber(run.turnover);
+      const forecastAbs = asNumber(run.forecast_abs_error);
+      const rationaleLength = String((run as Record<string, unknown>).reasoning_summary ?? "").trim().length;
+      if (holdings != null) bucket.holdings.push(holdings);
+      if (hhi != null) bucket.hhi.push(hhi);
+      if (turnover != null) bucket.turnover.push(turnover);
+      if (forecastAbs != null) bucket.forecastAbs.push(forecastAbs);
+      if (rationaleLength > 0) bucket.rationaleLengths.push(rationaleLength);
+      if (holdings != null && hhi != null && Math.abs(hhi - 1 / Math.max(holdings, 1)) <= 0.02) {
+        bucket.equalWeightLike += 1;
+      }
+      bucket.runCount += 1;
+      grouped.set(key, bucket);
+    }
+    return Array.from(grouped.values()).map((row) => ({
+      ...row,
+      meanHoldings: mean(row.holdings),
+      meanHhi: mean(row.hhi),
+      meanTurnover: mean(row.turnover),
+      meanForecastAbs: mean(row.forecastAbs),
+      meanRationaleLength: mean(row.rationaleLengths),
+      equalWeightRate: row.runCount > 0 ? row.equalWeightLike / row.runCount : null,
+    }));
+  }, [runs, modelMarketFilter]);
+
+  const hhiByModelPeriod = useMemo(() => {
+    const grouped = new Map<string, { period: string; model: string; values: number[] }>();
+    for (const run of runs) {
+      const model = String(run.model ?? "").trim();
+      const period = String(run.period ?? "").trim();
+      const hhi = asNumber(run.hhi);
+      if (!model || !period || hhi == null) continue;
+      if (modelMarketFilter !== "All" && run.market !== modelMarketFilter) continue;
+      const key = `${period}::${model}`;
+      const bucket = grouped.get(key) ?? { period, model, values: [] };
+      bucket.values.push(hhi);
+      grouped.set(key, bucket);
+    }
+    const flat = Array.from(grouped.values()).map((row) => ({ period: row.period, model: row.model, hhi: mean(row.values) }));
+    const periods = Array.from(new Set(flat.map((row) => row.period))).sort();
+    return periods.map((period) => {
+      const row: Record<string, string | number | null> = { period };
+      for (const entry of flat.filter((item) => item.period === period)) {
+        row[entry.model] = entry.hhi;
+      }
+      return row;
+    });
+  }, [runs, modelMarketFilter]);
+
+  const rationaleByModelPeriod = useMemo(() => {
+    const grouped = new Map<string, { period: string; model: string; values: number[] }>();
+    for (const run of runs) {
+      const model = String(run.model ?? "").trim();
+      const period = String(run.period ?? "").trim();
+      const length = String((run as Record<string, unknown>).reasoning_summary ?? "").trim().length;
+      if (!model || !period || length <= 0) continue;
+      if (modelMarketFilter !== "All" && run.market !== modelMarketFilter) continue;
+      const key = `${period}::${model}`;
+      const bucket = grouped.get(key) ?? { period, model, values: [] };
+      bucket.values.push(length);
+      grouped.set(key, bucket);
+    }
+    const flat = Array.from(grouped.values()).map((row) => ({ period: row.period, model: row.model, rationaleLength: mean(row.values) }));
+    const periods = Array.from(new Set(flat.map((row) => row.period))).sort();
+    return periods.map((period) => {
+      const row: Record<string, string | number | null> = { period };
+      for (const entry of flat.filter((item) => item.period === period)) {
+        row[entry.model] = entry.rationaleLength;
+      }
+      return row;
+    });
+  }, [runs, modelMarketFilter]);
+
+  const behaviorHoldingsQuery = useQuery({
+    queryKey: ["behavior-holdings", data.active_experiment_id, modelMarketFilter],
+    queryFn: async () => {
+      const market = modelMarketFilter === "All" ? undefined : modelMarketFilter;
+      const rows = await Promise.all(
+        ["gpt_retail", "gpt_advanced"].map((strategyKey) =>
+          fetchAllDailyHoldings({
+            experiment_id: data.active_experiment_id,
+            strategy_key: strategyKey,
+            market,
+          })
+        )
+      );
+      return rows.flat();
+    },
+    enabled: Boolean(data.active_experiment_id),
+    staleTime: 60_000,
+  });
+
+  const sectorConcentrationRows = useMemo(() => {
+    const grouped = new Map<string, { promptType: string; sector: string; count: number }>();
+    const totals = new Map<string, number>();
+    for (const row of behaviorHoldingsQuery.data ?? []) {
+      const promptType = String(row.prompt_type ?? "").trim();
+      const sector = String(row.sector ?? "Unknown");
+      if (promptType !== "retail" && promptType !== "advanced") continue;
+      const key = `${promptType}::${sector}`;
+      const bucket = grouped.get(key) ?? { promptType, sector, count: 0 };
+      bucket.count += 1;
+      totals.set(promptType, (totals.get(promptType) ?? 0) + 1);
+      grouped.set(key, bucket);
+    }
+    return Array.from(grouped.values())
+      .map((row) => ({
+        ...row,
+        share: (totals.get(row.promptType) ?? 0) > 0 ? row.count / (totals.get(row.promptType) ?? 1) : null,
+        capViolation: (totals.get(row.promptType) ?? 0) > 0 ? row.count / (totals.get(row.promptType) ?? 1) > 0.25 : false,
+      }))
+      .sort((left, right) => (right.share ?? 0) - (left.share ?? 0))
+      .slice(0, 12);
+  }, [behaviorHoldingsQuery.data]);
+
+  const assetFrequencyRows = useMemo(() => {
+    const grouped = new Map<string, { ticker: string; name: string; count: number; markets: Set<string> }>();
+    for (const row of behaviorHoldingsQuery.data ?? []) {
+      const ticker = String(row.ticker ?? "").trim();
+      if (!ticker) continue;
+      const bucket = grouped.get(ticker) ?? {
+        ticker,
+        name: String(row.name ?? ticker),
+        count: 0,
+        markets: new Set<string>(),
+      };
+      bucket.count += 1;
+      if (row.market) bucket.markets.add(row.market);
+      grouped.set(ticker, bucket);
+    }
+    return Array.from(grouped.values())
+      .sort((left, right) => right.count - left.count)
+      .slice(0, 15)
+      .map((row) => ({
+        ...row,
+        markets: Array.from(row.markets).map((market) => MARKET_LABELS[market] ?? market).join(", "),
+      }));
+  }, [behaviorHoldingsQuery.data]);
 
   // Compute post-loss runs: for each (strategy, market, model, prompt_type) group sorted by
   // period, find runs where the immediately preceding period had a negative return.
@@ -4106,6 +4603,53 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       return true;
     });
   }, [postLossRuns, reasoningPromptFilter, reasoningSearch]);
+
+  const postGainComparisonRows = useMemo(() => {
+    const groups = new Map<string, {
+      label: string;
+      lossReturns: number[];
+      gainReturns: number[];
+      lossTurnover: number[];
+      gainTurnover: number[];
+    }>();
+    const bySequence = new Map<string, RunRow[]>();
+    for (const run of runs) {
+      const promptType = String(run.prompt_type ?? "").trim();
+      const model = String(run.model ?? "").trim();
+      if ((promptType !== "retail" && promptType !== "advanced") || !model) continue;
+      const key = `${run.strategy_key ?? ""}::${run.market ?? ""}::${model}::${promptType}`;
+      const bucket = bySequence.get(key) ?? [];
+      bucket.push(run);
+      bySequence.set(key, bucket);
+    }
+    for (const [key, seq] of bySequence.entries()) {
+      const sorted = [...seq].sort((a, b) => String(a.period ?? "").localeCompare(String(b.period ?? "")));
+      const promptType = key.split("::").at(-1) ?? "unknown";
+      const label = promptType === "advanced" ? "Advanced prompt" : "Retail prompt";
+      const bucket = groups.get(promptType) ?? { label, lossReturns: [], gainReturns: [], lossTurnover: [], gainTurnover: [] };
+      for (let index = 1; index < sorted.length; index += 1) {
+        const priorReturn = asNumber(sorted[index - 1].period_return ?? sorted[index - 1].net_return ?? sorted[index - 1].period_return_net);
+        const nextReturn = asNumber(sorted[index].period_return ?? sorted[index].net_return ?? sorted[index].period_return_net);
+        const nextTurnover = asNumber(sorted[index].turnover);
+        if (priorReturn == null || nextReturn == null) continue;
+        if (priorReturn < 0) {
+          bucket.lossReturns.push(nextReturn);
+          if (nextTurnover != null) bucket.lossTurnover.push(nextTurnover);
+        } else {
+          bucket.gainReturns.push(nextReturn);
+          if (nextTurnover != null) bucket.gainTurnover.push(nextTurnover);
+        }
+      }
+      groups.set(promptType, bucket);
+    }
+    return Array.from(groups.values()).map((row) => ({
+      label: row.label,
+      postLossReturn: mean(row.lossReturns),
+      postGainReturn: mean(row.gainReturns),
+      postLossTurnover: mean(row.lossTurnover),
+      postGainTurnover: mean(row.gainTurnover),
+    }));
+  }, [runs]);
 
   return (
     <div className="space-y-4 pb-1">
@@ -4449,6 +4993,98 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
             </Panel>
           </div>
 
+          {structuralRows.length > 0 && (
+            <Panel className="overflow-x-auto p-0">
+              <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+                <p className="dashboard-label">Structural comparison by model and prompt</p>
+              </div>
+              <table className="w-full min-w-[940px] text-[11px]">
+                <thead>
+                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Avg holdings</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean HHI</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Equal-weight-like %</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Forecast abs err</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean rationale chars</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {structuralRows.map((row) => (
+                    <tr key={`${row.model}-${row.promptType}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                      <td className="px-3 py-2.5 text-[#5e5955]">{row.model}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.runCount}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanHoldings != null ? row.meanHoldings.toFixed(1) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanHhi != null ? row.meanHhi.toFixed(3) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.equalWeightRate, 0)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanForecastAbs, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanRationaleLength != null ? row.meanRationaleLength.toFixed(0) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Panel>
+          )}
+
+          {hhiByModelPeriod.length > 0 && (
+            <Panel>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">HHI over time by model</p>
+                <FigureExportControls
+                  captureRef={behaviorHhiTimeRef}
+                  slug="behavior-hhi-over-time-by-model"
+                  caption="Behavior — HHI over time by model"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
+              <div ref={behaviorHhiTimeRef} className="min-w-0">
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={hhiByModelPeriod}>
+                    <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                    <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                    <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? value.toFixed(3) : "—")} />
+                    <Legend />
+                    {Array.from(new Set(structuralRows.map((row) => row.model))).map((model, index) => (
+                      <Line key={model} type="monotone" dataKey={model} stroke={MODEL_SCATTER_COLORS[index % MODEL_SCATTER_COLORS.length]} dot={false} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+          )}
+
+          {rationaleByModelPeriod.length > 0 && (
+            <Panel>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Rationale length over time</p>
+                <FigureExportControls
+                  captureRef={behaviorRationaleRef}
+                  slug="behavior-rationale-length-by-model"
+                  caption="Behavior — Rationale length by model"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
+              <div ref={behaviorRationaleRef} className="min-w-0">
+                <ResponsiveContainer width="100%" height={280}>
+                  <LineChart data={rationaleByModelPeriod}>
+                    <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                    <XAxis dataKey="period" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                    <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? `${value.toFixed(0)} chars` : "—")} />
+                    <Legend />
+                    {Array.from(new Set(structuralRows.map((row) => row.model))).map((model, index) => (
+                      <Line key={model} type="monotone" dataKey={model} stroke={MODEL_SCATTER_COLORS[index % MODEL_SCATTER_COLORS.length]} dot={false} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+          )}
+
           <Panel className="overflow-x-auto p-0">
             <table className="w-full min-w-[760px] text-[11px]">
               <thead>
@@ -4558,6 +5194,92 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                 </table>
               </Panel>
             </>
+          )}
+
+          {postGainComparisonRows.length > 0 && (
+            <Panel className="overflow-x-auto p-0">
+              <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+                <p className="dashboard-label">Post-loss vs post-gain baseline</p>
+              </div>
+              <table className="w-full min-w-[680px] text-[11px]">
+                <thead>
+                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Post-loss return</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Post-gain return</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Post-loss turnover</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Post-gain turnover</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {postGainComparisonRows.map((row) => (
+                    <tr key={row.label} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                      <td className="px-3 py-2.5 text-[#5e5955]">{row.label}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.postLossReturn, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.postGainReturn, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.postLossTurnover, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.postGainTurnover, 1)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Panel>
+          )}
+
+          {(sectorConcentrationRows.length > 0 || assetFrequencyRows.length > 0) && (
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              <Panel className="overflow-x-auto p-0">
+                <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+                  <p className="dashboard-label">Sector concentration and cap pressure</p>
+                </div>
+                <table className="w-full min-w-[520px] text-[11px]">
+                  <thead>
+                    <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Sector</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Share</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Cap flag</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sectorConcentrationRows.map((row) => (
+                      <tr key={`${row.promptType}-${row.sector}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                        <td className="px-3 py-2.5 text-[#5e5955]">{row.promptType}</td>
+                        <td className="px-3 py-2.5 text-[#8d857f]">{row.sector}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.share, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.capViolation ? "Yes" : "No"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Panel>
+
+              <Panel className="overflow-x-auto p-0">
+                <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+                  <p className="dashboard-label">Most frequent assets</p>
+                </div>
+                <table className="w-full min-w-[620px] text-[11px]">
+                  <thead>
+                    <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Ticker</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Name</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Markets</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Freq</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assetFrequencyRows.map((row) => (
+                      <tr key={row.ticker} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                        <td className="px-3 py-2.5 text-[#5e5955]">{row.ticker}</td>
+                        <td className="px-3 py-2.5 text-[#8d857f]">{row.name}</td>
+                        <td className="px-3 py-2.5 text-[#8d857f]">{row.markets}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Panel>
+            </div>
           )}
 
           {/* ── Reasoning keyword frequency ── */}
@@ -4989,6 +5711,228 @@ export function DrawdownsTab({ data }: BaseTabProps) {
   );
 }
 
+export function RollingRiskTab({ data }: BaseTabProps) {
+  const allMarkets = useMemo(() => getMarketOptions(data), [data]);
+  const [marketFilter, setMarketFilter] = useState(allMarkets[0] ?? "");
+  const [seriesFilter, setSeriesFilter] = useState("All");
+  const rollingSharpeRef = useRef<HTMLDivElement>(null);
+  const rollingSortinoRef = useRef<HTMLDivElement>(null);
+  const rollingVolRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!allMarkets.includes(marketFilter)) {
+      setMarketFilter(allMarkets[0] ?? "");
+    }
+  }, [allMarkets, marketFilter]);
+
+  const rollingQuery = useQuery({
+    queryKey: ["rolling-risk", data.active_experiment_id, marketFilter],
+    queryFn: async () => {
+      const rows = await Promise.all(
+        ["gpt_retail", "gpt_advanced"].map((strategyKey) =>
+          getEquityChart({
+            experiment_id: data.active_experiment_id,
+            market: marketFilter,
+            strategy_key: strategyKey,
+          })
+        )
+      );
+      return rows.flat();
+    },
+    enabled: Boolean(data.active_experiment_id && marketFilter),
+    staleTime: 60_000,
+  });
+
+  const rollingRows = useMemo(
+    () => aggregateRollingMetricSeries(rollingQuery.data ?? []),
+    [rollingQuery.data]
+  );
+
+  const seriesOptions = useMemo(() => {
+    const values = Array.from(new Set(rollingRows.map((row) => row.seriesLabel))).sort();
+    return [{ value: "All", label: "All series" }, ...values.map((value) => ({ value, label: value }))];
+  }, [rollingRows]);
+
+  useEffect(() => {
+    if (!seriesOptions.some((option) => option.value === seriesFilter)) {
+      setSeriesFilter("All");
+    }
+  }, [seriesFilter, seriesOptions]);
+
+  const chartRows = useMemo(() => {
+    const filtered = rollingRows.filter((row) => seriesFilter === "All" || row.seriesLabel === seriesFilter);
+    const grouped = new Map<string, Record<string, string | number | null>>();
+    for (const row of filtered) {
+      const bucket = grouped.get(row.date) ?? { date: row.date };
+      bucket[`${row.seriesLabel}__Sharpe`] = row.rollingSharpe;
+      bucket[`${row.seriesLabel}__Sortino`] = row.rollingSortino;
+      bucket[`${row.seriesLabel}__Volatility`] = row.rollingVolatility != null ? row.rollingVolatility * Math.sqrt(252) * 100 : null;
+      grouped.set(row.date, bucket);
+    }
+    return Array.from(grouped.values()).sort((left, right) => String(left.date).localeCompare(String(right.date)));
+  }, [rollingRows, seriesFilter]);
+
+  const visibleSeries = useMemo(() => {
+    const filtered = rollingRows.filter((row) => seriesFilter === "All" || row.seriesLabel === seriesFilter);
+    return Array.from(new Set(filtered.map((row) => row.seriesLabel)));
+  }, [rollingRows, seriesFilter]);
+
+  const colorMap = useMemo(
+    () =>
+      new Map(
+        visibleSeries.map((label, index) => [label, MODEL_SCATTER_COLORS[index % MODEL_SCATTER_COLORS.length]])
+      ),
+    [visibleSeries]
+  );
+
+  const autocorrelationSummary = useMemo(() => {
+    return visibleSeries.map((label) => {
+      const returns = rollingQuery.data
+        ?.filter((row) => `${String(row.model ?? "").trim() || "unknown"} · ${String(row.prompt_type ?? "").trim() || "unknown"}` === label)
+        .map((row) => asNumber(row.daily_return))
+        .filter((value): value is number => value != null) ?? [];
+      return {
+        label,
+        acf1: computeAutocorrelation(returns, 1),
+        ljungBox5: ljungBoxStatistic(returns, 5),
+        n: returns.length,
+      };
+    });
+  }, [rollingQuery.data, visibleSeries]);
+
+  return (
+    <div className="space-y-4 pb-1">
+      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <FilterSelect
+            label="Market"
+            value={marketFilter}
+            onChange={setMarketFilter}
+            options={allMarkets.map((market) => ({ value: market, label: MARKET_LABELS[market] ?? market }))}
+          />
+          <FilterSelect
+            label="Model / prompt series"
+            value={seriesFilter}
+            onChange={setSeriesFilter}
+            options={seriesOptions}
+          />
+        </div>
+      </Panel>
+
+      {rollingQuery.isLoading ? (
+        <LoadingState title="Loading rolling risk metrics" />
+      ) : chartRows.length === 0 ? (
+        <EmptyState title="No rolling metrics available" body="No daily GPT equity rows were returned for the selected market." />
+      ) : (
+        <>
+          <Panel>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+              <p className="dashboard-label">Rolling Sharpe</p>
+              <FigureExportControls
+                captureRef={rollingSharpeRef}
+                slug="paths-rolling-sharpe"
+                caption="Paths — Rolling Sharpe"
+                experimentId={data.active_experiment_id}
+              />
+            </div>
+            <div ref={rollingSharpeRef} className="min-w-0">
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={chartRows}>
+                  <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} minTickGap={28} />
+                  <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                  <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")} />
+                  <Legend />
+                  {visibleSeries.map((label) => (
+                    <Line key={label} type="monotone" dataKey={`${label}__Sharpe`} name={label} stroke={colorMap.get(label)} strokeWidth={2} dot={false} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </Panel>
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <Panel>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Rolling Sortino</p>
+                <FigureExportControls
+                  captureRef={rollingSortinoRef}
+                  slug="paths-rolling-sortino"
+                  caption="Paths — Rolling Sortino"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
+              <div ref={rollingSortinoRef} className="min-w-0">
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={chartRows}>
+                    <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} minTickGap={28} />
+                    <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
+                    <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")} />
+                    <Legend />
+                    {visibleSeries.map((label) => (
+                      <Line key={label} type="monotone" dataKey={`${label}__Sortino`} name={label} stroke={colorMap.get(label)} strokeWidth={2} dot={false} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+
+            <Panel>
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                <p className="dashboard-label">Rolling annualized volatility</p>
+                <FigureExportControls
+                  captureRef={rollingVolRef}
+                  slug="paths-rolling-volatility"
+                  caption="Paths — Rolling annualized volatility"
+                  experimentId={data.active_experiment_id}
+                />
+              </div>
+              <div ref={rollingVolRef} className="min-w-0">
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={chartRows}>
+                    <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} minTickGap={28} />
+                    <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} tickFormatter={(value: number) => `${value.toFixed(0)}%`} />
+                    <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? `${value.toFixed(1)}%` : "—")} />
+                    <Legend />
+                    {visibleSeries.map((label) => (
+                      <Line key={label} type="monotone" dataKey={`${label}__Volatility`} name={label} stroke={colorMap.get(label)} strokeWidth={2} dot={false} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+          </div>
+
+          <Panel className="overflow-x-auto p-0">
+            <table className="w-full min-w-[520px] text-[11px]">
+              <thead>
+                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Series</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Obs</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">ACF(1)</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Ljung-Box (5)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {autocorrelationSummary.map((row) => (
+                  <tr key={row.label} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{row.label}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.n}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.acf1 != null ? row.acf1.toFixed(3) : "—"}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.ljungBox5 != null ? row.ljungBox5.toFixed(2) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function DataQualityTab({ data }: BaseTabProps) {
   const allMarkets = useMemo(() => getMarketOptions(data), [data]);
   const [marketFilter, setMarketFilter] = useState("All");
@@ -5010,6 +5954,14 @@ export function DataQualityTab({ data }: BaseTabProps) {
     0
   );
   const avgRepairAttempts = totalRows > 0 ? weightedRepairAttempts / totalRows : null;
+  const failureSummary = useMemo(() => buildRunFailureSummary(data.runs), [data.runs]);
+  const coverageRows = useMemo(
+    () =>
+      buildCoverageRows(data.runs).filter((row) =>
+        marketFilter === "All" ? true : row.market === marketFilter
+      ),
+    [data.runs, marketFilter]
+  );
 
   const byPrompt = Array.from(
     rows.reduce((map, row) => {
@@ -5048,6 +6000,13 @@ export function DataQualityTab({ data }: BaseTabProps) {
         <KpiCard label="Valid Rows" value={formatPctFromNumber(totalRows > 0 ? (totalValid / totalRows) * 100 : null, 0)} color={COLORS.green} sub={`${totalValid} valid`} />
         <KpiCard label="Repaired Rows" value={formatPctFromNumber(totalRows > 0 ? (totalRepaired / totalRows) * 100 : null, 0)} color={COLORS.amber} sub={`${totalRepaired} repaired`} />
         <KpiCard label="Avg Repair Attempts" value={avgRepairAttempts != null ? avgRepairAttempts.toFixed(2) : "—"} color={COLORS.cyan} sub="Weighted by row count" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <KpiCard label="Runs Loaded" value={String(failureSummary.totalRuns)} color={COLORS.accent} sub="Current experiment" />
+        <KpiCard label="Failed / invalid runs" value={String(failureSummary.failedRuns)} color={COLORS.red} sub={formatPctFromRatio(failureSummary.failureRate, 1)} />
+        <KpiCard label="Coverage cells" value={String(coverageRows.length)} color={COLORS.purple} sub="model x market x period x prompt" />
+        <KpiCard label="Distinct failures" value={String(failureSummary.byFailureType.length)} color={COLORS.amber} sub="Unique failure categories" />
       </div>
 
       {rows.length === 0 ? (
@@ -5140,6 +6099,36 @@ export function DataQualityTab({ data }: BaseTabProps) {
               </tbody>
             </table>
           </Panel>
+
+          <Panel className="overflow-x-auto p-0">
+            <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+              <p className="dashboard-label">Coverage table</p>
+            </div>
+            <table className="w-full min-w-[940px] text-[11px]">
+              <thead>
+                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Period</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Valid runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {coverageRows.map((row) => (
+                  <tr key={`${row.model}-${row.market}-${row.period}-${row.promptType}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                    <td className="px-3 py-2.5 text-[#5e5955]">{row.model}</td>
+                    <td className="px-3 py-2.5 text-[#8d857f]">{MARKET_LABELS[row.market] ?? row.market}</td>
+                    <td className="px-3 py-2.5 text-[#8d857f]">{row.period}</td>
+                    <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.runCount}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.validCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
         </>
       )}
     </div>
@@ -5154,7 +6143,7 @@ const SUBTAB_BUTTON_INACTIVE =
   "border-white/45 bg-white/45 text-[#6e6762] shadow-sm backdrop-blur-sm hover:bg-white/65 hover:text-[#4a4542]";
 
 export function PathsTab({ data, runs }: BaseTabProps) {
-  const [activeSection, setActiveSection] = useState<"equity" | "drawdowns" | "holdings" | "runs">("equity");
+  const [activeSection, setActiveSection] = useState<"equity" | "robustness" | "drawdowns" | "holdings" | "runs">("equity");
 
   return (
     <div className="space-y-4 pb-1">
@@ -5169,6 +6158,7 @@ export function PathsTab({ data, runs }: BaseTabProps) {
         <div className="flex flex-wrap gap-2">
           {[
             { key: "equity", label: "Equity & Factors" },
+            { key: "robustness", label: "Robustness" },
             { key: "drawdowns", label: "Drawdowns" },
             { key: "holdings", label: "Holdings" },
             { key: "runs", label: "Run Explorer" },
@@ -5188,6 +6178,7 @@ export function PathsTab({ data, runs }: BaseTabProps) {
       </div>
 
       {activeSection === "equity" && <EquityCurvesTab data={data} runs={runs} />}
+      {activeSection === "robustness" && <RollingRiskTab data={data} runs={runs} />}
       {activeSection === "drawdowns" && <DrawdownsTab data={data} runs={runs} />}
       {activeSection === "holdings" && <PortfoliosTab data={data} runs={runs} />}
       {activeSection === "runs" && <RunExplorerTab data={data} runs={runs} />}
