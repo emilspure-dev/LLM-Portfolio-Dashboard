@@ -4,15 +4,10 @@ import { Loader2, RefreshCw, WifiOff } from "lucide-react";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import {
   BehaviorTab,
+  DiagnosticsTab,
   ByMarketTab,
-  DataQualityTab,
-  DrawdownsTab,
-  EquityCurvesTab,
   FactorStyleTab,
-  PortfoliosTab,
-  RunExplorerTab,
-  SharpeReturnsTab,
-  StatisticalTestsTab,
+  PathsTab,
   StrategiesTab,
 } from "@/components/dashboard/DetailTabs";
 import { OverviewTab } from "@/components/dashboard/OverviewTab";
@@ -26,17 +21,12 @@ import type { EvaluationData, RunRow } from "@/lib/types";
 
 const TAB_NAMES = [
   "Overview",
-  "Strategies",
+  "Performance",
   "Factor Style",
-  "Risk & Return",
-  "Equity Curves",
-  "Portfolios",
-  "Run Explorer",
-  "By Market",
-  "Statistical Tests",
+  "Paths",
+  "Markets",
   "Behavior",
-  "Drawdowns",
-  "Data Quality",
+  "Diagnostics",
 ] as const;
 
 function LoadingPanel() {
@@ -256,31 +246,16 @@ export default function Index() {
                   <FactorStyleTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 3 && (
-                  <SharpeReturnsTab data={visibleData} runs={allRuns} />
+                  <PathsTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 4 && (
-                  <EquityCurvesTab data={visibleData} runs={allRuns} />
-                )}
-                {activeTab === 5 && (
-                  <PortfoliosTab data={visibleData} runs={allRuns} />
-                )}
-                {activeTab === 6 && (
-                  <RunExplorerTab data={visibleData} runs={allRuns} />
-                )}
-                {activeTab === 7 && (
                   <ByMarketTab data={visibleData} runs={allRuns} />
                 )}
-                {activeTab === 8 && (
-                  <StatisticalTestsTab data={visibleData} runs={allRuns} />
-                )}
-                {activeTab === 9 && (
+                {activeTab === 5 && (
                   <BehaviorTab data={visibleData} runs={allRuns} />
                 )}
-                {activeTab === 10 && (
-                  <DrawdownsTab data={visibleData} runs={allRuns} />
-                )}
-                {activeTab === 11 && (
-                  <DataQualityTab data={visibleData} runs={allRuns} />
+                {activeTab === 6 && (
+                  <DiagnosticsTab data={visibleData} runs={allRuns} />
                 )}
               </div>
             </>

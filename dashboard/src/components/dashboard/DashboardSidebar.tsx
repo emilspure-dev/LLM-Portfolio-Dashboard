@@ -197,8 +197,9 @@ export function DashboardSidebar({
         <p className="mt-3 border-t border-[rgba(232,224,217,0.75)] pt-3 text-[10px] leading-4 text-[#c4bcb4]">
           UI build <span className="font-mono text-[#9a928b]">{__DASHBOARD_BUILD_ID__}</span>
           {" · "}
-          Latest tabs include <span className="text-[#9a928b]">Strategies</span> and{" "}
-          <span className="text-[#9a928b]">Factor Style</span> after Overview. If you do not see them,
+          Latest tabs include <span className="text-[#9a928b]">Performance</span>,{" "}
+          <span className="text-[#9a928b]">Factor Style</span>, and <span className="text-[#9a928b]">Paths</span> after
+          Overview. If you do not see them,
           your browser or host is serving an old bundle—hard-refresh, redeploy, or run{" "}
           <code className="rounded bg-[rgba(0,0,0,0.04)] px-1">npm run dev</code> from{" "}
           <code className="rounded bg-[rgba(0,0,0,0.04)] px-1">dashboard/</code>.

@@ -1,9 +1,12 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   ReferenceLine,
   ResponsiveContainer,
   Scatter,
@@ -27,7 +30,6 @@ import {
   sharpeColor,
 } from "@/lib/constants";
 import { buildStrategySummaryWithRunSharpe } from "@/lib/data-loader";
-import type { FactorStyleSummaryRow } from "@/lib/api-types";
 import type { EvaluationData, RunRow } from "@/lib/types";
 
 /** Stable [0, 1) for jitter so dots don’t jump on re-render. */
@@ -99,73 +101,49 @@ function runCountByStrategy(runs: RunRow[]): Map<string, number> {
   return m;
 }
 
-function aggregateFactorTiltsByStrategy(
-  rows: FactorStyleSummaryRow[],
-  marketFilter: string
+const SHARPE_HIST_COLORS = {
+  gptRetail: COLORS.accent,
+  gptAdvanced: COLORS.orange,
+  equalWeight: COLORS.cyan,
+  meanVariance: COLORS.purple,
+  sixtyForty: COLORS.slate,
+  index: COLORS.amber,
+  famaFrench: "#818CF8",
+} as const;
+
+function mean(values: number[]) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+function runStrategySharpes(runs: RunRow[], strategyKey: string): number[] {
+  return runs
+    .filter((run) => run.strategy_key === strategyKey)
+    .map((run) => run.sharpe_ratio)
+    .filter((value): value is number => value != null && Number.isFinite(value));
+}
+
+function buildSharpeHistogramBins(
+  retail: number[],
+  advanced: number[],
+  binWidth: number
 ) {
-  const scoped =
-    marketFilter === "All" ? rows : rows.filter((r) => r.market === marketFilter);
-
-  type Acc = {
-    strategy: string;
-    tw: number;
-    sz: number;
-    val: number;
-    mom: number;
-    lr: number;
-    qual: number;
-  };
-
-  const map = new Map<string, Acc>();
-  for (const r of scoped) {
-    const weight = Math.max(1, r.path_count ?? 1);
-    const acc =
-      map.get(r.strategy_key) ??
-      ({
-        strategy: r.strategy,
-        tw: 0,
-        sz: 0,
-        val: 0,
-        mom: 0,
-        lr: 0,
-        qual: 0,
-      } satisfies Acc);
-    acc.strategy = r.strategy;
-    acc.tw += weight;
-    if (r.mean_size_exposure != null) {
-      acc.sz += r.mean_size_exposure * weight;
-    }
-    if (r.mean_value_exposure != null) {
-      acc.val += r.mean_value_exposure * weight;
-    }
-    if (r.mean_momentum_exposure != null) {
-      acc.mom += r.mean_momentum_exposure * weight;
-    }
-    if (r.mean_low_risk_exposure != null) {
-      acc.lr += r.mean_low_risk_exposure * weight;
-    }
-    if (r.mean_quality_exposure != null) {
-      acc.qual += r.mean_quality_exposure * weight;
-    }
-    map.set(r.strategy_key, acc);
+  const all = [...retail, ...advanced];
+  if (all.length === 0) return [];
+  const minValue = Math.min(...all);
+  const maxValue = Math.max(...all);
+  const start = Math.floor((minValue - binWidth) / binWidth) * binWidth;
+  const end = Math.ceil((maxValue + binWidth) / binWidth) * binWidth;
+  const bins: Array<{ mid: number; retail: number; advanced: number }> = [];
+  for (let left = start; left < end; left += binWidth) {
+    const right = left + binWidth;
+    const mid = left + binWidth / 2;
+    bins.push({
+      mid,
+      retail: retail.filter((value) => value >= left && value < right).length,
+      advanced: advanced.filter((value) => value >= left && value < right).length,
+    });
   }
-
-  return Array.from(map.entries())
-    .map(([strategy_key, a]) => ({
-      strategy_key,
-      strategy: a.strategy,
-      size: a.tw > 0 ? a.sz / a.tw : null,
-      value: a.tw > 0 ? a.val / a.tw : null,
-      momentum: a.tw > 0 ? a.mom / a.tw : null,
-      lowRisk: a.tw > 0 ? a.lr / a.tw : null,
-      quality: a.tw > 0 ? a.qual / a.tw : null,
-    }))
-    .filter((row) =>
-      [row.size, row.value, row.momentum, row.lowRisk, row.quality].some(
-        (v) => v != null && !Number.isNaN(v)
-      )
-    )
-    .sort((a, b) => a.strategy.localeCompare(b.strategy));
+  return bins;
 }
 
 interface StrategiesTabProps {
@@ -176,6 +154,7 @@ interface StrategiesTabProps {
 export function StrategiesTab({ data, runs }: StrategiesTabProps) {
   const allMarkets: string[] = data.filters?.markets ?? [];
   const [marketFilter, setMarketFilter] = useState("All");
+  const strategiesDistributionRef = useRef<HTMLDivElement>(null);
   const strategiesMeanSharpeRef = useRef<HTMLDivElement>(null);
   const strategiesRiskReturnRef = useRef<HTMLDivElement>(null);
   const strategiesDispersionRef = useRef<HTMLDivElement>(null);
@@ -189,10 +168,6 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
     [runs, marketFilter]
   );
   const runCounts = useMemo(() => runCountByStrategy(localRuns), [localRuns]);
-  const factorAgg = useMemo(
-    () => aggregateFactorTiltsByStrategy(data.factor_style_rows ?? [], marketFilter),
-    [data.factor_style_rows, marketFilter]
-  );
 
   const sortedBySharpe = useMemo(
     () =>
@@ -234,6 +209,40 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         )[0],
     [summary]
   );
+
+  const sharpeHistogramModel = useMemo(() => {
+    const retail = runStrategySharpes(localRuns, "gpt_retail");
+    const advanced = runStrategySharpes(localRuns, "gpt_advanced");
+    let binWidth = 0.42;
+    let bins = buildSharpeHistogramBins(retail, advanced, binWidth);
+    while (bins.length > 42 && binWidth < 2.5) {
+      binWidth += 0.14;
+      bins = buildSharpeHistogramBins(retail, advanced, binWidth);
+    }
+    const summaryMean = (key: string) => {
+      const row = summary.find((item) => item.strategy_key === key);
+      return row?.mean_sharpe != null && Number.isFinite(row.mean_sharpe)
+        ? row.mean_sharpe
+        : null;
+    };
+    return {
+      retail,
+      advanced,
+      bins,
+      meanMarkers: [
+        { key: "adv", value: mean(advanced), label: "GPT (Advanced) mean", color: SHARPE_HIST_COLORS.gptAdvanced, dashed: true },
+        { key: "ret", value: mean(retail), label: "GPT (Retail) mean", color: SHARPE_HIST_COLORS.gptRetail, dashed: true },
+        { key: "ew", value: summaryMean("equal_weight"), label: "Equal Weight mean", color: SHARPE_HIST_COLORS.equalWeight, dashed: false },
+        { key: "mv", value: summaryMean("mean_variance"), label: "Mean-Variance mean", color: SHARPE_HIST_COLORS.meanVariance, dashed: false },
+        { key: "ix", value: summaryMean("index"), label: "Market Index mean", color: SHARPE_HIST_COLORS.index, dashed: false },
+        { key: "sf", value: summaryMean("sixty_forty"), label: "60/40 mean", color: SHARPE_HIST_COLORS.sixtyForty, dashed: false },
+        { key: "ff", value: summaryMean("fama_french"), label: "Fama-French mean", color: SHARPE_HIST_COLORS.famaFrench, dashed: false },
+      ].filter(
+        (marker): marker is { key: string; value: number; label: string; color: string; dashed: boolean } =>
+          marker.value != null && Number.isFinite(marker.value)
+      ),
+    };
+  }, [localRuns, summary]);
 
   const sharpeBarData = useMemo(
     () =>
@@ -316,7 +325,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             </div>
           </div>
         )}
-        <SectionHeader>Strategies</SectionHeader>
+        <SectionHeader>Performance</SectionHeader>
         <Panel className="flex min-h-[200px] items-center justify-center">
           <p className="text-center text-[13px] text-[#9b938b]">
             No strategy summary rows for {marketScope}. Select a different market or check the experiment.
@@ -346,9 +355,10 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         </div>
       )}
       <div>
-        <SectionHeader>Strategies</SectionHeader>
+        <SectionHeader>Performance</SectionHeader>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
-          Aggregated performance, risk, run counts, and factor tilts by strategy, currently showing{" "}
+          Use this view to rank strategies, compare their risk/return trade-offs, and inspect how GPT run outcomes are
+          distributed in{" "}
           <strong>{marketScope}</strong>.
         </p>
       </div>
@@ -386,6 +396,142 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
 
       <SoftHr />
 
+      <div>
+        <SectionHeader>Run Distribution</SectionHeader>
+        <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
+          This view shows how GPT run outcomes are distributed within the current market scope, while the dotted and dashed
+          markers anchor those runs against benchmark and GPT mean Sharpe levels.
+        </p>
+      </div>
+      {sharpeHistogramModel.retail.length > 0 || sharpeHistogramModel.advanced.length > 0 ? (
+        <Panel>
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+            <p className="dashboard-label">Distribution of GPT run Sharpe ratios</p>
+            <FigureExportControls
+              captureRef={strategiesDistributionRef}
+              slug="performance-sharpe-distribution"
+              caption="Performance — Distribution of GPT Run Sharpe Ratios"
+              experimentId={data.active_experiment_id}
+            />
+          </div>
+          <p className="mb-3 text-[11px] leading-5 text-[#8a827a]">
+            The filled areas show the run-level Sharpe distribution for GPT (Retail) and GPT (Advanced). Dashed markers show
+            GPT means; dotted markers show benchmark means for the same market scope.
+          </p>
+          <div className="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 border-b border-[rgba(232,224,217,0.65)] pb-3 text-[10px] sm:grid-cols-3 lg:grid-cols-4">
+            {sharpeHistogramModel.meanMarkers
+              .sort((a, b) => a.value - b.value)
+              .map((marker) => (
+                <span key={marker.key} className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-[2px] w-4 shrink-0"
+                    style={{
+                      backgroundColor: marker.color,
+                      borderTop: marker.dashed ? `2px dashed ${marker.color}` : `2px dotted ${marker.color}`,
+                      height: 0,
+                    }}
+                  />
+                  <span style={{ color: marker.color }} className="font-semibold">
+                    {marker.label}: {marker.value.toFixed(2)}
+                  </span>
+                </span>
+              ))}
+          </div>
+          {(() => {
+            const markerXs = sharpeHistogramModel.meanMarkers.map((marker) => marker.value);
+            const binMids = sharpeHistogramModel.bins.map((bin) => bin.mid);
+            const allXs = [...binMids, ...markerXs];
+            const xMin = Math.floor((Math.min(...allXs) - 0.5) * 2) / 2;
+            const xMax = Math.ceil((Math.max(...allXs) + 0.5) * 2) / 2;
+            return (
+              <div ref={strategiesDistributionRef} className="min-w-0">
+                <ResponsiveContainer width="100%" height={340}>
+                  <AreaChart data={sharpeHistogramModel.bins} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+                    <CartesianGrid stroke="rgba(200, 192, 184, 0.55)" vertical={false} strokeDasharray="3 6" />
+                    <XAxis
+                      dataKey="mid"
+                      type="number"
+                      domain={[xMin, xMax]}
+                      tickFormatter={(v: number) => v.toFixed(1)}
+                      tick={{ fontSize: 10, fill: "#7a726c" }}
+                      axisLine={{ stroke: "rgba(180, 172, 164, 0.65)" }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fontSize: 10, fill: "#8f8780" }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={36}
+                      label={{
+                        value: "Count",
+                        angle: -90,
+                        position: "insideLeft",
+                        offset: 4,
+                        style: { fill: "#9b938b", fontSize: 10, fontWeight: 600 },
+                      }}
+                    />
+                    <Tooltip
+                      {...tooltipStyle}
+                      formatter={(value: number | undefined, name: string) => [`${value ?? 0} run${value === 1 ? "" : "s"}`, name]}
+                      labelFormatter={(mid) => `Sharpe ≈ ${typeof mid === "number" ? mid.toFixed(2) : mid}`}
+                    />
+                    <Legend
+                      verticalAlign="top"
+                      align="right"
+                      wrapperStyle={{ fontSize: 11, color: "#5d5754", paddingBottom: 4 }}
+                    />
+                    <Area
+                      name="GPT (Retail)"
+                      dataKey="retail"
+                      type="stepAfter"
+                      stroke={SHARPE_HIST_COLORS.gptRetail}
+                      strokeWidth={1.5}
+                      fill={SHARPE_HIST_COLORS.gptRetail}
+                      fillOpacity={0.35}
+                      isAnimationActive={false}
+                      legendType="square"
+                    />
+                    <Area
+                      name="GPT (Advanced)"
+                      dataKey="advanced"
+                      type="stepAfter"
+                      stroke={SHARPE_HIST_COLORS.gptAdvanced}
+                      strokeWidth={1.5}
+                      fill={SHARPE_HIST_COLORS.gptAdvanced}
+                      fillOpacity={0.35}
+                      isAnimationActive={false}
+                      legendType="square"
+                    />
+                    {sharpeHistogramModel.meanMarkers.map((marker) => (
+                      <ReferenceLine
+                        key={marker.key}
+                        x={marker.value}
+                        stroke={marker.color}
+                        strokeWidth={2.2}
+                        strokeDasharray={marker.dashed ? "8 4" : "3 3"}
+                        ifOverflow="extendDomain"
+                      />
+                    ))}
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            );
+          })()}
+          <p className="mt-2 text-[10px] text-[#a39b93]">
+            X-axis: Sharpe ratio. Y-axis: run count per bin.
+          </p>
+        </Panel>
+      ) : (
+        <Panel>
+          <p className="text-[12px] leading-5 text-[#8a827a]">
+            No GPT run-level Sharpe observations are available for this market scope.
+          </p>
+        </Panel>
+      )}
+
+      <SoftHr />
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Panel>
           <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
@@ -393,7 +539,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             <FigureExportControls
               captureRef={strategiesMeanSharpeRef}
               slug="strategies-mean-sharpe-by-strategy"
-              caption="Strategies — Mean Sharpe by strategy"
+              caption="Performance — Mean Sharpe by Strategy"
               experimentId={data.active_experiment_id}
             />
           </div>
@@ -435,7 +581,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             <FigureExportControls
               captureRef={strategiesRiskReturnRef}
               slug="strategies-risk-return-summary"
-              caption="Strategies — Risk / Return Summary"
+              caption="Performance — Risk / Return Summary"
               experimentId={data.active_experiment_id}
             />
           </div>
@@ -572,7 +718,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
               <FigureExportControls
                 captureRef={strategiesDispersionRef}
                 slug="strategies-sharpe-dispersion-gpt"
-                caption="Strategies — Sharpe Dispersion (GPT Retail and GPT Advanced)"
+                caption="Performance — Sharpe Dispersion (GPT Retail and GPT Advanced)"
                 experimentId={data.active_experiment_id}
               />
             </div>
@@ -745,77 +891,9 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         </table>
       </Panel>
 
-      <SectionHeader>Factor Tilts Table</SectionHeader>
-      {data.factor_style_error ? (
-        <Panel>
-          <p className="text-[12px] leading-5 text-[#8b5348]">
-            Factor Style API error: {data.factor_style_error}
-          </p>
-          <p className="mt-2 text-[12px] leading-5 text-[#9b938b]">
-            Open the <strong>Factor Style</strong> tab for full troubleshooting notes (backend deploy,
-            API base URL, DB view).
-          </p>
-        </Panel>
-      ) : factorAgg.length === 0 ? (
-        <Panel>
-          <p className="text-[12px] leading-5 text-[#9b938b]">
-            No factor-style rows for this scope (API returned 200 with an empty list). Daily path
-            metrics do not have factor-exposure rows for this experiment yet, so try another
-            experiment or rebuild the analytics export.
-          </p>
-        </Panel>
-      ) : (
-        <Panel className="overflow-x-auto p-0">
-          <table className="w-full min-w-[720px] text-[11px]">
-            <thead>
-              <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                  Strategy
-                </th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                  Size
-                </th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                  Value
-                </th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                  Momentum
-                </th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                  Low risk
-                </th>
-                <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                  Quality
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {factorAgg.map((row) => (
-                <tr
-                  key={row.strategy_key}
-                  className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
-                >
-                  <td className="px-3 py-2.5 font-medium text-[#5e5955]">
-                    {getStrategyDisplayName(row.strategy, row.strategy_key)}
-                  </td>
-                  {(["size", "value", "momentum", "lowRisk", "quality"] as const).map((k, i) => (
-                    <td key={k} className="px-3 py-2.5 text-right tabular-nums text-[#8d857f]">
-                      {row[k] != null && Number.isFinite(row[k] as number)
-                        ? (row[k] as number).toFixed(3)
-                        : "—"}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      )}
-
       <p className="text-[11px] leading-5 text-[#a39b93]">
-        For equity paths, drawdowns, holdings, and run-level detail, use{" "}
-        <strong>Equity Curves</strong>, <strong>Drawdowns</strong>, <strong>Portfolios</strong>, and{" "}
-        <strong>Run Explorer</strong>.
+        Use <strong>Factor Style</strong> for the style-based return explanation, <strong>Paths</strong> for daily
+        equity and drawdown drill-down, and <strong>Markets</strong> for heterogeneity across regions and periods.
       </p>
     </div>
   );

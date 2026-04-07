@@ -48,6 +48,7 @@ import type { BehaviorRow, EvaluationData, RunRow, StrategyRow } from "@/lib/typ
 import { KpiCard } from "./KpiCard";
 import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
+import { SharpeGapDiagnostic } from "./OverviewTab";
 
 interface BaseTabProps {
   data: EvaluationData;
@@ -3422,7 +3423,6 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
 
 export function ByMarketTab({ data }: BaseTabProps) {
   const markets = getMarketOptions(data);
-  const byMarketBestBarRef = useRef<HTMLDivElement>(null);
   const byMarketSharpeHeatmapRef = useRef<HTMLDivElement>(null);
   const byMarketPeriodConsistencyRef = useRef<HTMLDivElement>(null);
   const perMarketSummary = markets.map((market) => ({
@@ -3442,60 +3442,13 @@ export function ByMarketTab({ data }: BaseTabProps) {
     )
   );
 
-  const bestRows = perMarketSummary
-    .map((entry) => ({
-      market: entry.market,
-      row: [...entry.summary].sort((left, right) => (right.mean_sharpe ?? -Infinity) - (left.mean_sharpe ?? -Infinity))[0],
-    }))
-    .filter((entry) => entry.row);
-
   return (
     <div className="space-y-4 pb-1">
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-        {bestRows.map(({ market, row }) => (
-          <KpiCard
-            key={market}
-            label={MARKET_LABELS[market] ?? market}
-            value={
-              row?.mean_sharpe != null && Number.isFinite(row.mean_sharpe)
-                ? row.mean_sharpe.toFixed(2)
-                : "—"
-            }
-            color={sharpeColor(row?.mean_sharpe)}
-            sub={row ? `Top strategy: ${formatStrategyLabel(row.Strategy, row.strategy_key)}` : "No summary rows"}
-          />
-        ))}
-      </div>
-
-      <Panel>
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-          <p className="dashboard-label">Best strategy by market</p>
-          <FigureExportControls
-            captureRef={byMarketBestBarRef}
-            slug="by-market-best-strategy-sharpe"
-            caption="Best strategy by market (Sharpe)"
-            experimentId={data.active_experiment_id}
-          />
-        </div>
-        <div ref={byMarketBestBarRef} className="min-w-0">
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={bestRows.map(({ market, row }) => ({
-            market: MARKET_LABELS[market] ?? market,
-            sharpe: row?.mean_sharpe ?? null,
-            color: row ? getStrategyColor(row.strategy_key) : COLORS.slate,
-          }))}>
-            <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-            <XAxis dataKey="market" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
-            <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")} />
-            <Bar dataKey="sharpe" radius={[10, 10, 0, 0]}>
-              {bestRows.map(({ market, row }) => (
-                <Cell key={market} fill={row ? getStrategyColor(row.strategy_key) : COLORS.slate} />
-              ))}
-            </Bar>
-          </BarChart>
-          </ResponsiveContainer>
-        </div>
+      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+        <p className="text-[12px] leading-5 text-[#8f8780]">
+          Use this view to answer where strategy results differ. The heatmap compares strategies across markets, while the
+          period-consistency matrix shows when GPT variants beat or missed each market index over time.
+        </p>
       </Panel>
 
       <SectionHeader>Sharpe Heatmap</SectionHeader>
@@ -3716,7 +3669,7 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
           label="Strategies Compared"
           value={String(statsRows.length)}
           color={COLORS.accent}
-          sub="Current sidebar filters"
+          sub="Current experiment"
         />
       </div>
 
@@ -4580,6 +4533,105 @@ export function DataQualityTab({ data }: BaseTabProps) {
             </table>
           </Panel>
         </>
+      )}
+    </div>
+  );
+}
+
+const SUBTAB_BUTTON_BASE =
+  "rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all";
+const SUBTAB_BUTTON_ACTIVE =
+  "border-[#191513] bg-[#191513] text-[#f9f6f1] shadow-[0_8px_18px_rgba(35,28,22,0.18)]";
+const SUBTAB_BUTTON_INACTIVE =
+  "border-white/45 bg-white/45 text-[#6e6762] shadow-sm backdrop-blur-sm hover:bg-white/65 hover:text-[#4a4542]";
+
+export function PathsTab({ data, runs }: BaseTabProps) {
+  const [activeSection, setActiveSection] = useState<"equity" | "drawdowns" | "holdings" | "runs">("equity");
+
+  return (
+    <div className="space-y-4 pb-1">
+      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+        <p className="text-[12px] leading-5 text-[#8f8780]">
+          This path-analysis lane starts with the typical strategy path, then lets you drill into drawdowns, holdings,
+          and individual runs without leaving the same top-level view.
+        </p>
+      </Panel>
+
+      <div className="dashboard-panel rounded-[18px] px-4 py-3">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: "equity", label: "Equity & Factors" },
+            { key: "drawdowns", label: "Drawdowns" },
+            { key: "holdings", label: "Holdings" },
+            { key: "runs", label: "Run Explorer" },
+          ].map((section) => (
+            <button
+              key={section.key}
+              type="button"
+              onClick={() => setActiveSection(section.key as typeof activeSection)}
+              className={`${SUBTAB_BUTTON_BASE} ${
+                activeSection === section.key ? SUBTAB_BUTTON_ACTIVE : SUBTAB_BUTTON_INACTIVE
+              }`}
+            >
+              {section.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeSection === "equity" && <EquityCurvesTab data={data} runs={runs} />}
+      {activeSection === "drawdowns" && <DrawdownsTab data={data} runs={runs} />}
+      {activeSection === "holdings" && <PortfoliosTab data={data} runs={runs} />}
+      {activeSection === "runs" && <RunExplorerTab data={data} runs={runs} />}
+    </div>
+  );
+}
+
+export function DiagnosticsTab({ data, runs }: BaseTabProps) {
+  const [activeSection, setActiveSection] = useState<"confidence" | "quality" | "missing">("confidence");
+
+  return (
+    <div className="space-y-4 pb-1">
+      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+        <p className="text-[12px] leading-5 text-[#8f8780]">
+          Diagnostics sit behind the main story. Use them to validate statistical confidence, inspect run-quality issues,
+          and understand where backend summary fields are still incomplete.
+        </p>
+      </Panel>
+
+      <div className="dashboard-panel rounded-[18px] px-4 py-3">
+        <div className="flex flex-wrap gap-2">
+          {[
+            { key: "confidence", label: "Confidence" },
+            { key: "quality", label: "Data Quality" },
+            { key: "missing", label: "Missing Data" },
+          ].map((section) => (
+            <button
+              key={section.key}
+              type="button"
+              onClick={() => setActiveSection(section.key as typeof activeSection)}
+              className={`${SUBTAB_BUTTON_BASE} ${
+                activeSection === section.key ? SUBTAB_BUTTON_ACTIVE : SUBTAB_BUTTON_INACTIVE
+              }`}
+            >
+              {section.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeSection === "confidence" && <StatisticalTestsTab data={data} runs={runs} />}
+      {activeSection === "quality" && <DataQualityTab data={data} runs={runs} />}
+      {activeSection === "missing" && (
+        <div className="space-y-4">
+          <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+            <p className="text-[12px] leading-5 text-[#8f8780]">
+              These checks focus on gaps in the summary layer, especially rows where annualized return or volatility exists
+              but `mean_sharpe` is still missing in the API response.
+            </p>
+          </Panel>
+          <SharpeGapDiagnostic summaryRows={data.summary_rows} />
+        </div>
       )}
     </div>
   );

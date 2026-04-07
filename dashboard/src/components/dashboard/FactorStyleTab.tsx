@@ -249,7 +249,8 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
       <div>
         <SectionHeader>Portfolio factor style</SectionHeader>
         <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
-          Shows only the GPT portfolios, so you can compare how the retail and advanced prompts tilt across markets.
+          This is the summary explanation layer for GPT portfolios: compare how the retail and advanced prompts tilt across
+          markets here, then use <strong>Paths</strong> for the day-by-day factor timeline.
         </p>
         {data.factor_style_from_exposure_fallback && (
           <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#5a6d78]">

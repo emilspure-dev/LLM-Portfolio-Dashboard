@@ -28,7 +28,6 @@ interface OverviewTabProps {
 export function OverviewTab({ data, runs }: OverviewTabProps) {
   const { summary } = data;
   const overviewBeatIndexRef = useRef<HTMLDivElement>(null);
-  const overviewBeat6040Ref = useRef<HTMLDivElement>(null);
   const nRuns = runs.filter((r) => r.valid !== false).length;
   const nMarkets = new Set(runs.map((r) => r.market).filter(Boolean)).size;
   const nPeriods = new Set(runs.map((r) => r.period).filter(Boolean)).size;
@@ -71,17 +70,6 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       .map((s) => ({
         name: getStrategyDisplayName(s.Strategy, s.strategy_key),
         value: Number(s.pct_runs_beating_index_sharpe.toFixed(1)),
-        color: getStrategyColor(s.strategy_key),
-      }));
-  }, [summary]);
-
-  const beat60Data = useMemo(() => {
-    return summary
-      .filter((s) => s.pct_runs_beating_sixty_forty_sharpe != null && !isNaN(s.pct_runs_beating_sixty_forty_sharpe))
-      .sort((a, b) => a.pct_runs_beating_sixty_forty_sharpe - b.pct_runs_beating_sixty_forty_sharpe)
-      .map((s) => ({
-        name: getStrategyDisplayName(s.Strategy, s.strategy_key),
-        value: Number(s.pct_runs_beating_sixty_forty_sharpe.toFixed(1)),
         color: getStrategyColor(s.strategy_key),
       }));
   }, [summary]);
@@ -364,164 +352,57 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
 
       <SoftHr />
 
-      {/* Beat rate charts */}
-      {(beatIndexData.length > 0 || beat60Data.length > 0) && (
+      {/* Beat rate chart */}
+      {beatIndexData.length > 0 && (
         <>
           <SectionHeader>Beat Rate Comparison</SectionHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {beatIndexData.length > 0 && (
-              <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
-                <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-                  <p className="dashboard-label">% of runs beating market index (Sharpe)</p>
-                  <FigureExportControls
-                    captureRef={overviewBeatIndexRef}
-                    slug="overview-beat-index-sharpe"
-                    caption="Overview — Percent of runs beating market index (Sharpe)"
-                    experimentId={data.active_experiment_id}
-                  />
-                </div>
-                <div ref={overviewBeatIndexRef} className="min-w-0">
-                  <ResponsiveContainer width="100%" height={beatIndexData.length * 40 + 36}>
-                    <BarChart data={beatIndexData} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
-                    <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                    <XAxis
-                      type="number"
-                      domain={[0, 105]}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10, fill: "#aca49d" }}
-                    />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10, fill: "#8f8780" }}
-                      width={100}
-                    />
-                    <Tooltip {...tooltipStyle} formatter={(v: number) => `${v}%`} />
-                    <ReferenceLine x={50} stroke="rgba(192, 180, 170, 0.9)" strokeDasharray="3 6" strokeWidth={1} />
-                    <Bar
-                      dataKey="value"
-                      radius={[999, 999, 999, 999]}
-                      barSize={12}
-                      label={{ position: "right", fontSize: 10, fill: "#9b938b", formatter: (v: number) => `${v}%` }}
-                    >
-                      {beatIndexData.map((d, i) => (
-                        <Cell key={i} fill={d.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
-
-            {beat60Data.length > 0 && (
-              <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
-                <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-                  <p className="dashboard-label">% of runs beating 60/40 (Sharpe)</p>
-                  <FigureExportControls
-                    captureRef={overviewBeat6040Ref}
-                    slug="overview-beat-sixty-forty-sharpe"
-                    caption="Overview — Percent of runs beating 60/40 (Sharpe)"
-                    experimentId={data.active_experiment_id}
-                  />
-                </div>
-                <div ref={overviewBeat6040Ref} className="min-w-0">
-                  <ResponsiveContainer width="100%" height={beat60Data.length * 40 + 36}>
-                    <BarChart data={beat60Data} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
-                    <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                    <XAxis
-                      type="number"
-                      domain={[0, 105]}
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10, fill: "#aca49d" }}
-                    />
-                    <YAxis
-                      dataKey="name"
-                      type="category"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 10, fill: "#8f8780" }}
-                      width={100}
-                    />
-                    <Tooltip {...tooltipStyle} formatter={(v: number) => `${v}%`} />
-                    <ReferenceLine x={50} stroke="rgba(192, 180, 170, 0.9)" strokeDasharray="3 6" strokeWidth={1} />
-                    <Bar
-                      dataKey="value"
-                      radius={[999, 999, 999, 999]}
-                      barSize={12}
-                      label={{ position: "right", fontSize: 10, fill: "#9b938b", formatter: (v: number) => `${v}%` }}
-                    >
-                      {beat60Data.map((d, i) => (
-                        <Cell key={i} fill={d.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-                </div>
-              </div>
-            )}
+          <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+              <p className="dashboard-label">% of runs beating market index (Sharpe)</p>
+              <FigureExportControls
+                captureRef={overviewBeatIndexRef}
+                slug="overview-beat-index-sharpe"
+                caption="Overview — Percent of runs beating market index (Sharpe)"
+                experimentId={data.active_experiment_id}
+              />
+            </div>
+            <div ref={overviewBeatIndexRef} className="min-w-0">
+              <ResponsiveContainer width="100%" height={beatIndexData.length * 40 + 36}>
+                <BarChart data={beatIndexData} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
+                <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                <XAxis
+                  type="number"
+                  domain={[0, 105]}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 10, fill: "#aca49d" }}
+                />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 10, fill: "#8f8780" }}
+                  width={100}
+                />
+                <Tooltip {...tooltipStyle} formatter={(v: number) => `${v}%`} />
+                <ReferenceLine x={50} stroke="rgba(192, 180, 170, 0.9)" strokeDasharray="3 6" strokeWidth={1} />
+                <Bar
+                  dataKey="value"
+                  radius={[999, 999, 999, 999]}
+                  barSize={12}
+                  label={{ position: "right", fontSize: 10, fill: "#9b938b", formatter: (v: number) => `${v}%` }}
+                >
+                  {beatIndexData.map((d, i) => (
+                    <Cell key={i} fill={d.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </>
       )}
-
-      {/* Strategy summary table */}
-      {summary.length > 0 && (
-        <>
-          <SectionHeader>Strategy Summary</SectionHeader>
-          <div className="dashboard-panel-strong overflow-hidden rounded-[20px]">
-            <table className="w-full text-[11px]">
-              <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Strategy</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Beat Index %</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Beat 60/40 %</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Period Return</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">N</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summarySorted.map((s, i) => (
-                  <tr key={i} className="border-b border-[rgba(227,220,214,0.8)] last:border-0 hover:bg-[rgba(214,205,197,0.12)] transition-colors">
-                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{s.Strategy}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">
-                      {s.markets && s.markets.length > 1
-                        ? "All Markets"
-                        : getMarketShortLabel(s.markets?.[0] ?? "—")}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-medium tabular-nums" style={{ color: sharpeColor(s.mean_sharpe) }}>
-                      {fmt(s.mean_sharpe, 2)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-medium tabular-nums text-[#9f978f]">
-                      {s.pct_runs_beating_index_sharpe != null && !isNaN(s.pct_runs_beating_index_sharpe)
-                        ? `${s.pct_runs_beating_index_sharpe.toFixed(1)}%`
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-medium tabular-nums text-[#9f978f]">
-                      {s.pct_runs_beating_sixty_forty_sharpe != null && !isNaN(s.pct_runs_beating_sixty_forty_sharpe)
-                        ? `${s.pct_runs_beating_sixty_forty_sharpe.toFixed(1)}%`
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-medium tabular-nums text-[#9f978f]">
-                      {fmt(s.net_return_mean, 4)}
-                    </td>
-                    <td className="px-3 py-2.5 text-right font-medium tabular-nums text-[#9f978f]">
-                      {s.n_observations}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-
-      <SoftHr />
 
       {/* Key Insights */}
       {insights.length > 0 && (
@@ -535,103 +416,18 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         </>
       )}
 
-      {/* Period-by-period consistency */}
-      {(() => {
-        const gptKeys = ["gpt_advanced", "gpt_retail"] as const;
-        const gptRuns = runs.filter((r) => gptKeys.includes(r.strategy_key as typeof gptKeys[number]));
-        const indexRuns = runs.filter((r) => r.strategy_key === "index");
-        const markets = Array.from(new Set(runs.map((r) => r.market).filter(Boolean) as string[])).sort(
-          (a, b) => {
-            const o: Record<string, number> = { us: 0, germany: 1, japan: 2 };
-            return (o[a] ?? 99) - (o[b] ?? 99);
-          }
-        );
-        const periods = Array.from(new Set(runs.map((r) => r.period).filter(Boolean) as string[])).sort();
-        if (gptRuns.length === 0 || indexRuns.length === 0 || periods.length < 2) return null;
-
-        const idxSharpe = new Map<string, number>();
-        for (const r of indexRuns) {
-          const k = `${r.market}::${r.period}`;
-          const s = r.sharpe_ratio as number | null;
-          if (s != null) {
-            const prev = idxSharpe.get(k);
-            if (prev == null || s > prev) idxSharpe.set(k, s);
-          }
-        }
-
-        const columns = markets.flatMap((m) =>
-          gptKeys.map((gk) => ({ market: m, gptKey: gk, col: `${m}::${gk}` }))
-        );
-
-        return (
-          <>
-            <SoftHr />
-            <SectionHeader>Period Consistency</SectionHeader>
-            <p className="mb-2 text-[12px] leading-5 text-[#8f8780]">
-              Each value is mean GPT Sharpe for that period.{" "}
-              <span className="font-medium text-[#5a6f7a]">Teal</span> = above index Sharpe;{" "}
-              <span className="font-medium text-[#7a6a58]">warm neutral</span> = index Sharpe or below (not whether the number is positive).
-            </p>
-            <div className="dashboard-panel-strong overflow-hidden rounded-[20px]">
-              <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Period</th>
-                    {columns.map((c) => (
-                      <th key={c.col} className="px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
-                        <div>{getMarketShortLabel(c.market)}</div>
-                        <div className="mt-0.5 text-[9px] font-normal normal-case opacity-70">
-                          {c.gptKey === "gpt_advanced" ? "Advanced" : "Retail"}
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {periods.map((period) => (
-                    <tr key={period} className="border-b border-[rgba(227,220,214,0.6)] last:border-0">
-                      <td className="whitespace-nowrap px-3 py-2 font-medium text-[#5e5955]">{period}</td>
-                      {columns.map((c) => {
-                        const idx = idxSharpe.get(`${c.market}::${period}`);
-                        const gpts = gptRuns.filter(
-                          (r) => r.strategy_key === c.gptKey && r.market === c.market && r.period === period
-                        );
-                        if (!gpts.length || idx == null) {
-                          return <td key={c.col} className="px-2 py-2 text-center text-[#d0c9c3]">—</td>;
-                        }
-                        const avg = gpts.reduce((s, r) => s + ((r.sharpe_ratio as number) ?? 0), 0) / gpts.length;
-                        const beat = avg > idx;
-                        const pill = beat ? INDEX_VS_PILL.beat : INDEX_VS_PILL.miss;
-                        return (
-                          <td key={c.col} className="px-2 py-2 text-center">
-                            <span
-                              className="inline-block rounded-[8px] px-2 py-0.5 text-[10px] font-semibold"
-                              style={{
-                                backgroundColor: pill.backgroundColor,
-                                color: pill.color,
-                              }}
-                            >
-                              {avg.toFixed(2)}
-                            </span>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        );
-      })()}
-
-      <SoftHr />
-      <SharpeGapDiagnostic summaryRows={data.summary_rows} />
+      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+        <p className="text-[12px] leading-5 text-[#8f8780]">
+          Use <strong>Performance</strong> for full strategy ranking and run distributions, <strong>Factor Style</strong>
+          for return explanations, <strong>Paths</strong> for time-series drill-down, and <strong>Diagnostics</strong> for
+          missing-data and confidence checks.
+        </p>
+      </Panel>
     </div>
   );
 }
 
-function SharpeGapDiagnostic({
+export function SharpeGapDiagnostic({
   summaryRows,
 }: {
   summaryRows: { strategy_key: string; strategy: string; market: string; mean_sharpe: number | null; mean_annualized_return: number | null; mean_volatility: number | null; observations: number }[];
