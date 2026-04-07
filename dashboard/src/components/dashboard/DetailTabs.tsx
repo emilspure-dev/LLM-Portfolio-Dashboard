@@ -1982,17 +1982,6 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
                         strokeDasharray="5 4"
                         strokeWidth={1}
                         ifOverflow="extendDomain"
-                        label={{
-                          value:
-                            m.kind === "model"
-                              ? `Model ${m.label.length > 42 ? `${m.label.slice(0, 40)}…` : m.label}`
-                              : m.label.length > 36
-                                ? `${m.label.slice(0, 34)}…`
-                                : m.label,
-                          position: "insideTopLeft",
-                          fill: "#9b938b",
-                          fontSize: 9,
-                        }}
                       />
                     ))}
                     </LineChart>
@@ -2003,6 +1992,24 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
                     rows (dark) or, when no model is recorded, a{" "}
                     <span className="font-medium text-[#7a736d]">period</span> boundary (tan).
                   </p>
+                  {factorChangeMarkers.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {factorChangeMarkers.map((m) => (
+                        <span
+                          key={`factor-marker-${m.date}-${m.kind}-${m.label}`}
+                          className="rounded-full border border-[rgba(232,224,217,0.85)] bg-[rgba(255,255,252,0.68)] px-2.5 py-1 text-[10px] leading-4 text-[#8d857f]"
+                        >
+                          <span className="font-medium text-[#6f6863]">
+                            {m.kind === "model" ? "Model change" : "Period"}
+                          </span>
+                          {" · "}
+                          {formatDateLabel(m.date)}
+                          {" · "}
+                          {m.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </Panel>
             </>
@@ -3290,17 +3297,6 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                             strokeDasharray="5 4"
                             strokeWidth={1}
                             ifOverflow="extendDomain"
-                            label={{
-                              value:
-                                m.kind === "model"
-                                  ? `Model ${m.label.length > 42 ? `${m.label.slice(0, 40)}…` : m.label}`
-                                  : m.label.length > 36
-                                    ? `${m.label.slice(0, 34)}…`
-                                    : m.label,
-                              position: "insideTopLeft",
-                              fill: "#9b938b",
-                              fontSize: 9,
-                            }}
                           />
                         ))}
                       </LineChart>
@@ -3308,6 +3304,24 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                       <p className="mt-2 text-[11px] leading-4 text-[#9d958d]">
                         Dashed vertical lines: model change (dark) or period boundary when model is unset (tan).
                       </p>
+                      {runFactorChangeMarkers.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {runFactorChangeMarkers.map((m) => (
+                            <span
+                              key={`run-factor-marker-${m.date}-${m.kind}-${m.label}`}
+                              className="rounded-full border border-[rgba(232,224,217,0.85)] bg-[rgba(255,255,252,0.68)] px-2.5 py-1 text-[10px] leading-4 text-[#8d857f]"
+                            >
+                              <span className="font-medium text-[#6f6863]">
+                                {m.kind === "model" ? "Model change" : "Period"}
+                              </span>
+                              {" · "}
+                              {formatDateLabel(m.date)}
+                              {" · "}
+                              {m.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </Panel>
                 )
