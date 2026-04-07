@@ -60,6 +60,18 @@ export function sharpeColor(v: number | null | undefined): string {
   return COLORS.red;
 }
 
+/** Pills for GPT avg Sharpe vs same-period index — cool/warm split avoids reading as “positive/negative Sharpe”. */
+export const INDEX_VS_PILL = {
+  beat: {
+    backgroundColor: "rgba(156, 187, 200, 0.42)",
+    color: "#3a5866",
+  },
+  miss: {
+    backgroundColor: "rgba(218, 198, 176, 0.48)",
+    color: "#6b5b48",
+  },
+} as const;
+
 export function fmt(v: number | null | undefined, d = 1): string {
   if (v == null || isNaN(v)) return "—";
   return v.toFixed(d);

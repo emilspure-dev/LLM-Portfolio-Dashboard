@@ -8,7 +8,13 @@ import { InsightCard } from "./InsightCard";
 import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
 import {
-  COLORS, MARKET_LABELS, getStrategyColor, sharpeColor, fmt, fmtp,
+  COLORS,
+  INDEX_VS_PILL,
+  MARKET_LABELS,
+  getStrategyColor,
+  sharpeColor,
+  fmt,
+  fmtp,
 } from "@/lib/constants";
 
 const MARKET_SHORT: Record<string, string> = Object.fromEntries(
@@ -575,6 +581,11 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
           <>
             <SoftHr />
             <SectionHeader>Period-by-period consistency</SectionHeader>
+            <p className="mb-2 text-[12px] leading-5 text-[#8f8780]">
+              Each value is mean GPT Sharpe for that period.{" "}
+              <span className="font-medium text-[#5a6f7a]">Teal</span> = above index Sharpe;{" "}
+              <span className="font-medium text-[#7a6a58]">warm neutral</span> = index Sharpe or below (not whether the number is positive).
+            </p>
             <div className="dashboard-panel-strong overflow-hidden rounded-[20px]">
               <table className="w-full text-[11px]">
                 <thead>
@@ -604,13 +615,14 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                         }
                         const avg = gpts.reduce((s, r) => s + ((r.sharpe_ratio as number) ?? 0), 0) / gpts.length;
                         const beat = avg > idx;
+                        const pill = beat ? INDEX_VS_PILL.beat : INDEX_VS_PILL.miss;
                         return (
                           <td key={c.col} className="px-2 py-2 text-center">
                             <span
                               className="inline-block rounded-[8px] px-2 py-0.5 text-[10px] font-semibold"
                               style={{
-                                backgroundColor: beat ? "rgba(120,185,135,0.3)" : "rgba(212,140,130,0.25)",
-                                color: beat ? "#4a8a5a" : "#b05050",
+                                backgroundColor: pill.backgroundColor,
+                                color: pill.color,
                               }}
                             >
                               {avg.toFixed(2)}

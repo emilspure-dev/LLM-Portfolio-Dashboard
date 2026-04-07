@@ -27,7 +27,14 @@ import {
   buildStrategySummaryWithRunSharpe,
   collectPathIdsForStrategyMarket,
 } from "@/lib/data-loader";
-import { CHART_COLORS, COLORS, MARKET_LABELS, getStrategyColor, sharpeColor } from "@/lib/constants";
+import {
+  CHART_COLORS,
+  COLORS,
+  INDEX_VS_PILL,
+  MARKET_LABELS,
+  getStrategyColor,
+  sharpeColor,
+} from "@/lib/constants";
 import type {
   FactorExposureRow,
   HoldingDailyRow,
@@ -3447,8 +3454,9 @@ export function ByMarketTab({ data }: BaseTabProps) {
             <SectionHeader>Period Consistency</SectionHeader>
             <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
               <p className="text-[12px] leading-5 text-[#8f8780]">
-                For each period, does GPT beat the market index Sharpe in that market?
-                Green = GPT Sharpe exceeded index. Red = missed. Grey = no data.
+                For each period, mean GPT Sharpe vs that market&apos;s index Sharpe.{" "}
+                <span className="font-medium text-[#5a6f7a]">Teal</span> = above index;{" "}
+                <span className="font-medium text-[#7a6a58]">warm neutral</span> = index or below. Grey = no data.
               </p>
             </Panel>
             <Panel className="overflow-x-auto p-0">
@@ -3496,13 +3504,14 @@ export function ByMarketTab({ data }: BaseTabProps) {
                           gptRunsForCell.reduce((s, r) => s + (asNumber(r.sharpe_ratio) ?? 0), 0) /
                           gptRunsForCell.length;
                         const beat = avgGpt > idxSharpe;
+                        const pill = beat ? INDEX_VS_PILL.beat : INDEX_VS_PILL.miss;
                         return (
                           <td key={col.colKey} className="px-2 py-2 text-center">
                             <span
                               className="inline-block rounded-[8px] px-2 py-1 text-[10px] font-semibold"
                               style={{
-                                backgroundColor: beat ? "rgba(120,185,135,0.35)" : "rgba(212,140,130,0.3)",
-                                color: beat ? "#4a8a5a" : "#b05050",
+                                backgroundColor: pill.backgroundColor,
+                                color: pill.color,
                               }}
                             >
                               {avgGpt.toFixed(2)}
