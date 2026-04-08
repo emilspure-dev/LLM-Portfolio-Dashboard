@@ -22,7 +22,7 @@ import {
 } from "recharts";
 import { AlertCircle, ChevronLeft, ChevronRight, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getDailyHoldings, getEquityChart, getFactorExposureChart, getRegimeChart } from "@/lib/api-client";
+import { getDailyHoldings, getEquityChart, getFactorExposureChart, getPeriods, getRegimeChart } from "@/lib/api-client";
 import {
   buildCoverageRows,
   buildFeatureRegression,
@@ -128,6 +128,24 @@ const CHART_LEGEND_WRAPPER = {
   color: "#6f6863",
   paddingTop: 8,
 };
+
+const REGIME_BADGE_STYLES = {
+  market: {
+    Bear: { backgroundColor: "rgba(214, 140, 130, 0.18)", color: "#a85e5a" },
+    Flat: { backgroundColor: "rgba(211, 189, 154, 0.22)", color: "#8b7152" },
+    Bull: { backgroundColor: "rgba(127, 184, 139, 0.2)", color: "#3f7b52" },
+  },
+  vol: {
+    Low: { backgroundColor: "rgba(109, 174, 194, 0.18)", color: "#4f7385" },
+    Elevated: { backgroundColor: "rgba(218, 191, 154, 0.2)", color: "#866c52" },
+    High: { backgroundColor: "rgba(210, 145, 126, 0.18)", color: "#a25f50" },
+  },
+  rate: {
+    Easing: { backgroundColor: "rgba(114, 181, 170, 0.18)", color: "#48766f" },
+    Stable: { backgroundColor: "rgba(214, 205, 190, 0.24)", color: "#7b7067" },
+    Tightening: { backgroundColor: "rgba(189, 155, 208, 0.18)", color: "#7a5d8e" },
+  },
+} as const;
 
 const MODEL_SCATTER_COLORS = [
   CHART_COLORS[0],
@@ -309,6 +327,46 @@ function formatDateLabel(value: string) {
     day: "numeric",
     year: "2-digit",
   });
+}
+
+function getRegimeBadgeStyle(
+  kind: keyof typeof REGIME_BADGE_STYLES,
+  label: string | null | undefined
+) {
+  const trimmed = String(label ?? "").trim();
+  const match = REGIME_BADGE_STYLES[kind][trimmed as keyof (typeof REGIME_BADGE_STYLES)[typeof kind]];
+  return match ?? { backgroundColor: "rgba(214,205,190,0.18)", color: "#8c847d" };
+}
+
+function RegimeBadge({
+  kind,
+  label,
+}: {
+  kind: keyof typeof REGIME_BADGE_STYLES;
+  label: string | null | undefined;
+}) {
+  const display = String(label ?? "").trim() || "—";
+  const tone = getRegimeBadgeStyle(kind, label);
+  return (
+    <span
+      className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold"
+      style={tone}
+    >
+      {display}
+    </span>
+  );
+}
+
+function describeRegimeState(
+  marketLabel: string | null | undefined,
+  volLabel: string | null | undefined,
+  rateLabel: string | null | undefined
+) {
+  return [
+    String(marketLabel ?? "").trim() || "—",
+    String(volLabel ?? "").trim() || "—",
+    String(rateLabel ?? "").trim() || "—",
+  ].join(" / ");
 }
 
 function asNumber(value: unknown): number | null {
@@ -3942,6 +4000,479 @@ export function ByMarketTab({ data }: BaseTabProps) {
             </table>
           </Panel>
         </>
+      )}
+    </div>
+  );
+}
+
+export function RegimesTab({ data, runs }: BaseTabProps) {
+  const allMarkets = useMemo(() => getMarketOptions(data), [data]);
+  const [marketFilter, setMarketFilter] = useState("All");
+  const [modelFilter, setModelFilter] = useState("All");
+  const [promptFilter, setPromptFilter] = useState("All");
+  const regimePeriodsRef = useRef<HTMLDivElement>(null);
+  const regimePerformanceRef = useRef<HTMLDivElement>(null);
+
+  const periodsQuery = useQuery({
+    queryKey: ["regime-periods", data.active_experiment_id, marketFilter],
+    queryFn: () =>
+      getPeriods({
+        experiment_id: data.active_experiment_id,
+        market: marketFilter === "All" ? undefined : marketFilter,
+      }),
+    enabled: Boolean(data.active_experiment_id),
+    staleTime: 60_000,
+  });
+
+  const periodRows = useMemo(() => {
+    const rows = [...(periodsQuery.data ?? [])];
+    return rows.sort((left, right) => {
+      const marketCompare = String(left.market ?? "").localeCompare(String(right.market ?? ""));
+      if (marketCompare !== 0) {
+        return marketCompare;
+      }
+      const leftOrder = Number(left.period_order ?? Number.POSITIVE_INFINITY);
+      const rightOrder = Number(right.period_order ?? Number.POSITIVE_INFINITY);
+      if (Number.isFinite(leftOrder) && Number.isFinite(rightOrder) && leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+      return String(left.period ?? "").localeCompare(String(right.period ?? ""));
+    });
+  }, [periodsQuery.data]);
+
+  const latestPeriodRow = periodRows.at(-1) ?? null;
+  const regimeTransitionCount = periodRows.filter((row) => Number(row.any_regime_changed ?? 0) > 0).length;
+  const distinctRegimeCodes = new Set(periodRows.map((row) => row.regime_code).filter(Boolean)).size;
+
+  const regimeSummaryRows = useMemo(() => {
+    const grouped = new Map<
+      string,
+      {
+        market: string;
+        regimeCode: string;
+        marketLabel: string | null;
+        volLabel: string | null;
+        rateLabel: string | null;
+        periodCount: number;
+        transitionCount: number;
+      }
+    >();
+
+    for (const row of periodRows) {
+      const key = `${row.market}::${row.regime_code ?? "unknown"}`;
+      const bucket = grouped.get(key) ?? {
+        market: row.market,
+        regimeCode: row.regime_code ?? "unknown",
+        marketLabel: row.market_regime_label,
+        volLabel: row.vol_regime_label,
+        rateLabel: row.rate_regime_label,
+        periodCount: 0,
+        transitionCount: 0,
+      };
+      bucket.periodCount += 1;
+      if (Number(row.any_regime_changed ?? 0) > 0) {
+        bucket.transitionCount += 1;
+      }
+      grouped.set(key, bucket);
+    }
+
+    return Array.from(grouped.values()).sort((left, right) => {
+      if (right.periodCount !== left.periodCount) {
+        return right.periodCount - left.periodCount;
+      }
+      return left.market.localeCompare(right.market);
+    });
+  }, [periodRows]);
+
+  const regimePerformanceRows = useMemo(
+    () =>
+      buildRegimePerformanceRows(runs).filter((row) => {
+        if (row.regimeCode === "unknown") return false;
+        if (marketFilter !== "All" && row.market !== marketFilter) return false;
+        if (modelFilter !== "All" && row.model !== modelFilter) return false;
+        if (promptFilter !== "All" && row.promptType !== promptFilter) return false;
+        return true;
+      }),
+    [runs, marketFilter, modelFilter, promptFilter]
+  );
+
+  const modelOptions = useMemo(
+    () => ["All", ...Array.from(new Set(buildRegimePerformanceRows(runs).map((row) => row.model))).sort()],
+    [runs]
+  );
+  const promptOptions = useMemo(
+    () => ["All", ...Array.from(new Set(buildRegimePerformanceRows(runs).map((row) => row.promptType))).sort()],
+    [runs]
+  );
+
+  const topRegimeRow =
+    [...regimePerformanceRows].sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity))[0] ??
+    null;
+  const weakestRegimeRow =
+    [...regimePerformanceRows]
+      .filter((row) => row.meanSharpe != null)
+      .sort((left, right) => (left.meanSharpe ?? Infinity) - (right.meanSharpe ?? Infinity))[0] ??
+    null;
+  const dominantRegimeRow = regimeSummaryRows[0] ?? null;
+  const latestTransitionRow =
+    [...periodRows]
+      .filter((row) => Number(row.any_regime_changed ?? 0) > 0)
+      .sort((left, right) => {
+        const leftOrder = Number(left.period_order ?? Number.POSITIVE_INFINITY);
+        const rightOrder = Number(right.period_order ?? Number.POSITIVE_INFINITY);
+        if (Number.isFinite(leftOrder) && Number.isFinite(rightOrder) && leftOrder !== rightOrder) {
+          return leftOrder - rightOrder;
+        }
+        return String(left.period ?? "").localeCompare(String(right.period ?? ""));
+      })
+      .at(-1) ?? null;
+
+  return (
+    <div className="space-y-4 pb-1">
+      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+        <p className="text-[12px] leading-5 text-[#8f8780]">
+          This view makes the regime system explicit in the dashboard. The first section reads the canonical
+          market-period classifications from `market_periods`; the second shows which model and prompt combinations
+          have performed best inside each regime state.
+        </p>
+      </Panel>
+
+      <Panel>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <FilterSelect
+            label="Market"
+            value={marketFilter}
+            onChange={setMarketFilter}
+            options={[
+              { value: "All", label: "All markets" },
+              ...allMarkets.map((market) => ({
+                value: market,
+                label: MARKET_LABELS[market] ?? market,
+              })),
+            ]}
+          />
+          <FilterSelect
+            label="Model"
+            value={modelFilter}
+            onChange={setModelFilter}
+            options={modelOptions.map((model) => ({
+              value: model,
+              label: model,
+            }))}
+          />
+          <FilterSelect
+            label="Prompt"
+            value={promptFilter}
+            onChange={setPromptFilter}
+            options={promptOptions.map((prompt) => ({
+              value: prompt,
+              label: prompt,
+            }))}
+          />
+          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+            <p className="dashboard-label">Latest classified period</p>
+            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">
+              {latestPeriodRow?.period ?? "—"}
+            </p>
+            <p className="mt-1 text-[11px] text-[#9b938b]">
+              {latestPeriodRow ? `${MARKET_LABELS[latestPeriodRow.market] ?? latestPeriodRow.market}` : "No period rows loaded"}
+            </p>
+          </div>
+        </div>
+      </Panel>
+
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <KpiCard
+          label="Period Rows"
+          value={String(periodRows.length)}
+          color={COLORS.cyan}
+          sub="Loaded from market_periods"
+        />
+        <KpiCard
+          label="Distinct Regime Codes"
+          value={String(distinctRegimeCodes)}
+          color={COLORS.amber}
+          sub="Within current market filter"
+        />
+        <KpiCard
+          label="Transition Periods"
+          value={String(regimeTransitionCount)}
+          color={COLORS.accent}
+          sub="Rows with any regime change"
+        />
+        <KpiCard
+          label="Top Conditional Sharpe"
+          value={topRegimeRow?.meanSharpe != null ? topRegimeRow.meanSharpe.toFixed(2) : "—"}
+          color={sharpeColor(topRegimeRow?.meanSharpe)}
+          sub={
+            topRegimeRow
+              ? `${MARKET_LABELS[topRegimeRow.market] ?? topRegimeRow.market} · ${topRegimeRow.model} · ${topRegimeRow.promptType}`
+              : "No regime-performance rows"
+          }
+        />
+      </div>
+
+      <SectionHeader>Analysis</SectionHeader>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+          <p className="dashboard-label">Dominant state</p>
+          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#5f5955]">
+            {dominantRegimeRow
+              ? `${MARKET_LABELS[dominantRegimeRow.market] ?? dominantRegimeRow.market} · ${dominantRegimeRow.regimeCode}`
+              : "No dominant state yet"}
+          </p>
+          <p className="mt-2 text-[12px] leading-5 text-[#8f8780]">
+            {dominantRegimeRow
+              ? `${describeRegimeState(
+                  dominantRegimeRow.marketLabel,
+                  dominantRegimeRow.volLabel,
+                  dominantRegimeRow.rateLabel
+                )} is the most recurrent classified regime in the current filter, appearing in ${dominantRegimeRow.periodCount} period${dominantRegimeRow.periodCount === 1 ? "" : "s"}.`
+              : "No period rows matched the current market filter."}
+          </p>
+        </Panel>
+
+        <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+          <p className="dashboard-label">Latest transition</p>
+          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#5f5955]">
+            {latestTransitionRow
+              ? `${MARKET_LABELS[latestTransitionRow.market] ?? latestTransitionRow.market} · ${latestTransitionRow.period}`
+              : "No transition detected"}
+          </p>
+          <p className="mt-2 text-[12px] leading-5 text-[#8f8780]">
+            {latestTransitionRow
+              ? `The latest regime change in the current filter set moves into ${describeRegimeState(
+                  latestTransitionRow.market_regime_label,
+                  latestTransitionRow.vol_regime_label,
+                  latestTransitionRow.rate_regime_label
+                )}. ${regimeTransitionCount} of ${periodRows.length || 0} period rows show at least one regime-field change.`
+              : "None of the loaded period rows are flagged as a regime transition."}
+          </p>
+        </Panel>
+
+        <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+          <p className="dashboard-label">Performance read</p>
+          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#5f5955]">
+            {topRegimeRow
+              ? `${topRegimeRow.model} · ${topRegimeRow.promptType}`
+              : "No conditional result"}
+          </p>
+          <p className="mt-2 text-[12px] leading-5 text-[#8f8780]">
+            {topRegimeRow
+              ? `Best conditional Sharpe is ${formatSignedNumber(topRegimeRow.meanSharpe, 2)} in ${
+                  MARKET_LABELS[topRegimeRow.market] ?? topRegimeRow.market
+                } under ${describeRegimeState(
+                  topRegimeRow.marketRegimeLabel,
+                  topRegimeRow.volRegimeLabel,
+                  topRegimeRow.rateRegimeLabel
+                )}, with mean return ${formatSignedPctFromRatio(topRegimeRow.meanReturn, 1)} across ${topRegimeRow.count} run${topRegimeRow.count === 1 ? "" : "s"}${
+                  weakestRegimeRow
+                    ? `. Weakest observed conditional Sharpe is ${formatSignedNumber(weakestRegimeRow.meanSharpe, 2)} in ${MARKET_LABELS[weakestRegimeRow.market] ?? weakestRegimeRow.market}.`
+                    : "."
+                }`
+              : "No valid run-level regime-performance rows matched the current filters."}
+          </p>
+        </Panel>
+      </div>
+
+      <SectionHeader>Source-Of-Truth Period Regimes</SectionHeader>
+      {periodsQuery.isLoading ? (
+        <LoadingState title="Loading market period regimes" />
+      ) : periodRows.length === 0 ? (
+        <EmptyState
+          title="No period-level regimes available"
+          body="The `/api/periods` endpoint returned no rows for the current experiment or market filter."
+        />
+      ) : (
+        <>
+          <Panel className="overflow-x-auto p-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+              <p className="dashboard-label">Market-period regime table</p>
+              <FigureExportControls
+                captureRef={regimePeriodsRef}
+                slug="regimes-market-period-table"
+                caption="Regimes — market-period regime table"
+                experimentId={data.active_experiment_id}
+              />
+            </div>
+            <div ref={regimePeriodsRef} className="min-w-0">
+              <table className="w-full min-w-[980px] text-[11px]">
+                <thead>
+                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Period</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Window</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Vol</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Rates</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Regime code</th>
+                    <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Changed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {periodRows.map((row) => (
+                    <tr
+                      key={`${row.market}-${row.period}`}
+                      className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
+                    >
+                      <td className="px-3 py-2.5 font-medium text-[#5e5955]">
+                        {MARKET_LABELS[row.market] ?? row.market}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.period}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">
+                        {row.period_start_date && row.period_end_date
+                          ? `${formatDateLabel(row.period_start_date)} - ${formatDateLabel(row.period_end_date)}`
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <RegimeBadge kind="market" label={row.market_regime_label} />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <RegimeBadge kind="vol" label={row.vol_regime_label} />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <RegimeBadge kind="rate" label={row.rate_regime_label} />
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-[10px] text-[#8d857f]">
+                        {row.regime_code ?? "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <span
+                          className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                          style={
+                            Number(row.any_regime_changed ?? 0) > 0
+                              ? { backgroundColor: "rgba(116, 188, 160, 0.18)", color: "#4b7667" }
+                              : { backgroundColor: "rgba(214,205,190,0.18)", color: "#8c847d" }
+                          }
+                        >
+                          {Number(row.any_regime_changed ?? 0) > 0 ? "Yes" : "No"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+
+          <Panel className="overflow-x-auto p-0">
+            <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+              <p className="dashboard-label">Regime code recurrence</p>
+            </div>
+            <table className="w-full min-w-[760px] text-[11px]">
+              <thead>
+                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Regime code</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">State</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Periods</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Transitions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {regimeSummaryRows.map((row) => (
+                  <tr
+                    key={`${row.market}-${row.regimeCode}`}
+                    className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
+                  >
+                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">
+                      {MARKET_LABELS[row.market] ?? row.market}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono text-[10px] text-[#8d857f]">
+                      {row.regimeCode}
+                    </td>
+                    <td className="px-3 py-2.5 text-[#8d857f]">
+                      <div className="flex flex-wrap gap-1.5">
+                        <RegimeBadge kind="market" label={row.marketLabel} />
+                        <RegimeBadge kind="vol" label={row.volLabel} />
+                        <RegimeBadge kind="rate" label={row.rateLabel} />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.periodCount}</td>
+                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.transitionCount}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        </>
+      )}
+
+      <SectionHeader>Regime-Conditional Performance</SectionHeader>
+      {regimePerformanceRows.length === 0 ? (
+        <EmptyState
+          title="No regime-conditional performance rows"
+          body="No valid runs matched the current market, model, and prompt filters."
+        />
+      ) : (
+        <Panel className="overflow-x-auto p-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+            <p className="dashboard-label">Model and prompt performance by regime</p>
+            <FigureExportControls
+              captureRef={regimePerformanceRef}
+              slug="regimes-conditional-performance-table"
+              caption="Regimes — conditional performance by model and prompt"
+              experimentId={data.active_experiment_id}
+            />
+          </div>
+          <div ref={regimePerformanceRef} className="min-w-0">
+            <table className="w-full min-w-[980px] text-[11px]">
+              <thead>
+                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Regime code</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">State</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...regimePerformanceRows]
+                  .sort((left, right) => {
+                    if ((right.meanSharpe ?? -Infinity) !== (left.meanSharpe ?? -Infinity)) {
+                      return (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity);
+                    }
+                    return right.count - left.count;
+                  })
+                  .map((row) => (
+                    <tr
+                      key={`${row.market}-${row.regimeCode}-${row.model}-${row.promptType}`}
+                      className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
+                    >
+                      <td className="px-3 py-2.5 font-medium text-[#5e5955]">
+                        {MARKET_LABELS[row.market] ?? row.market}
+                      </td>
+                      <td className="px-3 py-2.5 font-mono text-[10px] text-[#8d857f]">
+                        {row.regimeCode}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">
+                        <div className="flex flex-wrap gap-1.5">
+                          <RegimeBadge kind="market" label={row.marketRegimeLabel} />
+                          <RegimeBadge kind="vol" label={row.volRegimeLabel} />
+                          <RegimeBadge kind="rate" label={row.rateRegimeLabel} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.model}</td>
+                      <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
+                      <td
+                        className="px-3 py-2.5 text-right font-medium"
+                        style={{ color: sharpeColor(row.meanSharpe) }}
+                      >
+                        {row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                        {formatPctFromRatio(row.meanReturn, 1)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.count}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       )}
     </div>
   );
