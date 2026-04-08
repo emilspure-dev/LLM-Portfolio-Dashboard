@@ -381,6 +381,70 @@ type RegimeTimelinePayload =
   | { source: "Regime metrics"; rows: RegimeRow[] }
   | { source: "Path metrics fallback"; rows: StrategyDailyRow[] };
 
+type RegimeTransitionMarker = {
+  date: string;
+  period: string;
+  regime: string;
+};
+
+function buildPeriodTransitionMarkers(rows: RegimeRow[]): RegimeTransitionMarker[] {
+  const byPeriod = new Map<string, RegimeTransitionMarker>();
+
+  for (const row of rows) {
+    if (Number(row.any_regime_changed ?? 0) <= 0) {
+      continue;
+    }
+
+    const period = String(row.period ?? "").trim() || "unknown";
+    const candidateDate = String(row.period_start_date ?? row.date);
+    const candidate: RegimeTransitionMarker = {
+      date: candidateDate,
+      period,
+      regime: describeRegimeState(
+        row.market_regime_label,
+        row.vol_regime_label,
+        row.rate_regime_label
+      ),
+    };
+
+    const existing = byPeriod.get(period);
+    if (!existing || candidate.date < existing.date) {
+      byPeriod.set(period, candidate);
+    }
+  }
+
+  return Array.from(byPeriod.values())
+    .sort((left, right) => left.date.localeCompare(right.date))
+    .slice(0, 24);
+}
+
+function buildDerivedTransitionMarkers(
+  rows: Array<{ date: string; marketRegimeLabel: string | null }>
+): RegimeTransitionMarker[] {
+  const markers: RegimeTransitionMarker[] = [];
+  let previousRegime: string | null = null;
+
+  for (const row of rows) {
+    const currentRegime = row.marketRegimeLabel?.trim() ?? null;
+    if (
+      previousRegime != null &&
+      currentRegime != null &&
+      currentRegime !== previousRegime
+    ) {
+      markers.push({
+        date: row.date,
+        period: "derived",
+        regime: currentRegime,
+      });
+    }
+    if (currentRegime != null) {
+      previousRegime = currentRegime;
+    }
+  }
+
+  return markers.slice(0, 24);
+}
+
 function asNumber(value: unknown): number | null {
   return typeof value === "number" && !Number.isNaN(value) ? value : null;
 }
@@ -4170,17 +4234,16 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
     return aggregateStrategyDailyForDrawdown(payload.rows);
   }, [regimeTimelineQuery.data]);
 
-  const timelineTransitionMarkers = useMemo(
-    () =>
-      timelineRows
-        .filter((row) => (row.regimeChangeRate ?? 0) > 0)
-        .map((row) => ({
-          date: row.date,
-          regime: row.marketRegimeLabel ?? "Unknown",
-        }))
-        .slice(0, 24),
-    [timelineRows]
-  );
+  const timelineTransitionMarkers = useMemo(() => {
+    const payload = regimeTimelineQuery.data;
+    if (!payload) {
+      return [];
+    }
+    if (payload.source === "Regime metrics") {
+      return buildPeriodTransitionMarkers(payload.rows);
+    }
+    return buildDerivedTransitionMarkers(timelineRows);
+  }, [regimeTimelineQuery.data, timelineRows]);
 
   const recurrenceChartRows = useMemo(
     () =>
@@ -4511,11 +4574,11 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <Panel>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-              <p className="dashboard-label">Daily regime timeline and transitions</p>
+              <p className="dashboard-label">Drawdown around regime transitions</p>
               <FigureExportControls
                 captureRef={regimeTimelineRef}
                 slug="regimes-daily-timeline"
-                caption="Regimes — daily timeline and transitions"
+                caption="Regimes — drawdown around regime transitions"
                 experimentId={data.active_experiment_id}
               />
             </div>
@@ -4570,8 +4633,9 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
                 </AreaChart>
               </ResponsiveContainer>
               <p className="mt-2 text-[11px] leading-5 text-[#9d958d]">
-                Vertical dashed lines mark dates where any regime field changed for the selected market and strategy.
-                The filled area shows average drawdown around those shifts.
+                Vertical dashed lines mark the first trading day of each changed regime period for the selected
+                market. The filled area is the average strategy drawdown, so this chart is meant to show whether
+                drawdowns cluster around regime shifts rather than to plot the regime labels themselves.
               </p>
               {timelineTransitionMarkers.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -4581,6 +4645,8 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
                       className="rounded-full border border-[rgba(232,224,217,0.85)] bg-[rgba(255,255,252,0.68)] px-2.5 py-1 text-[10px] leading-4 text-[#8d857f]"
                     >
                       <span className="font-medium text-[#6f6863]">{formatDateLabel(marker.date)}</span>
+                      {" · "}
+                      {marker.period}
                       {" · "}
                       {marker.regime}
                     </span>
