@@ -170,6 +170,126 @@ export function normalizeModelLabel(value: string | null | undefined): string {
   return String(value ?? "").trim() || "unknown";
 }
 
+function parsePeriodSortValue(value: string | null | undefined): number | null {
+  const raw = String(value ?? "").trim().toUpperCase();
+  if (!raw) return null;
+
+  let match = /^(\d{4})H([12])$/.exec(raw);
+  if (match) {
+    return Number(match[1]) * 2 + (Number(match[2]) - 1);
+  }
+
+  match = /^H([12])\s*(\d{4})$/.exec(raw);
+  if (match) {
+    return Number(match[2]) * 2 + (Number(match[1]) - 1);
+  }
+
+  return null;
+}
+
+function comparePeriodLabels(
+  left: string | null | undefined,
+  right: string | null | undefined
+): number {
+  const leftSort = parsePeriodSortValue(left);
+  const rightSort = parsePeriodSortValue(right);
+  if (leftSort != null && rightSort != null && leftSort !== rightSort) {
+    return leftSort - rightSort;
+  }
+  return String(left ?? "").localeCompare(String(right ?? ""));
+}
+
+export function getRunModelGroupKey(
+  run: Pick<
+    RunRow,
+    | "trajectory_id"
+    | "run_id"
+    | "path_id"
+    | "strategy_key"
+    | "market"
+    | "prompt_type"
+    | "execution_mode"
+  >
+): string {
+  const trajectoryId =
+    run.trajectory_id != null && String(run.trajectory_id).trim()
+      ? String(run.trajectory_id).trim()
+      : null;
+  if (trajectoryId) return `trajectory:${trajectoryId}`;
+
+  const runId =
+    run.run_id != null && String(run.run_id).trim()
+      ? String(run.run_id).trim()
+      : null;
+  if (runId) return `run:${runId}`;
+
+  const pathId =
+    run.path_id != null && String(run.path_id).trim()
+      ? String(run.path_id).trim()
+      : null;
+  if (pathId) return `path:${pathId}`;
+
+  return [
+    "fallback",
+    String(run.strategy_key ?? ""),
+    String(run.market ?? ""),
+    String(run.prompt_type ?? ""),
+    String(run.execution_mode ?? ""),
+  ].join("::");
+}
+
+export function buildRunModelMetadata(runs: RunRow[]) {
+  const periodModelByGroupAndPeriod = new Map<string, string>();
+  const periodModelByFallbackKey = new Map<string, string>();
+  const fullRunPeriods = new Map<string, Array<{ period: string; model: string }>>();
+
+  for (const run of runs) {
+    const model = normalizeModelLabel(run.model);
+    if (model === "unknown") continue;
+
+    const period = String(run.period ?? "").trim() || "unknown";
+    const groupKey = getRunModelGroupKey(run);
+    periodModelByGroupAndPeriod.set(`${groupKey}::${period}`, model);
+
+    const fallbackKey = [
+      String(run.strategy_key ?? ""),
+      String(run.market ?? ""),
+      period,
+      String(run.prompt_type ?? ""),
+    ].join("::");
+    periodModelByFallbackKey.set(fallbackKey, model);
+
+    const bucket = fullRunPeriods.get(groupKey) ?? [];
+    bucket.push({ period, model });
+    fullRunPeriods.set(groupKey, bucket);
+  }
+
+  const fullRunModelByGroupKey = new Map<string, string>();
+  for (const [groupKey, periods] of fullRunPeriods) {
+    const ordered = [...periods].sort((left, right) =>
+      comparePeriodLabels(left.period, right.period)
+    );
+    const modelStack: string[] = [];
+    const seen = new Set<string>();
+    for (const entry of ordered) {
+      if (!seen.has(entry.model)) {
+        seen.add(entry.model);
+        modelStack.push(entry.model);
+      }
+    }
+    fullRunModelByGroupKey.set(
+      groupKey,
+      modelStack.length > 0 ? modelStack.join(" -> ") : "unknown"
+    );
+  }
+
+  return {
+    periodModelByGroupAndPeriod,
+    periodModelByFallbackKey,
+    fullRunModelByGroupKey,
+  };
+}
+
 export function formatRunKey(run: Pick<RunRow, "run_id" | "path_id" | "strategy_key" | "market" | "period" | "model" | "prompt_type">): string {
   const runId = run.run_id != null && String(run.run_id).trim() ? String(run.run_id) : null;
   if (runId) return runId;
@@ -381,6 +501,7 @@ export function buildBenchmarkComparisonRows(runs: RunRow[]) {
 }
 
 export function buildRegimePerformanceRows(runs: RunRow[]) {
+  const modelMetadata = buildRunModelMetadata(runs);
   const grouped = new Map<string, {
     regimeCode: string;
     market: string;
@@ -395,7 +516,9 @@ export function buildRegimePerformanceRows(runs: RunRow[]) {
   }>();
   for (const run of runs.filter(isValidRun)) {
     const regimeCode = String(run.regime_code ?? "unknown");
-    const model = normalizeModelLabel(run.model);
+    const model =
+      modelMetadata.fullRunModelByGroupKey.get(getRunModelGroupKey(run)) ??
+      normalizeModelLabel(run.model);
     const promptType = normalizePromptType(run.prompt_type);
     const market = String(run.market ?? "unknown");
     const key = `${regimeCode}::${market}::${model}::${promptType}`;

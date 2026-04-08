@@ -22,8 +22,15 @@ import {
 } from "recharts";
 import { AlertCircle, ChevronLeft, ChevronRight, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { getDailyHoldings, getEquityChart, getFactorExposureChart, getPeriods, getRegimeChart } from "@/lib/api-client";
 import {
+  buildRunModelMetadata,
   buildCoverageRows,
   buildFeatureRegression,
   buildRegimePerformanceRows,
@@ -31,6 +38,7 @@ import {
   buildStrategySummaryWithRunSharpe,
   computeAutocorrelation,
   collectPathIdsForStrategyMarket,
+  getRunModelGroupKey,
   ljungBoxStatistic,
   rollingMetricSeries,
 } from "@/lib/data-loader";
@@ -368,6 +376,10 @@ function describeRegimeState(
     String(rateLabel ?? "").trim() || "—",
   ].join(" / ");
 }
+
+type RegimeTimelinePayload =
+  | { source: "Regime metrics"; rows: RegimeRow[] }
+  | { source: "Path metrics fallback"; rows: StrategyDailyRow[] };
 
 function asNumber(value: unknown): number | null {
   return typeof value === "number" && !Number.isNaN(value) ? value : null;
@@ -711,34 +723,21 @@ function attachRunLevelModelsToDailyRows(
   rows: StrategyDailyRow[],
   runs: RunRow[]
 ): StrategyDailyRow[] {
-  const byRunId = new Map<string, string>();
-  const byFallbackKey = new Map<string, string>();
-
-  for (const run of runs) {
-    const model = String(run.model ?? "").trim();
-    if (!model) continue;
-    const runId = run.run_id != null && String(run.run_id).trim() ? String(run.run_id) : null;
-    if (runId) {
-      byRunId.set(runId, model);
-    }
-    const fallbackKey = [
-      String(run.strategy_key ?? ""),
-      String(run.market ?? ""),
-      String(run.period ?? ""),
-      String(run.prompt_type ?? ""),
-    ].join("::");
-    byFallbackKey.set(fallbackKey, model);
-  }
+  const modelMetadata = buildRunModelMetadata(runs);
 
   return rows.map((row) => {
-    const runId = row.run_id != null && String(row.run_id).trim() ? String(row.run_id) : null;
+    const groupKey = getRunModelGroupKey(row);
+    const period = String(row.period ?? "").trim() || "unknown";
     const fallbackKey = [
       String(row.strategy_key ?? ""),
       String(row.market ?? ""),
-      String(row.period ?? ""),
+      period,
       String(row.prompt_type ?? ""),
     ].join("::");
-    const resolvedModel = (runId ? byRunId.get(runId) : null) ?? byFallbackKey.get(fallbackKey) ?? row.model;
+    const resolvedModel =
+      modelMetadata.periodModelByGroupAndPeriod.get(`${groupKey}::${period}`) ??
+      modelMetadata.periodModelByFallbackKey.get(fallbackKey) ??
+      row.model;
     return resolvedModel === row.model ? row : { ...row, model: resolvedModel };
   });
 }
@@ -4010,8 +4009,27 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
   const [marketFilter, setMarketFilter] = useState("All");
   const [modelFilter, setModelFilter] = useState("All");
   const [promptFilter, setPromptFilter] = useState("All");
+  const timelineSelection = useDailySelection(data);
+  const regimeTimelineRef = useRef<HTMLDivElement>(null);
+  const regimeRecurrenceRef = useRef<HTMLDivElement>(null);
+  const regimePerformanceChartRef = useRef<HTMLDivElement>(null);
   const regimePeriodsRef = useRef<HTMLDivElement>(null);
   const regimePerformanceRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (
+      marketFilter !== "All" &&
+      timelineSelection.marketOptions.includes(marketFilter) &&
+      timelineSelection.selectedMarket !== marketFilter
+    ) {
+      timelineSelection.setSelectedMarket(marketFilter);
+    }
+  }, [
+    marketFilter,
+    timelineSelection.marketOptions,
+    timelineSelection.selectedMarket,
+    timelineSelection.setSelectedMarket,
+  ]);
 
   const periodsQuery = useQuery({
     queryKey: ["regime-periods", data.active_experiment_id, marketFilter],
@@ -4040,7 +4058,7 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
     });
   }, [periodsQuery.data]);
 
-  const latestPeriodRow = periodRows.at(-1) ?? null;
+  const latestPeriodRow = periodRows.length > 0 ? periodRows[periodRows.length - 1] : null;
   const regimeTransitionCount = periodRows.filter((row) => Number(row.any_regime_changed ?? 0) > 0).length;
   const distinctRegimeCodes = new Set(periodRows.map((row) => row.regime_code).filter(Boolean)).size;
 
@@ -4084,26 +4102,160 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
     });
   }, [periodRows]);
 
-  const regimePerformanceRows = useMemo(
+  const allRegimePerformanceRows = useMemo(
     () =>
       buildRegimePerformanceRows(runs).filter((row) => {
         if (row.regimeCode === "unknown") return false;
+        return true;
+      }),
+    [runs]
+  );
+
+  const regimePerformanceRows = useMemo(
+    () =>
+      allRegimePerformanceRows.filter((row) => {
         if (marketFilter !== "All" && row.market !== marketFilter) return false;
         if (modelFilter !== "All" && row.model !== modelFilter) return false;
         if (promptFilter !== "All" && row.promptType !== promptFilter) return false;
         return true;
       }),
-    [runs, marketFilter, modelFilter, promptFilter]
+    [allRegimePerformanceRows, marketFilter, modelFilter, promptFilter]
   );
 
   const modelOptions = useMemo(
-    () => ["All", ...Array.from(new Set(buildRegimePerformanceRows(runs).map((row) => row.model))).sort()],
-    [runs]
+    () => ["All", ...Array.from(new Set(allRegimePerformanceRows.map((row) => row.model))).sort()],
+    [allRegimePerformanceRows]
   );
   const promptOptions = useMemo(
-    () => ["All", ...Array.from(new Set(buildRegimePerformanceRows(runs).map((row) => row.promptType))).sort()],
-    [runs]
+    () => ["All", ...Array.from(new Set(allRegimePerformanceRows.map((row) => row.promptType))).sort()],
+    [allRegimePerformanceRows]
   );
+
+  const regimeTimelineQuery = useQuery({
+    queryKey: [
+      "regime-timeline",
+      data.active_experiment_id,
+      timelineSelection.selectedMarket,
+      timelineSelection.selectedStrategyKey,
+    ],
+    queryFn: async (): Promise<RegimeTimelinePayload> => {
+      const base = {
+        experiment_id: data.active_experiment_id,
+        market: timelineSelection.selectedMarket,
+        strategy_key: timelineSelection.selectedStrategyKey,
+      };
+      const regimes = await getRegimeChart(base);
+      if (regimes.length > 0) {
+        return { source: "Regime metrics", rows: regimes };
+      }
+      const equity = await getEquityChart(base);
+      return { source: "Path metrics fallback", rows: equity };
+    },
+    enabled: Boolean(
+      data.active_experiment_id &&
+        timelineSelection.selectedMarket &&
+        timelineSelection.selectedStrategyKey
+    ),
+    staleTime: 60_000,
+  });
+
+  const timelineRows = useMemo(() => {
+    const payload = regimeTimelineQuery.data;
+    if (!payload) {
+      return [];
+    }
+    if (payload.source === "Regime metrics") {
+      return aggregateRegimeRows(payload.rows);
+    }
+    return aggregateStrategyDailyForDrawdown(payload.rows);
+  }, [regimeTimelineQuery.data]);
+
+  const timelineTransitionMarkers = useMemo(
+    () =>
+      timelineRows
+        .filter((row) => (row.regimeChangeRate ?? 0) > 0)
+        .map((row) => ({
+          date: row.date,
+          regime: row.marketRegimeLabel ?? "Unknown",
+        }))
+        .slice(0, 24),
+    [timelineRows]
+  );
+
+  const recurrenceChartRows = useMemo(
+    () =>
+      regimeSummaryRows
+        .map((row) => ({
+          ...row,
+          label:
+            marketFilter === "All"
+              ? `${MARKET_LABELS[row.market] ?? row.market} · ${row.regimeCode}`
+              : row.regimeCode,
+          stateLabel: describeRegimeState(row.marketLabel, row.volLabel, row.rateLabel),
+        }))
+        .slice(0, 12),
+    [regimeSummaryRows, marketFilter]
+  );
+
+  const conditionalChartRows = useMemo(() => {
+    const grouped = new Map<
+      string,
+      {
+        market: string;
+        regimeCode: string;
+        marketRegimeLabel: string | null;
+        volRegimeLabel: string | null;
+        rateRegimeLabel: string | null;
+        sharpeWeightedSum: number;
+        sharpeWeight: number;
+        returnWeightedSum: number;
+        returnWeight: number;
+        count: number;
+      }
+    >();
+
+    for (const row of regimePerformanceRows) {
+      const key = `${row.market}::${row.regimeCode}`;
+      const bucket = grouped.get(key) ?? {
+        market: row.market,
+        regimeCode: row.regimeCode,
+        marketRegimeLabel: row.marketRegimeLabel,
+        volRegimeLabel: row.volRegimeLabel,
+        rateRegimeLabel: row.rateRegimeLabel,
+        sharpeWeightedSum: 0,
+        sharpeWeight: 0,
+        returnWeightedSum: 0,
+        returnWeight: 0,
+        count: 0,
+      };
+
+      if (row.meanSharpe != null) {
+        bucket.sharpeWeightedSum += row.meanSharpe * row.count;
+        bucket.sharpeWeight += row.count;
+      }
+      if (row.meanReturn != null) {
+        bucket.returnWeightedSum += row.meanReturn * row.count;
+        bucket.returnWeight += row.count;
+      }
+      bucket.count += row.count;
+      grouped.set(key, bucket);
+    }
+
+    return Array.from(grouped.values())
+      .map((row) => ({
+        ...row,
+        label:
+          marketFilter === "All"
+            ? `${MARKET_LABELS[row.market] ?? row.market} · ${row.regimeCode}`
+            : row.regimeCode,
+        meanSharpe:
+          row.sharpeWeight > 0 ? row.sharpeWeightedSum / row.sharpeWeight : null,
+        meanReturn:
+          row.returnWeight > 0 ? row.returnWeightedSum / row.returnWeight : null,
+      }))
+      .sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity))
+      .slice(0, 12);
+  }, [regimePerformanceRows, marketFilter]);
 
   const topRegimeRow =
     [...regimePerformanceRows].sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity))[0] ??
@@ -4114,18 +4266,31 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
       .sort((left, right) => (left.meanSharpe ?? Infinity) - (right.meanSharpe ?? Infinity))[0] ??
     null;
   const dominantRegimeRow = regimeSummaryRows[0] ?? null;
+  const latestTransitionCandidates = [...periodRows]
+    .filter((row) => Number(row.any_regime_changed ?? 0) > 0)
+    .sort((left, right) => {
+      const leftOrder = Number(left.period_order ?? Number.POSITIVE_INFINITY);
+      const rightOrder = Number(right.period_order ?? Number.POSITIVE_INFINITY);
+      if (Number.isFinite(leftOrder) && Number.isFinite(rightOrder) && leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+      return String(left.period ?? "").localeCompare(String(right.period ?? ""));
+    });
   const latestTransitionRow =
-    [...periodRows]
-      .filter((row) => Number(row.any_regime_changed ?? 0) > 0)
-      .sort((left, right) => {
-        const leftOrder = Number(left.period_order ?? Number.POSITIVE_INFINITY);
-        const rightOrder = Number(right.period_order ?? Number.POSITIVE_INFINITY);
-        if (Number.isFinite(leftOrder) && Number.isFinite(rightOrder) && leftOrder !== rightOrder) {
-          return leftOrder - rightOrder;
-        }
-        return String(left.period ?? "").localeCompare(String(right.period ?? ""));
-      })
-      .at(-1) ?? null;
+    latestTransitionCandidates.length > 0
+      ? latestTransitionCandidates[latestTransitionCandidates.length - 1]
+      : null;
+  const sparseConditionalRows = regimePerformanceRows.filter((row) => row.count < 3).length;
+  const timelineSourceLabel = regimeTimelineQuery.data?.source ?? "—";
+  const timelineRawRowCount = regimeTimelineQuery.data?.rows.length ?? 0;
+  const timelineDominantRegime = Array.from(
+    timelineRows.reduce((map, row) => {
+      const key = row.marketRegimeLabel ?? "Unknown";
+      map.set(key, (map.get(key) ?? 0) + 1);
+      return map;
+    }, new Map<string, number>())
+  )
+    .sort((left, right) => right[1] - left[1])[0] ?? null;
 
   return (
     <div className="space-y-4 pb-1">
@@ -4133,7 +4298,8 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
         <p className="text-[12px] leading-5 text-[#8f8780]">
           This view makes the regime system explicit in the dashboard. The first section reads the canonical
           market-period classifications from `market_periods`; the second shows which model and prompt combinations
-          have performed best inside each regime state.
+          have performed best inside each regime state. The charts below separate regime timing, recurrence, and
+          conditional performance so the tables act as audit trails instead of the first thing you have to read.
         </p>
       </Panel>
 
@@ -4273,6 +4439,325 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
               : "No valid run-level regime-performance rows matched the current filters."}
           </p>
         </Panel>
+      </div>
+
+      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+        <p className="dashboard-label">How to read this</p>
+        <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-3">
+          <p className="text-[12px] leading-5 text-[#8f8780]">
+            <span className="font-semibold text-[#655f5b]">Timeline:</span> shows when the selected market and strategy
+            moved through regime changes and what the path looked like around those shifts.
+          </p>
+          <p className="text-[12px] leading-5 text-[#8f8780]">
+            <span className="font-semibold text-[#655f5b]">Recurrence:</span> counts how often each classified regime
+            appeared in the `market_periods` source of truth and how often it was entered via a flagged transition.
+          </p>
+          <p className="text-[12px] leading-5 text-[#8f8780]">
+            <span className="font-semibold text-[#655f5b]">Conditional performance:</span> summarizes which regime states
+            were most and least favorable after applying the current market, model, and prompt filters.
+          </p>
+        </div>
+      </Panel>
+
+      <SectionHeader>Visual Analysis</SectionHeader>
+      <Panel>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <FilterSelect
+            label="Timeline market"
+            value={timelineSelection.selectedMarket}
+            onChange={timelineSelection.setSelectedMarket}
+            disabled={marketFilter !== "All" || timelineSelection.marketOptions.length <= 1}
+            options={timelineSelection.marketOptions.map((market) => ({
+              value: market,
+              label: MARKET_LABELS[market] ?? market,
+            }))}
+          />
+          <FilterSelect
+            label="Timeline strategy"
+            value={timelineSelection.selectedStrategyKey}
+            onChange={timelineSelection.setSelectedStrategyKey}
+            options={timelineSelection.strategyOptions.map((option) => ({
+              value: option.strategy_key,
+              label: formatStrategyLabel(option.strategy, option.strategy_key),
+            }))}
+          />
+          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+            <p className="dashboard-label">Timeline source</p>
+            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">{timelineSourceLabel}</p>
+            <p className="mt-1 text-[11px] text-[#9b938b]">
+              Regime metrics when present; otherwise the chart falls back to path metrics with regime labels.
+            </p>
+          </div>
+          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+            <p className="dashboard-label">Timeline rows</p>
+            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">{timelineRawRowCount}</p>
+            <p className="mt-1 text-[11px] text-[#9b938b]">
+              {timelineDominantRegime
+                ? `Dominant daily market regime: ${timelineDominantRegime[0]}`
+                : "No daily regime data loaded"}
+            </p>
+          </div>
+        </div>
+      </Panel>
+
+      {regimeTimelineQuery.isLoading ? (
+        <LoadingState title="Loading regime timeline" />
+      ) : timelineRows.length === 0 ? (
+        <EmptyState
+          title="No regime timeline available"
+          body="No regime-chart or equity fallback rows were returned for the current timeline market and strategy selection."
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <Panel>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+              <p className="dashboard-label">Daily regime timeline and transitions</p>
+              <FigureExportControls
+                captureRef={regimeTimelineRef}
+                slug="regimes-daily-timeline"
+                caption="Regimes — daily timeline and transitions"
+                experimentId={data.active_experiment_id}
+              />
+            </div>
+            <div ref={regimeTimelineRef} className="min-w-0">
+              <ResponsiveContainer width="100%" height={320}>
+                <AreaChart data={timelineRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
+                  <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={formatDateLabel}
+                    minTickGap={28}
+                    tick={CHART_X_TICK}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={CHART_Y_TICK}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(value: number) => `${value.toFixed(0)}%`}
+                  />
+                  <Tooltip
+                    {...tooltipStyle}
+                    labelFormatter={(value) => formatDateLabel(String(value))}
+                    formatter={(value: number | null, name: string) => {
+                      if (name === "Drawdown") {
+                        return value != null ? `${value.toFixed(1)}%` : "—";
+                      }
+                      return value != null ? `${value.toFixed(2)}%` : "—";
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey={(row: { drawdown: number | null }) =>
+                      row.drawdown != null ? row.drawdown * 100 : null
+                    }
+                    stroke={COLORS.red}
+                    fill="rgba(212, 151, 144, 0.28)"
+                    strokeWidth={2}
+                    name="Drawdown"
+                  />
+                  {timelineTransitionMarkers.map((marker) => (
+                    <ReferenceLine
+                      key={`${marker.date}-${marker.regime}`}
+                      x={marker.date}
+                      stroke="rgba(92, 82, 74, 0.45)"
+                      strokeDasharray="5 4"
+                      strokeWidth={1}
+                      ifOverflow="extendDomain"
+                    />
+                  ))}
+                </AreaChart>
+              </ResponsiveContainer>
+              <p className="mt-2 text-[11px] leading-5 text-[#9d958d]">
+                Vertical dashed lines mark dates where any regime field changed for the selected market and strategy.
+                The filled area shows average drawdown around those shifts.
+              </p>
+              {timelineTransitionMarkers.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {timelineTransitionMarkers.slice(0, 8).map((marker) => (
+                    <span
+                      key={`timeline-marker-${marker.date}-${marker.regime}`}
+                      className="rounded-full border border-[rgba(232,224,217,0.85)] bg-[rgba(255,255,252,0.68)] px-2.5 py-1 text-[10px] leading-4 text-[#8d857f]"
+                    >
+                      <span className="font-medium text-[#6f6863]">{formatDateLabel(marker.date)}</span>
+                      {" · "}
+                      {marker.regime}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Panel>
+
+          <Panel>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+              <p className="dashboard-label">Regime recurrence</p>
+              <FigureExportControls
+                captureRef={regimeRecurrenceRef}
+                slug="regimes-recurrence-chart"
+                caption="Regimes — recurrence by classified regime"
+                experimentId={data.active_experiment_id}
+              />
+            </div>
+            <div ref={regimeRecurrenceRef} className="min-w-0">
+              <ResponsiveContainer width="100%" height={340}>
+                <BarChart
+                  data={recurrenceChartRows}
+                  layout="vertical"
+                  margin={{ top: 8, right: 24, left: 18, bottom: 8 }}
+                >
+                  <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" horizontal={false} strokeDasharray="3 6" />
+                  <XAxis type="number" tick={CHART_Y_TICK} axisLine={false} tickLine={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={150}
+                    tick={CHART_X_TICK}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    {...tooltipStyle}
+                    formatter={(value: number | null, name: string) => {
+                      if (name === "Transitions") {
+                        return value != null ? `${value}` : "—";
+                      }
+                      return value != null ? `${value}` : "—";
+                    }}
+                    labelFormatter={(value) => String(value)}
+                  />
+                  <Legend wrapperStyle={CHART_LEGEND_WRAPPER} iconType="circle" />
+                  <Bar dataKey="periodCount" name="Periods" fill={COLORS.cyan} radius={[0, 10, 10, 0]} />
+                  <Bar
+                    dataKey="transitionCount"
+                    name="Transitions"
+                    fill="rgba(145, 126, 107, 0.72)"
+                    radius={[0, 10, 10, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Panel>
+        </div>
+      )}
+
+      <Panel>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="dashboard-label">Conditional Sharpe by regime</p>
+            <p className="mt-1 text-[11px] leading-5 text-[#9d958d]">
+              Aggregates the current market, model, and prompt filters back to regime-state rows so you can compare which
+              states were most supportive. {sparseConditionalRows > 0 ? `${sparseConditionalRows} filtered rows have fewer than 3 runs.` : "All visible rows have at least 3 runs."}
+            </p>
+          </div>
+          <FigureExportControls
+            captureRef={regimePerformanceChartRef}
+            slug="regimes-conditional-sharpe-chart"
+            caption="Regimes — conditional Sharpe by regime"
+            experimentId={data.active_experiment_id}
+          />
+        </div>
+        {conditionalChartRows.length === 0 ? (
+          <EmptyState
+            title="No conditional chart data"
+            body="The current market, model, and prompt filters leave no aggregated regime-performance rows to chart."
+          />
+        ) : (
+          <div ref={regimePerformanceChartRef} className="min-w-0">
+            <ResponsiveContainer
+              width="100%"
+              height={Math.max(300, conditionalChartRows.length * 42)}
+            >
+              <BarChart
+                data={conditionalChartRows}
+                layout="vertical"
+                margin={{ top: 8, right: 22, left: 18, bottom: 8 }}
+              >
+                <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" horizontal={false} strokeDasharray="3 6" />
+                <XAxis type="number" tick={CHART_Y_TICK} axisLine={false} tickLine={false} />
+                <YAxis
+                  type="category"
+                  dataKey="label"
+                  width={150}
+                  tick={CHART_X_TICK}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <ReferenceLine x={0} stroke="rgba(145,126,107,0.45)" />
+                <Tooltip
+                  {...tooltipStyle}
+                  labelFormatter={(value) => String(value)}
+                  formatter={(value: number | null, name: string, payload) => {
+                    if (name === "Mean Sharpe") {
+                      return value != null ? value.toFixed(2) : "—";
+                    }
+                    return payload.payload.meanReturn != null
+                      ? formatSignedPctFromRatio(payload.payload.meanReturn, 1)
+                      : "—";
+                  }}
+                />
+                <Bar dataKey="meanSharpe" name="Mean Sharpe" radius={[0, 10, 10, 0]}>
+                  {conditionalChartRows.map((row) => (
+                    <Cell key={row.label} fill={sharpeColor(row.meanSharpe)} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </Panel>
+
+      <div className="space-y-3">
+        <SectionHeader>Methodology</SectionHeader>
+        <p className="max-w-3xl text-[12px] leading-5 text-[#9d958d]">
+          The charts above separate the regime source of truth from the performance aggregation layer so you can see both
+          what the market state was and how strategies behaved inside those states.
+        </p>
+        <Accordion
+          type="multiple"
+          className="dashboard-panel rounded-[16px] border border-[rgba(232,224,217,0.9)] px-3"
+        >
+          <AccordionItem value="regime-labels" className="border-[rgba(227,220,214,0.75)]">
+            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+              Regime labels and regime codes
+            </AccordionTrigger>
+            <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">
+              `Bear`, `Flat`, and `Bull` describe the market leg; `Low`, `Elevated`, and `High` describe the volatility
+              environment; `Easing`, `Stable`, and `Tightening` describe the rate leg. `regime_code` combines those three
+              labels into one compact identifier for the full state.
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="source-of-truth" className="border-[rgba(227,220,214,0.75)]">
+            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+              Source-of-truth periods vs run-level performance
+            </AccordionTrigger>
+            <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">
+              The period tables and recurrence chart come directly from `market_periods`, which is the canonical market
+              classification layer. The conditional performance chart uses run rows that inherit those regime labels and then
+              aggregates realized outcomes by regime, market, model, and prompt combination.
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="timeline-method" className="border-[rgba(227,220,214,0.75)]">
+            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+              Daily timeline construction
+            </AccordionTrigger>
+            <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">
+              The timeline prefers `/charts/regimes` so it can use daily regime metrics directly. When those rows are not
+              available, it falls back to daily path metrics and infers the consensus market regime from the attached daily
+              labels. Dashed lines mark dates where any regime field changed.
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="sample-caveats" className="border-[rgba(227,220,214,0.75)]">
+            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+              Sample-size caveats
+            </AccordionTrigger>
+            <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">
+              Conditional regime rows with low run counts can move sharply when filters change. Use the run counts in the
+              table below to judge whether a regime advantage looks broad-based or driven by only a few observations.
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
 
       <SectionHeader>Source-Of-Truth Period Regimes</SectionHeader>
