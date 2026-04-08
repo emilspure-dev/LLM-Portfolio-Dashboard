@@ -524,6 +524,45 @@ async function fetchAllDailyHoldings(
   return items;
 }
 
+function normalizeSelectionKeyPart(value: string | number | null | undefined) {
+  return String(value ?? "").trim();
+}
+
+function getSelectionPeriodKey(row: {
+  path_id?: string | number | null;
+  run_id?: string | number | null;
+  trajectory_id?: string | null;
+  period?: string | null;
+  strategy_key?: string | null;
+  market?: string | null;
+  prompt_type?: string | null;
+  model?: string | null;
+}) {
+  const period = normalizeSelectionKeyPart(row.period) || "unknown-period";
+  const pathId = normalizeSelectionKeyPart(row.path_id);
+  if (pathId) {
+    return `path:${pathId}:${period}`;
+  }
+
+  const runId = normalizeSelectionKeyPart(row.run_id);
+  if (runId) {
+    return `run:${runId}:${period}`;
+  }
+
+  const trajectoryId = normalizeSelectionKeyPart(row.trajectory_id);
+  if (trajectoryId) {
+    return `trajectory:${trajectoryId}:${period}`;
+  }
+
+  return [
+    normalizeSelectionKeyPart(row.strategy_key) || "unknown-strategy",
+    normalizeSelectionKeyPart(row.market) || "unknown-market",
+    normalizeSelectionKeyPart(row.prompt_type) || "unknown-prompt",
+    normalizeSelectionKeyPart(row.model) || "unknown-model",
+    period,
+  ].join("::");
+}
+
 function mean(values: number[]) {
   return values.length
     ? values.reduce((sum, value) => sum + value, 0) / values.length
@@ -5266,6 +5305,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
   const behaviorModelHhiRef = useRef<HTMLDivElement>(null);
   const behaviorHhiTimeRef = useRef<HTMLDivElement>(null);
   const behaviorRationaleRef = useRef<HTMLDivElement>(null);
+  const behaviorSelectionRef = useRef<HTMLDivElement>(null);
 
   const chartData = rows.map((row) => ({
     prompt: row.prompt_type,
@@ -5540,10 +5580,23 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
     staleTime: 60_000,
   });
 
+  const filteredBehaviorHoldings = useMemo(
+    () =>
+      (behaviorHoldingsQuery.data ?? []).filter((row) => {
+        const promptType = String(row.prompt_type ?? "").trim();
+        const model = String(row.model ?? "").trim();
+        return (
+          (promptType === "retail" || promptType === "advanced") &&
+          (behaviorModelFilter === "All" || model === behaviorModelFilter)
+        );
+      }),
+    [behaviorHoldingsQuery.data, behaviorModelFilter]
+  );
+
   const sectorConcentrationRows = useMemo(() => {
     const grouped = new Map<string, { promptType: string; sector: string; count: number }>();
     const totals = new Map<string, number>();
-    for (const row of behaviorHoldingsQuery.data ?? []) {
+    for (const row of filteredBehaviorHoldings) {
       const promptType = String(row.prompt_type ?? "").trim();
       const sector = String(row.sector ?? "Unknown");
       if (promptType !== "retail" && promptType !== "advanced") continue;
@@ -5561,31 +5614,104 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       }))
       .sort((left, right) => (right.share ?? 0) - (left.share ?? 0))
       .slice(0, 12);
-  }, [behaviorHoldingsQuery.data]);
+  }, [filteredBehaviorHoldings]);
 
-  const assetFrequencyRows = useMemo(() => {
-    const grouped = new Map<string, { ticker: string; name: string; count: number; markets: Set<string> }>();
-    for (const row of behaviorHoldingsQuery.data ?? []) {
+  const assetSelectionMatrix = useMemo(() => {
+    const marketRunTotals = new Map<string, Set<string>>();
+    for (const run of runs) {
+      const promptType = String(run.prompt_type ?? "").trim();
+      const market = String(run.market ?? "").trim();
+      const model = String(run.model ?? "").trim();
+      if ((promptType !== "retail" && promptType !== "advanced") || !market) continue;
+      if (modelMarketFilter !== "All" && market !== modelMarketFilter) continue;
+      if (behaviorModelFilter !== "All" && model !== behaviorModelFilter) continue;
+      const bucket = marketRunTotals.get(market) ?? new Set<string>();
+      bucket.add(getSelectionPeriodKey(run));
+      marketRunTotals.set(market, bucket);
+    }
+
+    const tickerBuckets = new Map<
+      string,
+      {
+        ticker: string;
+        name: string;
+        selectedByMarket: Map<string, Set<string>>;
+      }
+    >();
+
+    for (const row of filteredBehaviorHoldings) {
+      const market = String(row.market ?? "").trim();
       const ticker = String(row.ticker ?? "").trim();
-      if (!ticker) continue;
-      const bucket = grouped.get(ticker) ?? {
+      if (!market || !ticker || !marketRunTotals.has(market)) continue;
+
+      const bucket = tickerBuckets.get(ticker) ?? {
         ticker,
         name: String(row.name ?? ticker),
-        count: 0,
-        markets: new Set<string>(),
+        selectedByMarket: new Map<string, Set<string>>(),
       };
-      bucket.count += 1;
-      if (row.market) bucket.markets.add(row.market);
-      grouped.set(ticker, bucket);
+      const selectedRuns = bucket.selectedByMarket.get(market) ?? new Set<string>();
+      selectedRuns.add(getSelectionPeriodKey(row));
+      bucket.selectedByMarket.set(market, selectedRuns);
+      tickerBuckets.set(ticker, bucket);
     }
-    return Array.from(grouped.values())
-      .sort((left, right) => right.count - left.count)
-      .slice(0, 15)
-      .map((row) => ({
-        ...row,
-        markets: Array.from(row.markets).map((market) => MARKET_LABELS[market] ?? market).join(", "),
-      }));
-  }, [behaviorHoldingsQuery.data]);
+
+    const marketKeys = Array.from(marketRunTotals.keys()).sort((left, right) =>
+      (MARKET_LABELS[left] ?? left).localeCompare(MARKET_LABELS[right] ?? right)
+    );
+
+    const rows = Array.from(tickerBuckets.values())
+      .map((bucket) => {
+        const cells = marketKeys.map((market) => {
+          const selectedRunCount = bucket.selectedByMarket.get(market)?.size ?? 0;
+          const totalRuns = marketRunTotals.get(market)?.size ?? 0;
+          return {
+            market,
+            marketLabel: MARKET_LABELS[market] ?? market,
+            selectedRunCount,
+            totalRuns,
+            selectionRate: totalRuns > 0 ? selectedRunCount / totalRuns : null,
+          };
+        });
+
+        const totalSelectedRuns = cells.reduce((sum, cell) => sum + cell.selectedRunCount, 0);
+        const totalRuns = cells.reduce((sum, cell) => sum + cell.totalRuns, 0);
+        const activeMarkets = cells.filter((cell) => cell.selectedRunCount > 0);
+        const bestCell = activeMarkets.reduce<(typeof cells)[number] | null>(
+          (best, cell) => {
+            if (!best) return cell;
+            return (cell.selectionRate ?? 0) > (best.selectionRate ?? 0) ? cell : best;
+          },
+          null
+        );
+
+        return {
+          ticker: bucket.ticker,
+          name: bucket.name,
+          cells,
+          totalSelectedRuns,
+          totalRuns,
+          weightedRate: totalRuns > 0 ? totalSelectedRuns / totalRuns : null,
+          marketLabels: activeMarkets.map((cell) => cell.marketLabel).join(", "),
+          bestMarketLabel: bestCell?.marketLabel ?? "—",
+          bestMarketRate: bestCell?.selectionRate ?? null,
+        };
+      })
+      .filter((row) => row.totalSelectedRuns > 0)
+      .sort((left, right) => {
+        const rateDiff = (right.weightedRate ?? 0) - (left.weightedRate ?? 0);
+        if (Math.abs(rateDiff) > 1e-9) return rateDiff;
+        return right.totalSelectedRuns - left.totalSelectedRuns;
+      });
+
+    return {
+      marketKeys,
+      rows,
+    };
+  }, [filteredBehaviorHoldings, runs, modelMarketFilter, behaviorModelFilter]);
+
+  const assetFrequencyRows = useMemo(() => {
+    return assetSelectionMatrix.rows.slice(0, 15);
+  }, [assetSelectionMatrix]);
 
   // Compute post-loss runs: for each (strategy, market, model, prompt_type) group sorted by
   // period, find runs where the immediately preceding period had a negative return.
@@ -6387,36 +6513,120 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
           )}
 
           {(sectorConcentrationRows.length > 0 || assetFrequencyRows.length > 0) && (
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-              <Panel className="overflow-x-auto p-0">
-                <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
-                  <p className="dashboard-label">Sector concentration and cap pressure</p>
-                </div>
-                <table className="w-full min-w-[520px] text-[11px]">
-                  <thead>
-                    <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Sector</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Share</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Cap flag</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sectorConcentrationRows.map((row) => (
-                      <tr key={`${row.promptType}-${row.sector}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                        <td className="px-3 py-2.5 text-[#5e5955]">{row.promptType}</td>
-                        <td className="px-3 py-2.5 text-[#8d857f]">{row.sector}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.share, 1)}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.capViolation ? "Yes" : "No"}</td>
+            <>
+              {assetSelectionMatrix.rows.length > 0 && (
+                <Panel>
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                    <p className="dashboard-label">Stock selection share by market</p>
+                    <FigureExportControls
+                      captureRef={behaviorSelectionRef}
+                      slug="behavior-stock-selection-share"
+                      caption="Behavior — stock selection share by market"
+                      experimentId={data.active_experiment_id}
+                    />
+                  </div>
+                  <div ref={behaviorSelectionRef} className="space-y-3">
+                    <p className="text-[12px] leading-5 text-[#8f8780]">
+                      Each cell shows the share of GPT run-period portfolios in that market that selected the stock at
+                      least once. Selections are deduplicated to one `ticker x path x period` observation, so this is a
+                      portfolio-choice view rather than a daily holdings-count view.
+                    </p>
+                    <div className="overflow-x-auto">
+                      <div
+                        className="grid min-w-[760px] gap-2"
+                        style={{
+                          gridTemplateColumns: `minmax(190px, 1.4fr) repeat(${Math.max(assetSelectionMatrix.marketKeys.length, 1)}, minmax(108px, 1fr)) minmax(108px, 1fr)`,
+                        }}
+                      >
+                        <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                          Stock
+                        </div>
+                        {assetSelectionMatrix.marketKeys.map((market) => (
+                          <div
+                            key={`selection-head-${market}`}
+                            className="px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]"
+                          >
+                            {MARKET_LABELS[market] ?? market}
+                          </div>
+                        ))}
+                        <div className="px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                          Overall
+                        </div>
+
+                        {assetSelectionMatrix.rows.slice(0, 12).map((row) => (
+                          <div key={`selection-row-${row.ticker}`} className="contents">
+                            <div className="rounded-[14px] border border-[rgba(232,224,217,0.92)] bg-[rgba(255,255,252,0.75)] px-3 py-2">
+                              <p className="text-[12px] font-semibold text-[#5e5955]">{row.ticker}</p>
+                              <p className="mt-0.5 truncate text-[10px] text-[#8d857f]">{row.name}</p>
+                              <p className="mt-1 text-[10px] text-[#a19a93]">{row.marketLabels || "Not selected"}</p>
+                            </div>
+                            {row.cells.map((cell) => {
+                              const alpha = cell.selectionRate == null ? 0.08 : 0.12 + Math.min(cell.selectionRate, 1) * 0.58;
+                              return (
+                                <div
+                                  key={`selection-cell-${row.ticker}-${cell.market}`}
+                                  className="rounded-[14px] border px-2 py-2 text-center"
+                                  style={{
+                                    backgroundColor: `rgba(137, 182, 199, ${alpha})`,
+                                    borderColor: "rgba(215, 226, 230, 0.95)",
+                                  }}
+                                  title={`${row.ticker} in ${cell.marketLabel}: ${cell.selectedRunCount} of ${cell.totalRuns} run-periods`}
+                                >
+                                  <p className="text-[11px] font-semibold text-[#5e5955]">
+                                    {formatPctFromRatio(cell.selectionRate, 1)}
+                                  </p>
+                                  <p className="mt-0.5 text-[10px] text-[#8d857f]">
+                                    {cell.selectedRunCount}/{cell.totalRuns}
+                                  </p>
+                                </div>
+                              );
+                            })}
+                            <div className="rounded-[14px] border border-[rgba(232,224,217,0.92)] bg-[rgba(255,255,252,0.75)] px-2 py-2 text-center">
+                              <p className="text-[11px] font-semibold text-[#5e5955]">
+                                {formatPctFromRatio(row.weightedRate, 1)}
+                              </p>
+                              <p className="mt-0.5 text-[10px] text-[#8d857f]">
+                                {row.totalSelectedRuns}/{row.totalRuns}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </Panel>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+                <Panel className="overflow-x-auto p-0">
+                  <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+                    <p className="dashboard-label">Sector concentration and cap pressure</p>
+                  </div>
+                  <table className="w-full min-w-[520px] text-[11px]">
+                    <thead>
+                      <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                        <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
+                        <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Sector</th>
+                        <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Share</th>
+                        <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Cap flag</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Panel>
+                    </thead>
+                    <tbody>
+                      {sectorConcentrationRows.map((row) => (
+                        <tr key={`${row.promptType}-${row.sector}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
+                          <td className="px-3 py-2.5 text-[#5e5955]">{row.promptType}</td>
+                          <td className="px-3 py-2.5 text-[#8d857f]">{row.sector}</td>
+                          <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.share, 1)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.capViolation ? "Yes" : "No"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </Panel>
 
               <Panel className="overflow-x-auto p-0">
                 <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
-                  <p className="dashboard-label">Most frequent assets</p>
+                  <p className="dashboard-label">Most selected stocks</p>
                 </div>
                 <table className="w-full min-w-[620px] text-[11px]">
                   <thead>
@@ -6424,7 +6634,9 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                       <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Ticker</th>
                       <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Name</th>
                       <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Markets</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Freq</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs selected</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Overall share</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Best market</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -6432,14 +6644,19 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                       <tr key={row.ticker} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
                         <td className="px-3 py-2.5 text-[#5e5955]">{row.ticker}</td>
                         <td className="px-3 py-2.5 text-[#8d857f]">{row.name}</td>
-                        <td className="px-3 py-2.5 text-[#8d857f]">{row.markets}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.count}</td>
+                        <td className="px-3 py-2.5 text-[#8d857f]">{row.marketLabels}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.totalSelectedRuns}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.weightedRate, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                          {row.bestMarketLabel} {row.bestMarketRate != null ? `(${formatPctFromRatio(row.bestMarketRate, 1)})` : ""}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </Panel>
             </div>
+            </>
           )}
 
           {/* ── Reasoning keyword frequency ── */}
