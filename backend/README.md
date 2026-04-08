@@ -30,6 +30,28 @@ For development with auto-reload:
 npm run dev
 ```
 
+## Regime ETL
+
+The API remains read-only. Regime classification is updated by a separate ETL entrypoint that reads a target snapshot's `market_periods` windows, fetches raw market data, reproduces the PDF's three-way labels, verifies parity against the current fixture, and optionally writes the labels back into SQLite.
+
+Dry run with parity check only:
+
+```bash
+npm run regime:build -- --snapshot-id <data_snapshot_id>
+```
+
+Write the computed labels back to a copied SQLite snapshot:
+
+```bash
+npm run regime:build -- --snapshot-id <data_snapshot_id> --db /tmp/current.sqlite --write
+```
+
+Relevant environment variables:
+
+- `REGIME_DB_PATH` overrides the SQLite path used by the ETL.
+- `REGIME_SNAPSHOT_ID` provides a default target snapshot.
+- `REGIME_VERIFY_FIXTURE_PATH` overrides the default parity fixture path.
+
 ## Production notes
 
 - The browser never connects to SQLite directly.

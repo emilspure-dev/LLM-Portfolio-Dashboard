@@ -13,6 +13,12 @@ export const HOST = process.env.HOST?.trim() || "0.0.0.0";
 export const PORT = parseInteger(process.env.PORT, 3001);
 export const SQLITE_DB_PATH =
   process.env.SQLITE_DB_PATH?.trim() || "/srv/thesis/db/current.sqlite";
+export const REGIME_DB_PATH =
+  process.env.REGIME_DB_PATH?.trim() || SQLITE_DB_PATH;
+export const REGIME_SNAPSHOT_ID =
+  process.env.REGIME_SNAPSHOT_ID?.trim() || "";
+export const REGIME_VERIFY_FIXTURE_PATH =
+  process.env.REGIME_VERIFY_FIXTURE_PATH?.trim() || "";
 export const DEFAULT_PAGE_SIZE = clamp(
   parseInteger(process.env.API_DEFAULT_PAGE_SIZE, 100),
   1,

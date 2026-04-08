@@ -23,23 +23,38 @@ function openDatabase() {
     return database;
   }
 
-  if (!fs.existsSync(SQLITE_DB_PATH)) {
-    throw new Error(`SQLite database not found at ${SQLITE_DB_PATH}`);
-  }
+  database = openDatabaseAt(SQLITE_DB_PATH, { readOnly: true, queryOnly: true });
 
-  database = new DatabaseSync(SQLITE_DB_PATH, {
-    readOnly: true,
+  return database;
+}
+
+function assertDatabaseExists(databasePath) {
+  if (!fs.existsSync(databasePath)) {
+    throw new Error(`SQLite database not found at ${databasePath}`);
+  }
+}
+
+function openDatabaseAt(
+  databasePath,
+  {
+    readOnly = true,
+    queryOnly = false,
+  } = {}
+) {
+  assertDatabaseExists(databasePath);
+  const db = new DatabaseSync(databasePath, {
+    readOnly,
     timeout: 5000,
     allowExtension: false,
   });
 
-  database.exec(`
-    PRAGMA query_only = ON;
+  db.exec(`
+    ${queryOnly ? "PRAGMA query_only = ON;" : ""}
     PRAGMA busy_timeout = 5000;
     PRAGMA foreign_keys = ON;
   `);
 
-  return database;
+  return db;
 }
 
 export function checkDatabase() {
@@ -96,6 +111,24 @@ export function getTableColumns(tableName) {
 
   tableColumnsCache.set(normalizedTable, columns);
   return columns;
+}
+
+export function openWritableDatabase(databasePath = SQLITE_DB_PATH) {
+  return openDatabaseAt(databasePath, { readOnly: false, queryOnly: false });
+}
+
+export function openReadOnlyDatabase(databasePath = SQLITE_DB_PATH) {
+  return openDatabaseAt(databasePath, { readOnly: true, queryOnly: true });
+}
+
+export function getTableColumnsFromDatabase(db, tableName) {
+  const normalizedTable = assertSafeIdentifier(tableName);
+  const rows = db.prepare(`
+    SELECT name
+    FROM pragma_table_info('${normalizedTable}')
+    ORDER BY cid
+  `).all();
+  return rowsToValues(rows.map((row) => normalizeRow(row)), "name");
 }
 
 export function closeDatabase() {
