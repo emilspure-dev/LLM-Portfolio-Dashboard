@@ -16,9 +16,14 @@ import { SectionHeader, SoftHr } from "./SectionHeader";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { CHART_COLORS, MARKET_LABELS, getStrategyDisplayName } from "@/lib/constants";
-import { getFactorSelectionSummary, postFactorStyleAnalysis } from "@/lib/api-client";
+import {
+  getDailyHoldings,
+  getFactorSelectionSummary,
+  postFactorStyleAnalysis,
+} from "@/lib/api-client";
+import { apiRouteLikelyMissing } from "@/lib/data-loader";
 import { FACTOR_DEFINITIONS_BLURB, STRATEGY_GLOSSARY } from "@/lib/strategy-factor-glossary";
-import type { FactorStyleSummaryRow } from "@/lib/api-types";
+import type { FactorStyleSummaryRow, HoldingDailyRow } from "@/lib/api-types";
 import type { EvaluationData } from "@/lib/types";
 
 const FACTOR_STYLE_ORDER = [
@@ -72,6 +77,22 @@ type RegimeContextRow = {
   rateRegimeLabel: string | null;
 };
 
+type SelectionRow = {
+  strategyKey: GptStrategyKey;
+  runKey: string;
+  date: string;
+  period: string;
+  label: string;
+};
+
+type RunProfile = {
+  strategyKey: GptStrategyKey;
+  runKey: string;
+  totalSelections: number;
+  labelCounts: Record<string, number>;
+  dominantLabel: string;
+};
+
 const FACTOR_CONFIG: Record<
   SelectionFactorKey,
   { label: string; field: string; definition: string }
@@ -110,6 +131,312 @@ function factorStyleSortKey(strategyKey: string): number {
 
 function formatPromptLabel(strategyKey: GptStrategyKey) {
   return getStrategyDisplayName(strategyKey, strategyKey);
+}
+
+function getFactorLabelValue(
+  row: HoldingDailyRow,
+  factorKey: SelectionFactorKey
+) {
+  const raw = row[FACTOR_CONFIG[factorKey].field as keyof HoldingDailyRow];
+  return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+}
+
+function getRunKey(
+  row: Pick<
+    HoldingDailyRow | EvaluationData["runs"][number],
+    | "run_id"
+    | "path_id"
+    | "trajectory_id"
+    | "strategy_key"
+    | "market"
+    | "prompt_type"
+    | "model"
+  >
+) {
+  const runId = String(row.run_id ?? "").trim();
+  if (runId) return `run:${runId}`;
+  const pathId = String(row.path_id ?? "").trim();
+  if (pathId) return `path:${pathId}`;
+  const trajectoryId = String(row.trajectory_id ?? "").trim();
+  if (trajectoryId) return `trajectory:${trajectoryId}`;
+  return [
+    String(row.strategy_key ?? "") || "unknown-strategy",
+    String(row.market ?? "") || "unknown-market",
+    String(row.prompt_type ?? "") || "unknown-prompt",
+    String(row.model ?? "") || "unknown-model",
+  ].join("::");
+}
+
+async function fetchAllDailyHoldings(
+  query: Record<string, string | number | undefined>
+) {
+  let page = 1;
+  let totalPages = 1;
+  const items: HoldingDailyRow[] = [];
+
+  while (page <= totalPages) {
+    const response = await getDailyHoldings({
+      ...query,
+      page,
+      page_size: 1000,
+    });
+    items.push(...response.items);
+    totalPages = response.total_pages;
+    page += 1;
+  }
+
+  return items;
+}
+
+function buildSelectionRows(
+  holdingsByStrategy: Record<GptStrategyKey, HoldingDailyRow[]> | undefined,
+  factorKey: SelectionFactorKey
+) {
+  if (!holdingsByStrategy) return [];
+
+  const rows: SelectionRow[] = [];
+  for (const strategyKey of GPT_STRATEGY_KEYS) {
+    for (const row of holdingsByStrategy[strategyKey] ?? []) {
+      const label = getFactorLabelValue(row, factorKey);
+      if (!label) continue;
+      rows.push({
+        strategyKey,
+        runKey: getRunKey(row),
+        date: row.date,
+        period: row.period || "Unknown period",
+        label,
+      });
+    }
+  }
+  return rows;
+}
+
+function getLabelOrder(rows: SelectionRow[]) {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.label, (counts.get(row.label) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .sort((left, right) => right[1] - left[1])
+    .map(([label]) => label);
+}
+
+function getDisplayedLabels(labelOrder: string[]) {
+  if (labelOrder.length <= 4) return labelOrder;
+  return [...labelOrder.slice(0, 4), "Other"];
+}
+
+function buildRunProfiles(rows: SelectionRow[], displayedLabels: string[]) {
+  const topLabelSet = new Set(displayedLabels.filter((label) => label !== "Other"));
+  const grouped = new Map<string, RunProfile>();
+
+  for (const row of rows) {
+    const label = topLabelSet.has(row.label) ? row.label : "Other";
+    const profileKey = `${row.strategyKey}__${row.runKey}`;
+    const profile =
+      grouped.get(profileKey) ??
+      {
+        strategyKey: row.strategyKey,
+        runKey: row.runKey,
+        totalSelections: 0,
+        labelCounts: {},
+        dominantLabel: label,
+      };
+    profile.totalSelections += 1;
+    profile.labelCounts[label] = (profile.labelCounts[label] ?? 0) + 1;
+    grouped.set(profileKey, profile);
+  }
+
+  return Array.from(grouped.values()).map((profile) => {
+    const dominant = displayedLabels
+      .map((label) => ({ label, value: profile.labelCounts[label] ?? 0 }))
+      .sort((left, right) => right.value - left.value)[0];
+    return {
+      ...profile,
+      dominantLabel: dominant?.label ?? "Other",
+    };
+  });
+}
+
+function buildAggregateCountData(rows: SelectionRow[], displayedLabels: string[]) {
+  const runProfiles = buildRunProfiles(rows, displayedLabels);
+  const grouped = new Map<string, { label: string; retail: number; advanced: number }>();
+
+  for (const profile of runProfiles) {
+    const bucket = grouped.get(profile.dominantLabel) ?? {
+      label: profile.dominantLabel,
+      retail: 0,
+      advanced: 0,
+    };
+    if (profile.strategyKey === "gpt_retail") bucket.retail += 1;
+    if (profile.strategyKey === "gpt_advanced") bucket.advanced += 1;
+    grouped.set(profile.dominantLabel, bucket);
+  }
+
+  return displayedLabels
+    .map((label) => grouped.get(label) ?? { label, retail: 0, advanced: 0 })
+    .filter((row) => row.retail > 0 || row.advanced > 0);
+}
+
+function buildPromptSummary(rows: SelectionRow[], strategyKey: GptStrategyKey) {
+  const promptRows = rows.filter((row) => row.strategyKey === strategyKey);
+  const labels = Array.from(new Set(promptRows.map((row) => row.label)));
+  const profiles = buildRunProfiles(promptRows, labels);
+  const dominantCounts = new Map<string, number>();
+  const dates = new Set<string>(promptRows.map((row) => row.date));
+  const periods = new Set<string>(promptRows.map((row) => row.period));
+  for (const profile of profiles) {
+    dominantCounts.set(
+      profile.dominantLabel,
+      (dominantCounts.get(profile.dominantLabel) ?? 0) + 1
+    );
+  }
+
+  const dominantEntry = Array.from(dominantCounts.entries()).sort(
+    (left, right) => right[1] - left[1]
+  )[0];
+  const runCount = profiles.length;
+  return {
+    strategy_key: strategyKey,
+    prompt_type: strategyKey === "gpt_advanced" ? "advanced" : "retail",
+    run_count: runCount,
+    dominant_label: dominantEntry?.[0] ?? "—",
+    dominant_count: dominantEntry?.[1] ?? 0,
+    dominant_share: runCount > 0 ? (dominantEntry?.[1] ?? 0) / runCount : 0,
+    date_count: dates.size,
+    period_count: periods.size,
+  };
+}
+
+function buildRunMixData(profiles: RunProfile[], displayedLabels: string[]) {
+  const grouped = new Map<GptStrategyKey, { runCount: number; sums: Record<string, number> }>();
+  for (const strategyKey of GPT_STRATEGY_KEYS) {
+    grouped.set(strategyKey, {
+      runCount: 0,
+      sums: Object.fromEntries(displayedLabels.map((label) => [label, 0])),
+    });
+  }
+
+  for (const profile of profiles) {
+    const bucket = grouped.get(profile.strategyKey);
+    if (!bucket) continue;
+    bucket.runCount += 1;
+    for (const label of displayedLabels) {
+      const share =
+        profile.totalSelections > 0
+          ? (profile.labelCounts[label] ?? 0) / profile.totalSelections
+          : 0;
+      bucket.sums[label] = (bucket.sums[label] ?? 0) + share;
+    }
+  }
+
+  return displayedLabels.map((label) => ({
+    label,
+    retail:
+      (grouped.get("gpt_retail")?.sums[label] ?? 0) /
+      Math.max(grouped.get("gpt_retail")?.runCount ?? 0, 1),
+    advanced:
+      (grouped.get("gpt_advanced")?.sums[label] ?? 0) /
+      Math.max(grouped.get("gpt_advanced")?.runCount ?? 0, 1),
+  }));
+}
+
+function buildOutcomeLinkageRows(profiles: RunProfile[], runs: EvaluationData["runs"]) {
+  const runLookup = new Map(
+    runs.map((run) => [
+      getRunKey(run),
+      run,
+    ])
+  );
+  const grouped = new Map<
+    string,
+    {
+      dominant_label: string;
+      model: string;
+      prompt_type: string;
+      sharpeValues: number[];
+      returnValues: number[];
+      count: number;
+    }
+  >();
+
+  for (const profile of profiles) {
+    const run = runLookup.get(profile.runKey);
+    if (!run) continue;
+    const model = String(run.model ?? "").trim() || "unknown";
+    const promptType = String(run.prompt_type ?? "").trim() || "unknown";
+    const key = `${profile.dominantLabel}::${model}::${promptType}`;
+    const bucket = grouped.get(key) ?? {
+      dominant_label: profile.dominantLabel,
+      model,
+      prompt_type: promptType,
+      sharpeValues: [],
+      returnValues: [],
+      count: 0,
+    };
+    if (run.sharpe_ratio != null && Number.isFinite(run.sharpe_ratio)) {
+      bucket.sharpeValues.push(run.sharpe_ratio);
+    }
+    const realized =
+      run.annualized_return ?? run.period_return ?? run.net_return ?? run.period_return_net;
+    if (realized != null && Number.isFinite(realized)) {
+      bucket.returnValues.push(realized);
+    }
+    bucket.count += 1;
+    grouped.set(key, bucket);
+  }
+
+  return Array.from(grouped.values())
+    .map((row) => ({
+      dominant_label: row.dominant_label,
+      model: row.model,
+      prompt_type: row.prompt_type,
+      count: row.count,
+      mean_sharpe:
+        row.sharpeValues.length > 0
+          ? row.sharpeValues.reduce((sum, value) => sum + value, 0) /
+            row.sharpeValues.length
+          : null,
+      mean_return:
+        row.returnValues.length > 0
+          ? row.returnValues.reduce((sum, value) => sum + value, 0) /
+            row.returnValues.length
+          : null,
+    }))
+    .sort((left, right) => (right.mean_sharpe ?? -Infinity) - (left.mean_sharpe ?? -Infinity));
+}
+
+function buildRegimeContextRows(
+  holdingsByStrategy: Record<GptStrategyKey, HoldingDailyRow[]> | undefined
+) {
+  if (!holdingsByStrategy) return [];
+
+  const grouped = new Map<string, RegimeContextRow>();
+  for (const strategyKey of GPT_STRATEGY_KEYS) {
+    for (const row of holdingsByStrategy[strategyKey] ?? []) {
+      const key = `${row.market}__${row.period}`;
+      if (grouped.has(key)) continue;
+      grouped.set(key, {
+        market: row.market,
+        period: row.period,
+        periodStartDate: row.period_start_date,
+        periodEndDate: row.period_end_date,
+        marketRegimeLabel: row.market_regime_label,
+        volRegimeLabel: row.vol_regime_label,
+        rateRegimeLabel: row.rate_regime_label,
+      });
+    }
+  }
+
+  return Array.from(grouped.values()).sort((left, right) => {
+    const startCompare = (left.periodStartDate ?? left.period).localeCompare(
+      right.periodStartDate ?? right.period
+    );
+    if (startCompare !== 0) return startCompare;
+    return (MARKET_LABELS[left.market] ?? left.market).localeCompare(
+      MARKET_LABELS[right.market] ?? right.market
+    );
+  });
 }
 
 function formatPerRun(value: number | null | undefined, digits = 1) {
@@ -319,12 +646,56 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
       marketFilter,
       factorFilter,
     ],
-    queryFn: () =>
-      getFactorSelectionSummary({
-        experiment_id: data.active_experiment_id,
-        market: marketFilter === "All" ? undefined : marketFilter,
-        factor_key: factorFilter,
-      }),
+    queryFn: async () => {
+      try {
+        return await getFactorSelectionSummary({
+          experiment_id: data.active_experiment_id,
+          market: marketFilter === "All" ? undefined : marketFilter,
+          factor_key: factorFilter,
+        });
+      } catch (error) {
+        if (!apiRouteLikelyMissing(error)) {
+          throw error;
+        }
+
+        const holdingsByStrategy = Object.fromEntries(
+          await Promise.all(
+            GPT_STRATEGY_KEYS.map(async (strategyKey) => [
+              strategyKey,
+              await fetchAllDailyHoldings({
+                experiment_id: data.active_experiment_id,
+                strategy_key: strategyKey,
+                market: marketFilter === "All" ? undefined : marketFilter,
+              }),
+            ])
+          )
+        ) as Record<GptStrategyKey, HoldingDailyRow[]>;
+
+        const selectionRows = buildSelectionRows(holdingsByStrategy, factorFilter);
+        const labelOrder = getLabelOrder(selectionRows);
+        const displayedLabels = getDisplayedLabels(labelOrder);
+        const profiles = buildRunProfiles(selectionRows, displayedLabels);
+
+        return {
+          factor_key: factorFilter,
+          aggregate_counts: buildAggregateCountData(selectionRows, displayedLabels),
+          prompt_summaries: GPT_STRATEGY_KEYS.map((strategyKey) =>
+            buildPromptSummary(selectionRows, strategyKey)
+          ),
+          run_mix: buildRunMixData(profiles, displayedLabels),
+          outcome_linkage: buildOutcomeLinkageRows(profiles, data.runs),
+          regime_context: buildRegimeContextRows(holdingsByStrategy).map((row) => ({
+            market: row.market,
+            period: row.period,
+            period_start_date: row.periodStartDate,
+            period_end_date: row.periodEndDate,
+            market_regime_label: row.marketRegimeLabel,
+            vol_regime_label: row.volRegimeLabel,
+            rate_regime_label: row.rateRegimeLabel,
+          })),
+        };
+      }
+    },
     enabled: Boolean(data.active_experiment_id),
     staleTime: 60_000,
   });

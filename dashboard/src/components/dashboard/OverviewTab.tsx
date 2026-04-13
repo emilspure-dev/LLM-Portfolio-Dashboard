@@ -18,18 +18,25 @@ import {
   fmt,
   fmtp,
 } from "@/lib/constants";
-import type { EvaluationData, Insight } from "@/lib/types";
+import type { EvaluationData, Insight, RunRow } from "@/lib/types";
 
 interface OverviewTabProps {
   data: EvaluationData;
+  runs: RunRow[];
 }
 
-export function OverviewTab({ data }: OverviewTabProps) {
+export function OverviewTab({ data, runs }: OverviewTabProps) {
   const { summary } = data;
   const overviewBeatIndexRef = useRef<HTMLDivElement>(null);
-  const nRuns = data.overview_summary?.valid_runs ?? 0;
-  const nMarkets = data.overview_summary?.market_count ?? 0;
-  const nPeriods = data.overview_summary?.period_count ?? 0;
+  const nRuns =
+    data.overview_summary?.valid_runs ??
+    runs.filter((r) => r.valid !== false).length;
+  const nMarkets =
+    data.overview_summary?.market_count ??
+    new Set(runs.map((r) => r.market).filter(Boolean)).size;
+  const nPeriods =
+    data.overview_summary?.period_count ??
+    new Set(runs.map((r) => r.period).filter(Boolean)).size;
 
   const bestSharpe = useMemo(() => {
     if (!summary.length) return { value: NaN, name: "—" };
@@ -47,7 +54,22 @@ export function OverviewTab({ data }: OverviewTabProps) {
     };
   }, [summary]);
 
-  const gptBeatRate = data.overview_summary?.gpt_beat_index_rate ?? null;
+  const gptBeatRate = useMemo(() => {
+    if (data.overview_summary?.gpt_beat_index_rate != null) {
+      return data.overview_summary.gpt_beat_index_rate;
+    }
+    const gptRuns = runs.filter(
+      (r) => r.prompt_type === "retail" || r.prompt_type === "advanced"
+    );
+    if (!gptRuns.length) return null;
+    const idxRow = summary.find((s) => s.strategy_key === "index");
+    const idxSharpe = idxRow?.mean_sharpe ?? null;
+    if (idxSharpe == null || !Number.isFinite(idxSharpe)) return null;
+    const beating = gptRuns.filter(
+      (r) => r.sharpe_ratio != null && r.sharpe_ratio > idxSharpe
+    );
+    return (beating.length / gptRuns.length) * 100;
+  }, [data.overview_summary, runs, summary]);
 
   // Beat rate chart data
   const beatIndexData = useMemo(() => {
@@ -120,7 +142,17 @@ export function OverviewTab({ data }: OverviewTabProps) {
       }
     }
 
-    const meanGptHhi = data.overview_summary?.mean_gpt_hhi ?? null;
+    const meanGptHhi =
+      data.overview_summary?.mean_gpt_hhi ??
+      (() => {
+        const gptHhi = runs
+          .filter((r) => r.prompt_type === "retail" || r.prompt_type === "advanced")
+          .map((r) => r.hhi)
+          .filter((v): v is number => v != null && !isNaN(v));
+        return gptHhi.length > 0
+          ? gptHhi.reduce((a, b) => a + b, 0) / gptHhi.length
+          : null;
+      })();
     if (meanGptHhi != null && Number.isFinite(meanGptHhi)) {
       result.push({
         type: meanGptHhi > 0.15 ? "warn" : "pos",
@@ -130,7 +162,7 @@ export function OverviewTab({ data }: OverviewTabProps) {
     }
 
     return result;
-  }, [data.overview_summary, summary]);
+  }, [data.overview_summary, runs, summary]);
 
   // Strategy Summary Table: group by strategy_key, order groups by best Sharpe desc,
   // within each group order markets us → germany → japan.

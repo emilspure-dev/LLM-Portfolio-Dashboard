@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { getHealth, getMetaCurrent } from "@/lib/api-client";
 import {
   buildStrategySummaryWithRunSharpe,
+  computeBehavior,
   fetchEvaluationData,
   fetchAllRunResults,
 } from "@/lib/data-loader";
@@ -148,6 +149,8 @@ export default function Index() {
       ...data,
       runs: allRuns,
       run_details_loading: runsQuery.isLoading || runsQuery.isFetching,
+      behavior:
+        data.behavior.length > 0 ? data.behavior : computeBehavior(allRuns),
       summary: buildStrategySummaryWithRunSharpe(
         data.summary_rows,
         "All",
@@ -274,7 +277,7 @@ export default function Index() {
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-6">
-                {activeTab === 0 && <OverviewTab data={visibleData} />}
+                {activeTab === 0 && <OverviewTab data={visibleData} runs={allRuns} />}
                 {activeTab === 1 && (
                   <StrategiesTab data={visibleData} runs={allRuns} />
                 )}

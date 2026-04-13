@@ -43,6 +43,7 @@ import {
   buildRegimePerformanceRows,
   buildRunFailureSummary,
   buildStrategySummaryWithRunSharpe,
+  apiRouteLikelyMissing,
   computeAutocorrelation,
   collectPathIdsForStrategyMarket,
   getRunModelFallbackKey,
@@ -517,6 +518,200 @@ function mean(values: number[]) {
   return values.length
     ? values.reduce((sum, value) => sum + value, 0) / values.length
     : null;
+}
+
+function normalizeString(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function getSelectionPeriodKey(
+  row: Pick<
+    HoldingDailyRow | RunRow,
+    | "period"
+    | "path_id"
+    | "run_id"
+    | "trajectory_id"
+    | "strategy_key"
+    | "market"
+    | "prompt_type"
+    | "model"
+  >
+) {
+  const period = normalizeString(row.period) || "unknown-period";
+  const pathId = normalizeString(row.path_id);
+  if (pathId) {
+    return `path:${pathId}:${period}`;
+  }
+
+  const runId = normalizeString(row.run_id);
+  if (runId) {
+    return `run:${runId}:${period}`;
+  }
+
+  const trajectoryId = normalizeString(row.trajectory_id);
+  if (trajectoryId) {
+    return `trajectory:${trajectoryId}:${period}`;
+  }
+
+  return [
+    normalizeString(row.strategy_key) || "unknown-strategy",
+    normalizeString(row.market) || "unknown-market",
+    normalizeString(row.prompt_type) || "unknown-prompt",
+    normalizeString(row.model) || "unknown-model",
+    period,
+  ].join("::");
+}
+
+async function fetchAllHoldingsForBehaviorSummary(
+  query: Record<string, string | number | undefined>
+) {
+  let page = 1;
+  let totalPages = 1;
+  const items: HoldingDailyRow[] = [];
+
+  while (page <= totalPages) {
+    const response = await getDailyHoldings({
+      ...query,
+      page,
+      page_size: 1000,
+    });
+    items.push(...response.items);
+    totalPages = response.total_pages;
+    page += 1;
+  }
+
+  return items;
+}
+
+function buildBehaviorHoldingsSummaryFallback(
+  holdingsRows: HoldingDailyRow[],
+  runRows: RunRow[]
+) {
+  const grouped = new Map<
+    string,
+    { prompt_type: string; sector: string; count: number }
+  >();
+  const totals = new Map<string, number>();
+  for (const row of holdingsRows) {
+    const promptType = normalizeString(row.prompt_type);
+    const sector = normalizeString(row.sector) || "Unknown";
+    if (promptType !== "retail" && promptType !== "advanced") {
+      continue;
+    }
+    const key = `${promptType}::${sector}`;
+    const bucket = grouped.get(key) ?? { prompt_type: promptType, sector, count: 0 };
+    bucket.count += 1;
+    totals.set(promptType, (totals.get(promptType) ?? 0) + 1);
+    grouped.set(key, bucket);
+  }
+
+  const sector_rows = Array.from(grouped.values())
+    .map((row) => ({
+      ...row,
+      share:
+        (totals.get(row.prompt_type) ?? 0) > 0
+          ? row.count / (totals.get(row.prompt_type) ?? 1)
+          : null,
+      cap_violation:
+        (totals.get(row.prompt_type) ?? 0) > 0
+          ? row.count / (totals.get(row.prompt_type) ?? 1) > 0.25
+          : false,
+    }))
+    .sort((left, right) => (right.share ?? 0) - (left.share ?? 0))
+    .slice(0, 12);
+
+  const marketRunTotals = new Map<string, Set<string>>();
+  for (const row of runRows) {
+    const market = normalizeString(row.market);
+    if (!market) {
+      continue;
+    }
+    const bucket = marketRunTotals.get(market) ?? new Set<string>();
+    bucket.add(getSelectionPeriodKey(row));
+    marketRunTotals.set(market, bucket);
+  }
+
+  const tickerBuckets = new Map<
+    string,
+    {
+      ticker: string;
+      name: string;
+      selectedByMarket: Map<string, Set<string>>;
+    }
+  >();
+  for (const row of holdingsRows) {
+    const market = normalizeString(row.market);
+    const ticker = normalizeString(row.ticker);
+    if (!market || !ticker || !marketRunTotals.has(market)) {
+      continue;
+    }
+
+    const bucket =
+      tickerBuckets.get(ticker) ?? {
+        ticker,
+        name: normalizeString(row.name) || ticker,
+        selectedByMarket: new Map<string, Set<string>>(),
+      };
+    const selectedRuns = bucket.selectedByMarket.get(market) ?? new Set<string>();
+    selectedRuns.add(getSelectionPeriodKey(row));
+    bucket.selectedByMarket.set(market, selectedRuns);
+    tickerBuckets.set(ticker, bucket);
+  }
+
+  const market_keys = Array.from(marketRunTotals.keys()).sort((left, right) =>
+    left.localeCompare(right)
+  );
+  const asset_frequency_rows = Array.from(tickerBuckets.values())
+    .map((bucket) => {
+      const cells = market_keys.map((market) => {
+        const selectedRunCount = bucket.selectedByMarket.get(market)?.size ?? 0;
+        const totalRuns = marketRunTotals.get(market)?.size ?? 0;
+        return {
+          market,
+          selected_run_count: selectedRunCount,
+          total_runs: totalRuns,
+          selection_rate: totalRuns > 0 ? selectedRunCount / totalRuns : null,
+        };
+      });
+
+      const totalSelectedRuns = cells.reduce(
+        (sum, cell) => sum + cell.selected_run_count,
+        0
+      );
+      const totalRuns = cells.reduce((sum, cell) => sum + cell.total_runs, 0);
+      const bestCell = cells.reduce<(typeof cells)[number] | null>((best, cell) => {
+        if (!best) return cell;
+        return (cell.selection_rate ?? 0) > (best.selection_rate ?? 0)
+          ? cell
+          : best;
+      }, null);
+
+      return {
+        ticker: bucket.ticker,
+        name: bucket.name,
+        cells,
+        total_selected_runs: totalSelectedRuns,
+        total_runs: totalRuns,
+        weighted_rate: totalRuns > 0 ? totalSelectedRuns / totalRuns : null,
+        best_market: bestCell?.market ?? null,
+        best_market_rate: bestCell?.selection_rate ?? null,
+      };
+    })
+    .filter((row) => row.total_selected_runs > 0)
+    .sort((left, right) => {
+      const rateDiff = (right.weighted_rate ?? 0) - (left.weighted_rate ?? 0);
+      if (Math.abs(rateDiff) > 1e-9) {
+        return rateDiff;
+      }
+      return right.total_selected_runs - left.total_selected_runs;
+    })
+    .slice(0, 15);
+
+  return {
+    sector_rows,
+    market_keys,
+    asset_frequency_rows,
+  };
 }
 
 function isIndexStrategyKey(key: string | null | undefined): boolean {
@@ -5605,16 +5800,67 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       modelMarketFilter,
       behaviorModelFilter,
     ],
-    queryFn: () =>
-      getBehaviorHoldingsSummary({
-        experiment_id: data.active_experiment_id,
-        market: modelMarketFilter === "All" ? undefined : modelMarketFilter,
-        model: behaviorModelFilter === "All" ? undefined : behaviorModelFilter,
-      }),
+    queryFn: async () => {
+      try {
+        return await getBehaviorHoldingsSummary({
+          experiment_id: data.active_experiment_id,
+          market: modelMarketFilter === "All" ? undefined : modelMarketFilter,
+          model: behaviorModelFilter === "All" ? undefined : behaviorModelFilter,
+        });
+      } catch (error) {
+        if (!apiRouteLikelyMissing(error)) {
+          throw error;
+        }
+
+        const holdingsRows = (
+          await Promise.all(
+            ["gpt_retail", "gpt_advanced"].map((strategyKey) =>
+              fetchAllHoldingsForBehaviorSummary({
+                experiment_id: data.active_experiment_id,
+                strategy_key: strategyKey,
+                market: modelMarketFilter === "All" ? undefined : modelMarketFilter,
+                model: behaviorModelFilter === "All" ? undefined : behaviorModelFilter,
+              })
+            )
+          )
+        ).flat();
+
+        const runRows = runs.filter((run) => {
+          const promptType = String(run.prompt_type ?? "").trim();
+          if (promptType !== "retail" && promptType !== "advanced") {
+            return false;
+          }
+          if (
+            modelMarketFilter !== "All" &&
+            String(run.market ?? "") !== modelMarketFilter
+          ) {
+            return false;
+          }
+          if (
+            behaviorModelFilter !== "All" &&
+            String(run.model ?? "").trim() !== behaviorModelFilter
+          ) {
+            return false;
+          }
+          return true;
+        });
+
+        return buildBehaviorHoldingsSummaryFallback(holdingsRows, runRows);
+      }
+    },
     enabled: Boolean(data.active_experiment_id),
     staleTime: 60_000,
   });
-  const sectorConcentrationRows = behaviorHoldingsQuery.data?.sector_rows ?? [];
+  const sectorConcentrationRows = useMemo(
+    () =>
+      (behaviorHoldingsQuery.data?.sector_rows ?? []).map((row) => ({
+        promptType: row.prompt_type,
+        sector: row.sector,
+        share: row.share,
+        capViolation: row.cap_violation,
+      })),
+    [behaviorHoldingsQuery.data]
+  );
 
   const assetSelectionMatrix = useMemo(
     () => ({

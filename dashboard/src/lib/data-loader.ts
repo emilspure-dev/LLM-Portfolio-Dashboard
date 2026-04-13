@@ -118,7 +118,7 @@ export function buildFactorStyleSummaryFromExposureRows(
   return out;
 }
 
-function factorStyleRouteLikelyMissing(err: unknown): boolean {
+export function apiRouteLikelyMissing(err: unknown): boolean {
   const m = err instanceof Error ? err.message : String(err);
   return (
     /\b404\b/.test(m) ||
@@ -637,6 +637,65 @@ export function buildFeatureRegression(
   };
 }
 
+export function computeBehavior(runs: RunRow[]) {
+  const gptRuns = runs.filter(
+    (r) => r.prompt_type === "retail" || r.prompt_type === "advanced"
+  );
+  const result = [];
+
+  for (const pt of ["retail", "advanced"] as const) {
+    const sub = gptRuns.filter((r) => r.prompt_type === pt);
+    if (sub.length === 0) continue;
+
+    const avg = (arr: number[]) =>
+      arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+    const median = (arr: number[]) => {
+      if (!arr.length) return 0;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2
+        ? sorted[middle]
+        : (sorted[middle - 1] + sorted[middle]) / 2;
+    };
+
+    const hhis = sub
+      .map((r) => r.hhi)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const effectiveN = sub
+      .map((r) => r.effective_n_holdings)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const turnovers = sub
+      .map((r) => r.turnover)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const realizedReturns = sub
+      .map((r) => getReturnCol(r))
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const expectedReturns = sub
+      .map((r) => r.expected_portfolio_return_6m)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const forecastBias = sub
+      .map((r) => r.forecast_bias)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+    const forecastAbsError = sub
+      .map((r) => r.forecast_abs_error)
+      .filter((value): value is number => value != null && !Number.isNaN(value));
+
+    result.push({
+      prompt_type: pt,
+      mean_hhi: avg(hhis),
+      mean_effective_n_holdings: avg(effectiveN),
+      mean_turnover: avg(turnovers),
+      median_turnover: median(turnovers),
+      mean_expected_portfolio_return_6m: avg(expectedReturns),
+      mean_realized_net_return: avg(realizedReturns),
+      mean_forecast_bias: avg(forecastBias),
+      mean_forecast_abs_error: avg(forecastAbsError),
+    });
+  }
+
+  return result;
+}
+
 function weightedAverage(
   rows: StrategySummaryApiRow[],
   selector: (row: StrategySummaryApiRow) => number | null
@@ -889,10 +948,20 @@ export async function fetchEvaluationData({
   meta,
 }: FetchEvaluationDataArgs): Promise<EvaluationData> {
   const [overviewSummary, filters, summaryRows, behaviorRows, runQuality, periods] = await Promise.all([
-    getOverviewSummary({ experiment_id: experimentId }),
+    getOverviewSummary({ experiment_id: experimentId }).catch((error) => {
+      if (apiRouteLikelyMissing(error)) {
+        return null;
+      }
+      throw error;
+    }),
     getFilters({ experiment_id: experimentId }),
     getStrategySummary({ experiment_id: experimentId }),
-    getBehaviorSummary({ experiment_id: experimentId }),
+    getBehaviorSummary({ experiment_id: experimentId }).catch((error) => {
+      if (apiRouteLikelyMissing(error)) {
+        return [];
+      }
+      throw error;
+    }),
     getRunQuality({ experiment_id: experimentId }),
     getPeriods({ experiment_id: experimentId }),
   ]);
@@ -903,7 +972,7 @@ export async function fetchEvaluationData({
   try {
     factorStyleRows = await getFactorStyleSummary({ experiment_id: experimentId });
   } catch (e) {
-    if (factorStyleRouteLikelyMissing(e)) {
+    if (apiRouteLikelyMissing(e)) {
       try {
         const exposureRows = await getFactorExposureChart({ experiment_id: experimentId });
         factorStyleRows = buildFactorStyleSummaryFromExposureRows(exposureRows);
