@@ -1,7 +1,9 @@
 import type {
+  BehaviorSummaryRow,
   FactorStyleSummaryRow,
   FiltersResponse,
   MetaCurrentResponse,
+  OverviewSummaryResponse,
   PeriodRow,
   RunQualityRow,
   RunResultRow,
@@ -44,22 +46,13 @@ export interface RunRow extends RunResultRow {
   turnover?: number | null;
 }
 
-export interface BehaviorRow {
-  prompt_type: string;
-  mean_hhi: number;
-  mean_effective_n_holdings: number;
-  mean_turnover: number;
-  median_turnover: number;
-  mean_expected_portfolio_return_6m: number;
-  mean_realized_net_return: number;
-  mean_forecast_bias: number;
-  mean_forecast_abs_error: number;
-}
+export type BehaviorRow = BehaviorSummaryRow;
 
 export interface EvaluationData {
   meta: MetaCurrentResponse;
   filters: FiltersResponse;
   active_experiment_id: string;
+  overview_summary: OverviewSummaryResponse | null;
   summary_rows: StrategySummaryApiRow[];
   summary: StrategyRow[];
   factor_style_rows: FactorStyleSummaryRow[];
@@ -82,6 +75,7 @@ export interface EvaluationData {
   data_quality: unknown[];
   holdings: unknown[];
   runs_long: RunRow[];
+  run_details_loading?: boolean;
 }
 
 export type InsightType = "pos" | "neg" | "warn" | "info";

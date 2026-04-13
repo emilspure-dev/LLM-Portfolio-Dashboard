@@ -17,6 +17,7 @@ import { getHealth, getMetaCurrent } from "@/lib/api-client";
 import {
   buildStrategySummaryWithRunSharpe,
   fetchEvaluationData,
+  fetchAllRunResults,
 } from "@/lib/data-loader";
 import type { EvaluationData, RunRow } from "@/lib/types";
 
@@ -121,6 +122,15 @@ export default function Index() {
     staleTime: 30_000,
   });
 
+  const runsQuery = useQuery({
+    queryKey: ["dashboard-runs", resolvedExperimentId],
+    queryFn: () => fetchAllRunResults(resolvedExperimentId!),
+    enabled:
+      Boolean(resolvedExperimentId && metaQuery.data) &&
+      dashboardQuery.status === "success",
+    staleTime: 30_000,
+  });
+
   useEffect(() => {
     setActiveTab(0);
   }, [resolvedExperimentId]);
@@ -128,37 +138,47 @@ export default function Index() {
   const data = (dashboardQuery.data ?? null) as EvaluationData | null;
 
   // Summary and runs are always unfiltered (all markets); each tab manages its own market filter.
+  const allRuns: RunRow[] = useMemo(() => runsQuery.data ?? [], [runsQuery.data]);
+
   const visibleData = useMemo(() => {
     if (!data) {
       return null;
     }
     return {
       ...data,
+      runs: allRuns,
+      run_details_loading: runsQuery.isLoading || runsQuery.isFetching,
       summary: buildStrategySummaryWithRunSharpe(
         data.summary_rows,
         "All",
-        data.runs
+        allRuns
       ),
     };
-  }, [data]);
-
-  const allRuns: RunRow[] = useMemo(() => data?.runs ?? [], [data]);
+  }, [allRuns, data, runsQuery.isFetching, runsQuery.isLoading]);
 
   const isLoading =
     healthQuery.isLoading ||
     metaQuery.isLoading ||
     (Boolean(resolvedExperimentId) && dashboardQuery.isLoading);
-
   const errorMessage =
     (healthQuery.error as Error | null)?.message ??
     (metaQuery.error as Error | null)?.message ??
     (dashboardQuery.error as Error | null)?.message ??
+    (runsQuery.error as Error | null)?.message ??
     null;
+  const noExperimentAvailable =
+    !isLoading &&
+    !errorMessage &&
+    metaQuery.status === "success" &&
+    !resolvedExperimentId;
 
   const handleRefresh = () => {
     void healthQuery.refetch();
     void metaQuery.refetch();
     void dashboardQuery.refetch();
+    if (resolvedExperimentId) {
+      void runsQuery.refetch();
+    }
   };
 
   const handleReset = () => {
@@ -166,13 +186,16 @@ export default function Index() {
     setActiveTab(0);
     void metaQuery.refetch();
     void dashboardQuery.refetch();
+    if (resolvedExperimentId) {
+      void runsQuery.refetch();
+    }
   };
 
   return (
     <div className="min-h-screen px-4 py-4 md:px-8 md:py-7">
       <div className="dashboard-board mx-auto flex min-h-[calc(100vh-2rem)] max-w-[1440px] flex-col overflow-hidden rounded-[28px] lg:h-[calc(100vh-3.5rem)] lg:flex-row">
         <DashboardSidebar
-          data={data}
+          data={visibleData ?? data}
           meta={metaQuery.data}
           health={healthQuery.data}
           apiHealthPending={healthQuery.isPending && !healthQuery.data}
@@ -202,7 +225,13 @@ export default function Index() {
                   </span>
                   <span className="rounded-full border border-white/50 bg-white/55 px-3 py-1.5 shadow-sm backdrop-blur-sm">
                     {data
-                      ? `${allRuns.length} runs loaded`
+                      ? allRuns.length > 0
+                        ? `${allRuns.length} runs loaded`
+                        : data.overview_summary
+                          ? `${data.overview_summary.valid_runs} run rows available`
+                          : runsQuery.isLoading
+                            ? "Loading run details"
+                            : "Summary ready"
                       : isLoading
                         ? "Loading from API"
                         : "Awaiting API"}
@@ -214,6 +243,11 @@ export default function Index() {
 
           {errorMessage ? (
             <ErrorPanel message={errorMessage} onRetry={handleRefresh} />
+          ) : noExperimentAvailable ? (
+            <ErrorPanel
+              message="No completed experiment is currently available from the API."
+              onRetry={handleRefresh}
+            />
           ) : isLoading || !visibleData ? (
             <LoadingPanel />
           ) : (
@@ -240,12 +274,12 @@ export default function Index() {
               </div>
 
               <div className="flex-1 overflow-y-auto px-4 pb-4 md:px-6 md:pb-6">
-                {activeTab === 0 && <OverviewTab data={visibleData} runs={allRuns} />}
+                {activeTab === 0 && <OverviewTab data={visibleData} />}
                 {activeTab === 1 && (
                   <StrategiesTab data={visibleData} runs={allRuns} />
                 )}
                 {activeTab === 2 && (
-                  <FactorStyleTab data={visibleData} runs={allRuns} />
+                  <FactorStyleTab data={visibleData} />
                 )}
                 {activeTab === 3 && (
                   <PathsTab data={visibleData} runs={allRuns} />

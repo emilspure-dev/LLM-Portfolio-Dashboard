@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bar,
@@ -16,10 +16,10 @@ import { SectionHeader, SoftHr } from "./SectionHeader";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { CHART_COLORS, MARKET_LABELS, getStrategyDisplayName } from "@/lib/constants";
-import { getDailyHoldings, postFactorStyleAnalysis } from "@/lib/api-client";
+import { getFactorSelectionSummary, postFactorStyleAnalysis } from "@/lib/api-client";
 import { FACTOR_DEFINITIONS_BLURB, STRATEGY_GLOSSARY } from "@/lib/strategy-factor-glossary";
-import type { FactorStyleSummaryRow, HoldingDailyRow } from "@/lib/api-types";
-import type { EvaluationData, RunRow } from "@/lib/types";
+import type { FactorStyleSummaryRow } from "@/lib/api-types";
+import type { EvaluationData } from "@/lib/types";
 
 const FACTOR_STYLE_ORDER = [
   "gpt_retail",
@@ -57,19 +57,10 @@ const tooltipStyle = {
 
 interface FactorStyleTabProps {
   data: EvaluationData;
-  runs?: RunRow[];
 }
 
 type GptStrategyKey = (typeof GPT_STRATEGY_KEYS)[number];
 type SelectionFactorKey = "size" | "value" | "momentum" | "low_risk" | "quality";
-
-type SelectionRow = {
-  strategyKey: GptStrategyKey;
-  runKey: string;
-  date: string;
-  period: string;
-  label: string;
-};
 
 type RegimeContextRow = {
   market: string;
@@ -81,17 +72,9 @@ type RegimeContextRow = {
   rateRegimeLabel: string | null;
 };
 
-type RunProfile = {
-  strategyKey: GptStrategyKey;
-  runKey: string;
-  totalSelections: number;
-  labelCounts: Record<string, number>;
-  dominantLabel: string;
-};
-
 const FACTOR_CONFIG: Record<
   SelectionFactorKey,
-  { label: string; field: keyof HoldingDailyRow; definition: string }
+  { label: string; field: string; definition: string }
 > = {
   size: {
     label: "Size",
@@ -127,139 +110,6 @@ function factorStyleSortKey(strategyKey: string): number {
 
 function formatPromptLabel(strategyKey: GptStrategyKey) {
   return getStrategyDisplayName(strategyKey, strategyKey);
-}
-
-function getFactorLabelValue(row: HoldingDailyRow, factorKey: SelectionFactorKey) {
-  const raw = row[FACTOR_CONFIG[factorKey].field];
-  return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
-}
-
-async function fetchAllDailyHoldings(query: Record<string, string | number | undefined>) {
-  let page = 1;
-  let totalPages = 1;
-  const items: HoldingDailyRow[] = [];
-
-  while (page <= totalPages) {
-    const response = await getDailyHoldings({
-      ...query,
-      page,
-      page_size: 1000,
-    });
-    items.push(...response.items);
-    totalPages = response.total_pages;
-    page += 1;
-  }
-
-  return items;
-}
-
-function buildSelectionRows(
-  holdingsByStrategy: Record<GptStrategyKey, HoldingDailyRow[]> | undefined,
-  factorKey: SelectionFactorKey
-) {
-  if (!holdingsByStrategy) return [];
-
-  const rows: SelectionRow[] = [];
-  for (const strategyKey of GPT_STRATEGY_KEYS) {
-    for (const row of holdingsByStrategy[strategyKey] ?? []) {
-      const label = getFactorLabelValue(row, factorKey);
-      if (!label) continue;
-      rows.push({
-        strategyKey,
-        runKey: String(row.run_id ?? row.path_id ?? `${strategyKey}-${row.date}`),
-        date: row.date,
-        period: row.period || "Unknown period",
-        label,
-      });
-    }
-  }
-  return rows;
-}
-
-function getLabelOrder(rows: SelectionRow[]) {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    counts.set(row.label, (counts.get(row.label) ?? 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .sort((left, right) => right[1] - left[1])
-    .map(([label]) => label);
-}
-
-function getDisplayedLabels(labelOrder: string[]) {
-  if (labelOrder.length <= 4) return labelOrder;
-  return [...labelOrder.slice(0, 4), "Other"];
-}
-
-function buildAggregateCountData(rows: SelectionRow[], displayedLabels: string[]) {
-  const runProfiles = buildRunProfiles(rows, displayedLabels);
-  const grouped = new Map<string, { label: string; retail: number; advanced: number }>();
-
-  for (const profile of runProfiles) {
-    const bucket = grouped.get(profile.dominantLabel) ?? { label: profile.dominantLabel, retail: 0, advanced: 0 };
-    if (profile.strategyKey === "gpt_retail") bucket.retail += 1;
-    if (profile.strategyKey === "gpt_advanced") bucket.advanced += 1;
-    grouped.set(profile.dominantLabel, bucket);
-  }
-
-  return displayedLabels
-    .map((label) => grouped.get(label) ?? { label, retail: 0, advanced: 0 })
-    .filter((row) => row.retail > 0 || row.advanced > 0);
-}
-
-function buildRunProfiles(rows: SelectionRow[], displayedLabels: string[]) {
-  const topLabelSet = new Set(displayedLabels.filter((label) => label !== "Other"));
-  const grouped = new Map<string, RunProfile>();
-
-  for (const row of rows) {
-    const label = topLabelSet.has(row.label) ? row.label : "Other";
-    const profileKey = `${row.strategyKey}__${row.runKey}`;
-    const profile =
-      grouped.get(profileKey) ??
-      {
-        strategyKey: row.strategyKey,
-        runKey: row.runKey,
-        totalSelections: 0,
-        labelCounts: {},
-        dominantLabel: label,
-      };
-    profile.totalSelections += 1;
-    profile.labelCounts[label] = (profile.labelCounts[label] ?? 0) + 1;
-    grouped.set(profileKey, profile);
-  }
-
-  return Array.from(grouped.values()).map((profile) => {
-    const dominant = displayedLabels
-      .map((label) => ({ label, value: profile.labelCounts[label] ?? 0 }))
-      .sort((left, right) => right.value - left.value)[0];
-    return {
-      ...profile,
-      dominantLabel: dominant?.label ?? "Other",
-    };
-  });
-}
-
-function buildPromptSummary(rows: SelectionRow[], strategyKey: GptStrategyKey) {
-  const promptRows = rows.filter((row) => row.strategyKey === strategyKey);
-  const labels = Array.from(new Set(promptRows.map((row) => row.label)));
-  const profiles = buildRunProfiles(promptRows, labels);
-  const dominantCounts = new Map<string, number>();
-  const dates = new Set<string>(promptRows.map((row) => row.date));
-  const periods = new Set<string>(promptRows.map((row) => row.period));
-  for (const profile of profiles) {
-    dominantCounts.set(profile.dominantLabel, (dominantCounts.get(profile.dominantLabel) ?? 0) + 1);
-  }
-
-  const dominantEntry = Array.from(dominantCounts.entries()).sort((left, right) => right[1] - left[1])[0];
-  const runCount = profiles.length;
-  return {
-    runCount,
-    dominantLabel: dominantEntry?.[0] ?? "—",
-    dominantCount: dominantEntry?.[1] ?? 0,
-    dominantShare: runCount > 0 ? (dominantEntry?.[1] ?? 0) / runCount : 0,
-    dateCount: dates.size,
-    periodCount: periods.size,
-  };
 }
 
 function formatPerRun(value: number | null | undefined, digits = 1) {
@@ -313,31 +163,6 @@ function buildOverallAnalysis(
       )} runs.`;
 }
 
-function buildRunMixData(profiles: RunProfile[], displayedLabels: string[]) {
-  const grouped = new Map<GptStrategyKey, { runCount: number; sums: Record<string, number> }>();
-  for (const strategyKey of GPT_STRATEGY_KEYS) {
-    grouped.set(strategyKey, { runCount: 0, sums: Object.fromEntries(displayedLabels.map((label) => [label, 0])) });
-  }
-
-  for (const profile of profiles) {
-    const bucket = grouped.get(profile.strategyKey);
-    if (!bucket) continue;
-    bucket.runCount += 1;
-    for (const label of displayedLabels) {
-      const share = profile.totalSelections > 0 ? (profile.labelCounts[label] ?? 0) / profile.totalSelections : 0;
-      bucket.sums[label] = (bucket.sums[label] ?? 0) + share;
-    }
-  }
-
-  return displayedLabels.map((label) => ({
-    label,
-    retail:
-      (grouped.get("gpt_retail")?.sums[label] ?? 0) / Math.max(grouped.get("gpt_retail")?.runCount ?? 0, 1),
-    advanced:
-      (grouped.get("gpt_advanced")?.sums[label] ?? 0) / Math.max(grouped.get("gpt_advanced")?.runCount ?? 0, 1),
-  }));
-}
-
 function buildMixAnalysis(
   mixData: Array<{ label: string; retail: number; advanced: number }>
 ) {
@@ -349,79 +174,6 @@ function buildMixAnalysis(
     Math.abs(biggestGap.retail - biggestGap.advanced),
     0
   )}, which is the clearest cross-prompt difference in the full-run mix.`;
-}
-
-function buildOutcomeLinkageRows(profiles: RunProfile[], runs: RunRow[]) {
-  const runLookup = new Map(
-    runs.map((run) => [
-      String(run.run_id ?? run.path_id ?? `${run.strategy_key ?? ""}::${run.market ?? ""}::${run.period ?? ""}`),
-      run,
-    ])
-  );
-  const grouped = new Map<string, {
-    dominantLabel: string;
-    model: string;
-    promptType: string;
-    sharpeValues: number[];
-    returnValues: number[];
-    count: number;
-  }>();
-
-  for (const profile of profiles) {
-    const run = runLookup.get(profile.runKey);
-    if (!run) continue;
-    const model = String(run.model ?? "").trim() || "unknown";
-    const promptType = String(run.prompt_type ?? "").trim() || "unknown";
-    const key = `${profile.dominantLabel}::${model}::${promptType}`;
-    const bucket = grouped.get(key) ?? {
-      dominantLabel: profile.dominantLabel,
-      model,
-      promptType,
-      sharpeValues: [],
-      returnValues: [],
-      count: 0,
-    };
-    if (run.sharpe_ratio != null && Number.isFinite(run.sharpe_ratio)) bucket.sharpeValues.push(run.sharpe_ratio);
-    const realized = run.annualized_return ?? run.period_return ?? run.net_return ?? run.period_return_net;
-    if (realized != null && Number.isFinite(realized)) bucket.returnValues.push(realized);
-    bucket.count += 1;
-    grouped.set(key, bucket);
-  }
-
-  return Array.from(grouped.values())
-    .map((row) => ({
-      ...row,
-      meanSharpe: row.sharpeValues.length ? row.sharpeValues.reduce((sum, value) => sum + value, 0) / row.sharpeValues.length : null,
-      meanReturn: row.returnValues.length ? row.returnValues.reduce((sum, value) => sum + value, 0) / row.returnValues.length : null,
-    }))
-    .sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity));
-}
-
-function buildRegimeContextRows(holdingsByStrategy: Record<GptStrategyKey, HoldingDailyRow[]> | undefined) {
-  if (!holdingsByStrategy) return [];
-
-  const grouped = new Map<string, RegimeContextRow>();
-  for (const strategyKey of GPT_STRATEGY_KEYS) {
-    for (const row of holdingsByStrategy[strategyKey] ?? []) {
-      const key = `${row.market}__${row.period}`;
-      if (grouped.has(key)) continue;
-      grouped.set(key, {
-        market: row.market,
-        period: row.period,
-        periodStartDate: row.period_start_date,
-        periodEndDate: row.period_end_date,
-        marketRegimeLabel: row.market_regime_label,
-        volRegimeLabel: row.vol_regime_label,
-        rateRegimeLabel: row.rate_regime_label,
-      });
-    }
-  }
-
-  return Array.from(grouped.values()).sort((left, right) => {
-    const startCompare = (left.periodStartDate ?? left.period).localeCompare(right.periodStartDate ?? right.period);
-    if (startCompare !== 0) return startCompare;
-    return (MARKET_LABELS[left.market] ?? left.market).localeCompare(MARKET_LABELS[right.market] ?? right.market);
-  });
 }
 
 function formatPeriodWindow(startDate: string | null, endDate: string | null) {
@@ -528,7 +280,7 @@ function FactorStyleAiSection({
   );
 }
 
-export function FactorStyleTab({ data, runs = [] }: FactorStyleTabProps) {
+export function FactorStyleTab({ data }: FactorStyleTabProps) {
   const allMarkets: string[] = data.filters?.markets ?? [];
   const [marketFilter, setMarketFilter] = useState("All");
   const [factorFilter, setFactorFilter] = useState<SelectionFactorKey>("value");
@@ -550,77 +302,48 @@ export function FactorStyleTab({ data, runs = [] }: FactorStyleTabProps) {
     [factorStyleFiltered]
   );
 
-  const holdingsQuery = useQuery({
-    queryKey: ["factor-style-holdings", data.active_experiment_id, marketFilter],
-    queryFn: async () => {
-      const market = marketFilter === "All" ? undefined : marketFilter;
-      const rows = await Promise.all(
-        GPT_STRATEGY_KEYS.map(async (strategyKey) => ({
-          strategyKey,
-          rows: await fetchAllDailyHoldings({
-            experiment_id: data.active_experiment_id,
-            strategy_key: strategyKey,
-            market,
-          }),
-        }))
-      );
+  useEffect(() => {
+    setMarketFilter("All");
+  }, [data.active_experiment_id]);
 
-      return rows.reduce(
-        (acc, item) => {
-          acc[item.strategyKey] = item.rows;
-          return acc;
-        },
-        {} as Record<GptStrategyKey, HoldingDailyRow[]>
-      );
-    },
+  useEffect(() => {
+    if (marketFilter !== "All" && !allMarkets.includes(marketFilter)) {
+      setMarketFilter("All");
+    }
+  }, [allMarkets, marketFilter]);
+
+  const selectionSummaryQuery = useQuery({
+    queryKey: [
+      "factor-style-selection-summary",
+      data.active_experiment_id,
+      marketFilter,
+      factorFilter,
+    ],
+    queryFn: () =>
+      getFactorSelectionSummary({
+        experiment_id: data.active_experiment_id,
+        market: marketFilter === "All" ? undefined : marketFilter,
+        factor_key: factorFilter,
+      }),
     enabled: Boolean(data.active_experiment_id),
     staleTime: 60_000,
   });
 
-  const selectionRows = useMemo(
-    () => buildSelectionRows(holdingsQuery.data, factorFilter),
-    [holdingsQuery.data, factorFilter]
-  );
-
-  const labelOrder = useMemo(() => getLabelOrder(selectionRows), [selectionRows]);
-  const displayedLabels = useMemo(() => getDisplayedLabels(labelOrder), [labelOrder]);
-  const labelColors = useMemo(
+  const selectionSummary = selectionSummaryQuery.data;
+  const aggregateCountData = selectionSummary?.aggregate_counts ?? [];
+  const promptSummaries = selectionSummary?.prompt_summaries ?? [];
+  const regimeContextRows: RegimeContextRow[] = useMemo(
     () =>
-      displayedLabels.reduce(
-        (acc, label, index) => {
-          acc[label] = CHART_COLORS[index % CHART_COLORS.length];
-          return acc;
-        },
-        {} as Record<string, string>
-      ),
-    [displayedLabels]
-  );
-
-  const aggregateCountData = useMemo(
-    () => buildAggregateCountData(selectionRows, displayedLabels),
-    [selectionRows, displayedLabels]
-  );
-
-  const runProfiles = useMemo(
-    () => buildRunProfiles(selectionRows, displayedLabels),
-    [selectionRows, displayedLabels]
-  );
-
-  const promptSummaries = useMemo(
-    () =>
-      GPT_STRATEGY_KEYS.reduce(
-        (acc, key) => {
-          acc[key] = buildPromptSummary(selectionRows, key);
-          return acc;
-        },
-        {} as Record<GptStrategyKey, ReturnType<typeof buildPromptSummary>>
-      ),
-    [selectionRows]
-  );
-
-  const regimeContextRows = useMemo(
-    () => buildRegimeContextRows(holdingsQuery.data),
-    [holdingsQuery.data]
+      (selectionSummary?.regime_context ?? []).map((row) => ({
+        market: row.market,
+        period: row.period,
+        periodStartDate: row.period_start_date,
+        periodEndDate: row.period_end_date,
+        marketRegimeLabel: row.market_regime_label,
+        volRegimeLabel: row.vol_regime_label,
+        rateRegimeLabel: row.rate_regime_label,
+      })),
+    [selectionSummary]
   );
 
   const overallAnalysis = useMemo(
@@ -628,20 +351,14 @@ export function FactorStyleTab({ data, runs = [] }: FactorStyleTabProps) {
     [aggregateCountData]
   );
 
-  const runMixData = useMemo(
-    () => buildRunMixData(runProfiles, displayedLabels),
-    [runProfiles, displayedLabels]
-  );
+  const runMixData = selectionSummary?.run_mix ?? [];
 
   const runMixAnalysis = useMemo(
     () => buildMixAnalysis(runMixData),
     [runMixData]
   );
 
-  const outcomeLinkageRows = useMemo(
-    () => buildOutcomeLinkageRows(runProfiles, runs),
-    [runProfiles, runs]
-  );
+  const outcomeLinkageRows = selectionSummary?.outcome_linkage ?? [];
 
   return (
     <div className="space-y-4 pb-1">
@@ -698,23 +415,23 @@ export function FactorStyleTab({ data, runs = [] }: FactorStyleTabProps) {
 
       <SoftHr />
 
-      {holdingsQuery.isLoading ? (
+      {selectionSummaryQuery.isLoading ? (
         <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
           <InsightCard
             type="info"
             title="Loading prompt selection counts"
-            body="Fetching GPT daily holdings so the page can count how each prompt selects names across factor buckets."
+            body="Fetching compact selection summaries so the page can count how each prompt selects names across factor buckets."
           />
         </div>
-      ) : holdingsQuery.error ? (
+      ) : selectionSummaryQuery.error ? (
         <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
           <InsightCard
             type="warn"
             title="Holdings request failed"
-            body={holdingsQuery.error instanceof Error ? holdingsQuery.error.message : "Unable to load daily holdings."}
+            body={selectionSummaryQuery.error instanceof Error ? selectionSummaryQuery.error.message : "Unable to load factor-selection summary."}
           />
         </div>
-      ) : selectionRows.length === 0 ? (
+      ) : aggregateCountData.length === 0 ? (
         <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
           <InsightCard
             type="info"
@@ -726,24 +443,27 @@ export function FactorStyleTab({ data, runs = [] }: FactorStyleTabProps) {
         <>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             {GPT_STRATEGY_KEYS.map((strategyKey) => {
-              const summary = promptSummaries[strategyKey];
+              const summary = promptSummaries.find((row) => row.strategy_key === strategyKey);
+              const runCount = summary?.run_count ?? 0;
+              const dominantCount = summary?.dominant_count ?? 0;
+              const dominantShare = summary?.dominant_share ?? 0;
               return (
                 <div key={strategyKey} className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
                   <p className="dashboard-label mb-2">{formatPromptLabel(strategyKey)}</p>
-                  <p className="text-[18px] font-semibold text-[#534b45]">{summary.dominantLabel}</p>
+                  <p className="text-[18px] font-semibold text-[#534b45]">{summary?.dominant_label ?? "—"}</p>
                   <p className="mt-2 text-[12px] leading-5 text-[#7b736e]">
                     Most common dominant full-run {FACTOR_CONFIG[factorFilter].label.toLowerCase()} bucket, leading in{" "}
-                    {summary.dominantCount} of {summary.runCount} runs ({formatPct(summary.dominantShare, 0)}).
+                    {dominantCount} of {runCount} runs ({formatPct(dominantShare, 0)}).
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#9d958d]">
                     <span className="rounded-full border border-[rgba(232,224,217,0.9)] px-2.5 py-1">
-                      Runs: {summary.runCount}
+                      Runs: {runCount}
                     </span>
                     <span className="rounded-full border border-[rgba(232,224,217,0.9)] px-2.5 py-1">
-                      Dates: {summary.dateCount}
+                      Dates: {summary?.date_count ?? 0}
                     </span>
                     <span className="rounded-full border border-[rgba(232,224,217,0.9)] px-2.5 py-1">
-                      Periods: {summary.periodCount}
+                      Periods: {summary?.period_count ?? 0}
                     </span>
                   </div>
                 </div>
@@ -863,14 +583,14 @@ export function FactorStyleTab({ data, runs = [] }: FactorStyleTabProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {outcomeLinkageRows.slice(0, 18).map((row) => (
-                      <tr key={`${row.dominantLabel}-${row.model}-${row.promptType}`} className="border-b border-[rgba(227,220,214,0.55)] last:border-0">
-                        <td className="py-2 pr-3 text-[#5e5955]">{row.dominantLabel}</td>
+                  {outcomeLinkageRows.slice(0, 18).map((row) => (
+                      <tr key={`${row.dominant_label}-${row.model}-${row.prompt_type}`} className="border-b border-[rgba(227,220,214,0.55)] last:border-0">
+                        <td className="py-2 pr-3 text-[#5e5955]">{row.dominant_label}</td>
                         <td className="py-2 pr-3 text-[#8d857f]">{row.model}</td>
-                        <td className="py-2 pr-3 text-[#8d857f]">{row.promptType}</td>
+                        <td className="py-2 pr-3 text-[#8d857f]">{row.prompt_type}</td>
                         <td className="py-2 pr-3 text-right text-[#8d857f]">{row.count}</td>
-                        <td className="py-2 pr-3 text-right text-[#8d857f]">{row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}</td>
-                        <td className="py-2 text-right text-[#8d857f]">{formatPct(row.meanReturn, 1)}</td>
+                        <td className="py-2 pr-3 text-right text-[#8d857f]">{row.mean_sharpe != null ? row.mean_sharpe.toFixed(2) : "—"}</td>
+                        <td className="py-2 text-right text-[#8d857f]">{formatPct(row.mean_return, 1)}</td>
                       </tr>
                     ))}
                   </tbody>

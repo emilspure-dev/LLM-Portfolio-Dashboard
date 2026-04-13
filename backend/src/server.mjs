@@ -24,6 +24,11 @@ import {
   parsePagination,
   rowsToValues,
 } from "./query-helpers.mjs";
+import {
+  buildBehaviorHoldingsSummary,
+  buildFactorSelectionSummary,
+  getFactorLabelField,
+} from "./summary-builders.mjs";
 
 function json(response, statusCode, payload, extraHeaders = {}) {
   response.writeHead(statusCode, {
@@ -719,6 +724,412 @@ function handleRunQuality(url) {
   `, params);
 }
 
+function handleOverviewSummary(url) {
+  const experimentId = resolveExperimentId(url);
+
+  return (
+    queryGet(
+      `
+      WITH benchmark_sharpes AS (
+        SELECT
+          p.market,
+          AVG(ppm.sharpe_ratio) AS mean_sharpe
+        FROM path_period_metrics ppm
+        JOIN paths p
+          ON p.experiment_id = ppm.experiment_id
+         AND p.path_id = ppm.path_id
+        WHERE ppm.experiment_id = :experiment_id
+          AND p.strategy_key = 'index'
+        GROUP BY p.market
+      ),
+      rr_dedup AS (
+        SELECT
+          experiment_id,
+          path_id,
+          period,
+          MAX(valid) AS valid,
+          AVG(hhi) AS hhi
+        FROM llm_run_results
+        WHERE experiment_id = :experiment_id
+        GROUP BY experiment_id, path_id, period
+      ),
+      holdings AS (
+        SELECT
+          base.experiment_id,
+          base.path_id,
+          base.period,
+          SUM(base.weight_basis * base.weight_basis) AS hhi
+        FROM (
+          SELECT
+            experiment_id,
+            path_id,
+            period,
+            COALESCE(target_weight, effective_weight_period_start, 0.0) AS weight_basis
+          FROM decision_holdings
+          WHERE experiment_id = :experiment_id
+        ) base
+        GROUP BY base.experiment_id, base.path_id, base.period
+      )
+      SELECT
+        COUNT(*) AS total_runs,
+        SUM(CASE WHEN COALESCE(rr.valid, 0) <> 0 THEN 1 ELSE 0 END) AS valid_runs,
+        COUNT(DISTINCT p.market) AS market_count,
+        COUNT(DISTINCT ppm.period) AS period_count,
+        AVG(
+          CASE
+            WHEN NULLIF(p.prompt_type, '') IN ('retail', 'advanced')
+              AND idx.mean_sharpe IS NOT NULL
+              AND ppm.sharpe_ratio IS NOT NULL
+            THEN CASE WHEN ppm.sharpe_ratio > idx.mean_sharpe THEN 100.0 ELSE 0.0 END
+            ELSE NULL
+          END
+        ) AS gpt_beat_index_rate,
+        AVG(
+          CASE
+            WHEN NULLIF(p.prompt_type, '') IN ('retail', 'advanced')
+            THEN COALESCE(rr.hhi, holdings.hhi)
+            ELSE NULL
+          END
+        ) AS mean_gpt_hhi
+      FROM path_period_metrics ppm
+      JOIN paths p
+        ON p.experiment_id = ppm.experiment_id
+       AND p.path_id = ppm.path_id
+      LEFT JOIN rr_dedup rr
+        ON rr.experiment_id = ppm.experiment_id
+       AND rr.path_id = ppm.path_id
+       AND rr.period = ppm.period
+      LEFT JOIN holdings
+        ON holdings.experiment_id = ppm.experiment_id
+       AND holdings.path_id = ppm.path_id
+       AND holdings.period = ppm.period
+      LEFT JOIN benchmark_sharpes idx
+        ON idx.market = p.market
+      WHERE ppm.experiment_id = :experiment_id
+    `,
+      { experiment_id: experimentId }
+    ) ?? {
+      total_runs: 0,
+      valid_runs: 0,
+      market_count: 0,
+      period_count: 0,
+      gpt_beat_index_rate: null,
+      mean_gpt_hhi: null,
+    }
+  );
+}
+
+function handleBehaviorSummary(url) {
+  const experimentId = resolveExperimentId(url);
+  const rows = queryAll(
+    `
+    WITH rr_dedup AS (
+      SELECT
+        experiment_id,
+        path_id,
+        period,
+        MAX(valid) AS valid,
+        AVG(hhi) AS hhi,
+        AVG(effective_n_holdings) AS effective_n_holdings
+      FROM llm_run_results
+      WHERE experiment_id = :experiment_id
+      GROUP BY experiment_id, path_id, period
+    ),
+    holdings AS (
+      SELECT
+        base.experiment_id,
+        base.path_id,
+        base.period,
+        SUM(base.weight_basis * base.weight_basis) AS hhi,
+        CASE
+          WHEN SUM(base.weight_basis * base.weight_basis) > 0
+          THEN 1.0 / SUM(base.weight_basis * base.weight_basis)
+          ELSE NULL
+        END AS effective_n_holdings
+      FROM (
+        SELECT
+          experiment_id,
+          path_id,
+          period,
+          COALESCE(target_weight, effective_weight_period_start, 0.0) AS weight_basis
+        FROM decision_holdings
+        WHERE experiment_id = :experiment_id
+      ) base
+      GROUP BY base.experiment_id, base.path_id, base.period
+    )
+    SELECT
+      NULLIF(p.prompt_type, '') AS prompt_type,
+      COALESCE(rr_dedup.hhi, holdings.hhi) AS hhi,
+      COALESCE(rr_dedup.effective_n_holdings, holdings.effective_n_holdings) AS effective_n_holdings,
+      ppm.turnover,
+      ppm.expected_portfolio_return_6m,
+      ppm.period_return AS realized_return,
+      ppm.forecast_bias,
+      ppm.forecast_abs_error
+    FROM path_period_metrics ppm
+    JOIN paths p
+      ON p.experiment_id = ppm.experiment_id
+     AND p.path_id = ppm.path_id
+    LEFT JOIN rr_dedup
+      ON rr_dedup.experiment_id = ppm.experiment_id
+     AND rr_dedup.path_id = ppm.path_id
+     AND rr_dedup.period = ppm.period
+    LEFT JOIN holdings
+      ON holdings.experiment_id = ppm.experiment_id
+     AND holdings.path_id = ppm.path_id
+     AND holdings.period = ppm.period
+    WHERE ppm.experiment_id = :experiment_id
+      AND NULLIF(p.prompt_type, '') IN ('retail', 'advanced')
+  `,
+    { experiment_id: experimentId }
+  );
+
+  const mean = (values) =>
+    values.length > 0
+      ? values.reduce((sum, value) => sum + value, 0) / values.length
+      : null;
+  const median = (values) => {
+    if (values.length === 0) {
+      return null;
+    }
+    const sorted = [...values].sort((left, right) => left - right);
+    const middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 1
+      ? sorted[middle]
+      : (sorted[middle - 1] + sorted[middle]) / 2;
+  };
+
+  return ["advanced", "retail"]
+    .map((promptType) => {
+      const promptRows = rows.filter((row) => row.prompt_type === promptType);
+      if (promptRows.length === 0) {
+        return null;
+      }
+
+      const hhi = promptRows
+        .map((row) => row.hhi)
+        .filter((value) => typeof value === "number" && Number.isFinite(value));
+      const effectiveHoldings = promptRows
+        .map((row) => row.effective_n_holdings)
+        .filter((value) => typeof value === "number" && Number.isFinite(value));
+      const turnover = promptRows
+        .map((row) => row.turnover)
+        .filter((value) => typeof value === "number" && Number.isFinite(value));
+      const expectedReturn = promptRows
+        .map((row) => row.expected_portfolio_return_6m)
+        .filter((value) => typeof value === "number" && Number.isFinite(value));
+      const realizedReturn = promptRows
+        .map((row) => row.realized_return)
+        .filter((value) => typeof value === "number" && Number.isFinite(value));
+      const forecastBias = promptRows
+        .map((row) => row.forecast_bias)
+        .filter((value) => typeof value === "number" && Number.isFinite(value));
+      const forecastAbsError = promptRows
+        .map((row) => row.forecast_abs_error)
+        .filter((value) => typeof value === "number" && Number.isFinite(value));
+
+      return {
+        prompt_type: promptType,
+        mean_hhi: mean(hhi),
+        mean_effective_n_holdings: mean(effectiveHoldings),
+        mean_turnover: mean(turnover),
+        median_turnover: median(turnover),
+        mean_expected_portfolio_return_6m: mean(expectedReturn),
+        mean_realized_net_return: mean(realizedReturn),
+        mean_forecast_bias: mean(forecastBias),
+        mean_forecast_abs_error: mean(forecastAbsError),
+      };
+    })
+    .filter(Boolean);
+}
+
+function handleFactorSelectionSummary(url) {
+  const experimentId = resolveExperimentId(url);
+  const market = cleanString(url.searchParams.get("market"));
+  const factorKey = cleanString(url.searchParams.get("factor_key")) ?? "value";
+  const factorField = getFactorLabelField(factorKey);
+
+  if (!factorField) {
+    throw createHttpError(400, `Unsupported factor_key: ${factorKey}`);
+  }
+
+  const holdingClauses = [
+    "dh.experiment_id = :experiment_id",
+    "p.strategy_key IN ('gpt_retail', 'gpt_advanced')",
+  ];
+  const holdingParams = { experiment_id: experimentId };
+  addEqualsFilter(holdingClauses, holdingParams, "p.market", market, "market");
+
+  const runClauses = [
+    "ppm.experiment_id = :experiment_id",
+    "p.strategy_key IN ('gpt_retail', 'gpt_advanced')",
+  ];
+  const runParams = { experiment_id: experimentId };
+  addEqualsFilter(runClauses, runParams, "p.market", market, "market");
+
+  const holdingsRows = queryAll(
+    `
+    SELECT
+      p.strategy_key,
+      NULLIF(p.prompt_type, '') AS prompt_type,
+      NULLIF(p.model, '') AS model,
+      NULLIF(p.trajectory_id, '') AS trajectory_id,
+      p.run_id,
+      dh.path_id,
+      p.market,
+      dh.date,
+      dh.period,
+      dh.size_label,
+      dh.value_label,
+      dh.momentum_label,
+      dh.low_risk_label,
+      dh.quality_label
+    FROM daily_holdings dh
+    JOIN paths p
+      ON p.experiment_id = dh.experiment_id
+     AND p.path_id = dh.path_id
+    ${buildWhereClause(holdingClauses)}
+    ORDER BY p.strategy_key, dh.date, dh.path_id
+  `,
+    holdingParams
+  );
+
+  const outcomeRows = queryAll(
+    `
+    SELECT
+      p.strategy_key,
+      NULLIF(p.prompt_type, '') AS prompt_type,
+      NULLIF(p.model, '') AS model,
+      CASE
+        WHEN p.run_id IS NOT NULL AND TRIM(CAST(p.run_id AS TEXT)) <> ''
+          THEN 'run:' || CAST(p.run_id AS TEXT)
+        WHEN ppm.path_id IS NOT NULL AND TRIM(CAST(ppm.path_id AS TEXT)) <> ''
+          THEN 'path:' || CAST(ppm.path_id AS TEXT)
+        WHEN NULLIF(p.trajectory_id, '') IS NOT NULL
+          THEN 'trajectory:' || p.trajectory_id
+        ELSE p.strategy_key || '::' || p.market || '::' || COALESCE(NULLIF(p.prompt_type, ''), 'unknown-prompt') || '::' || COALESCE(NULLIF(p.model, ''), 'unknown-model')
+      END AS run_key,
+      AVG(ppm.sharpe_ratio) AS mean_sharpe,
+      AVG(ppm.period_return) AS mean_return
+    FROM path_period_metrics ppm
+    JOIN paths p
+      ON p.experiment_id = ppm.experiment_id
+     AND p.path_id = ppm.path_id
+    ${buildWhereClause(runClauses)}
+    GROUP BY
+      p.strategy_key,
+      NULLIF(p.prompt_type, ''),
+      NULLIF(p.model, ''),
+      run_key
+  `,
+    runParams
+  );
+
+  const regimeRows = queryAll(
+    `
+    SELECT DISTINCT
+      mp.market,
+      mp.period,
+      mp.period_start_date,
+      mp.period_end_date,
+      mp.market_regime_label,
+      mp.vol_regime_label,
+      mp.rate_regime_label
+    FROM experiments e
+    JOIN market_periods mp
+      ON mp.data_snapshot_id = e.data_snapshot_id
+    WHERE e.experiment_id = :experiment_id
+      ${market ? "AND mp.market = :market" : ""}
+    ORDER BY mp.period_start_date, mp.market, mp.period
+  `,
+    market ? { experiment_id: experimentId, market } : { experiment_id: experimentId }
+  );
+
+  return buildFactorSelectionSummary({
+    holdingsRows,
+    outcomeRows,
+    regimeRows,
+    factorKey,
+  });
+}
+
+function handleBehaviorHoldingsSummary(url) {
+  const experimentId = resolveExperimentId(url);
+  const market = cleanString(url.searchParams.get("market"));
+  const model = cleanString(url.searchParams.get("model"));
+
+  const holdingClauses = [
+    "dh.experiment_id = :experiment_id",
+    "NULLIF(p.prompt_type, '') IN ('retail', 'advanced')",
+  ];
+  const holdingParams = { experiment_id: experimentId };
+  addEqualsFilter(holdingClauses, holdingParams, "p.market", market, "market");
+  addEqualsFilter(holdingClauses, holdingParams, "p.model", model, "model");
+
+  const runClauses = [
+    "ppm.experiment_id = :experiment_id",
+    "NULLIF(p.prompt_type, '') IN ('retail', 'advanced')",
+  ];
+  const runParams = { experiment_id: experimentId };
+  addEqualsFilter(runClauses, runParams, "p.market", market, "market");
+  addEqualsFilter(runClauses, runParams, "p.model", model, "model");
+
+  const holdingsRows = queryAll(
+    `
+    SELECT
+      p.strategy_key,
+      NULLIF(p.prompt_type, '') AS prompt_type,
+      NULLIF(p.model, '') AS model,
+      NULLIF(p.trajectory_id, '') AS trajectory_id,
+      p.run_id,
+      dh.path_id,
+      p.market,
+      dh.period,
+      dh.ticker,
+      ip.name,
+      ip.sector
+    FROM daily_holdings dh
+    JOIN paths p
+      ON p.experiment_id = dh.experiment_id
+     AND p.path_id = dh.path_id
+    JOIN experiments e
+      ON e.experiment_id = dh.experiment_id
+    LEFT JOIN instrument_periods ip
+      ON ip.data_snapshot_id = e.data_snapshot_id
+     AND ip.market = p.market
+     AND ip.period = dh.period
+     AND ip.ticker = dh.ticker
+    ${buildWhereClause(holdingClauses)}
+  `,
+    holdingParams
+  );
+
+  const runRows = queryAll(
+    `
+    SELECT
+      p.strategy_key,
+      p.market,
+      NULLIF(p.prompt_type, '') AS prompt_type,
+      NULLIF(p.model, '') AS model,
+      NULLIF(p.trajectory_id, '') AS trajectory_id,
+      p.run_id,
+      ppm.path_id,
+      ppm.period
+    FROM path_period_metrics ppm
+    JOIN paths p
+      ON p.experiment_id = ppm.experiment_id
+     AND p.path_id = ppm.path_id
+    ${buildWhereClause(runClauses)}
+  `,
+    runParams
+  );
+
+  return buildBehaviorHoldingsSummary({
+    holdingsRows,
+    runRows,
+  });
+}
+
 function handleEquity(url) {
   const { clauses, params } = withExperimentFilters(url, {
     experimentId: "dpm.experiment_id",
@@ -1259,8 +1670,14 @@ const routes = new Map([
   ["GET /api/health", () => handleHealth()],
   ["GET /api/meta/current", () => handleMetaCurrent()],
   ["GET /api/filters", ({ url }) => handleFilters(url)],
+  ["GET /api/summary/overview", ({ url }) => handleOverviewSummary(url)],
   ["GET /api/summary/strategies", ({ url }) => handleStrategySummary(url)],
   ["GET /api/summary/factor-style", ({ url }) => handleFactorStyleSummary(url)],
+  ["GET /api/summary/behavior", ({ url }) => handleBehaviorSummary(url)],
+  ["GET /api/summary/factor-selections", ({ url }) =>
+    handleFactorSelectionSummary(url)],
+  ["GET /api/summary/behavior-holdings", ({ url }) =>
+    handleBehaviorHoldingsSummary(url)],
   ["GET /api/summary/run-quality", ({ url }) => handleRunQuality(url)],
   ["GET /api/charts/equity", ({ url }) => handleEquity(url)],
   ["GET /api/charts/factor-exposures", ({ url }) => handleFactorExposures(url)],

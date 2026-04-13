@@ -1,7 +1,9 @@
 import {
+  getBehaviorSummary,
   getFactorExposureChart,
   getFactorStyleSummary,
   getFilters,
+  getOverviewSummary,
   getPeriods,
   getRunQuality,
   getRunResults,
@@ -16,7 +18,6 @@ import type {
   StrategySummaryApiRow,
 } from "./api-types";
 import type {
-  BehaviorRow,
   EvaluationData,
   RunRow,
   StrategyRow,
@@ -211,12 +212,6 @@ export function getRunModelGroupKey(
     | "execution_mode"
   >
 ): string {
-  const trajectoryId =
-    run.trajectory_id != null && String(run.trajectory_id).trim()
-      ? String(run.trajectory_id).trim()
-      : null;
-  if (trajectoryId) return `trajectory:${trajectoryId}`;
-
   const runId =
     run.run_id != null && String(run.run_id).trim()
       ? String(run.run_id).trim()
@@ -229,12 +224,29 @@ export function getRunModelGroupKey(
       : null;
   if (pathId) return `path:${pathId}`;
 
+  const trajectoryId =
+    run.trajectory_id != null && String(run.trajectory_id).trim()
+      ? String(run.trajectory_id).trim()
+      : null;
+  if (trajectoryId) return `trajectory:${trajectoryId}`;
+
   return [
     "fallback",
     String(run.strategy_key ?? ""),
     String(run.market ?? ""),
     String(run.prompt_type ?? ""),
     String(run.execution_mode ?? ""),
+  ].join("::");
+}
+
+export function getRunModelFallbackKey(
+  run: Pick<RunRow, "strategy_key" | "market" | "period" | "prompt_type">
+) {
+  return [
+    String(run.strategy_key ?? ""),
+    String(run.market ?? ""),
+    String(run.period ?? ""),
+    String(run.prompt_type ?? ""),
   ].join("::");
 }
 
@@ -251,12 +263,12 @@ export function buildRunModelMetadata(runs: RunRow[]) {
     const groupKey = getRunModelGroupKey(run);
     periodModelByGroupAndPeriod.set(`${groupKey}::${period}`, model);
 
-    const fallbackKey = [
-      String(run.strategy_key ?? ""),
-      String(run.market ?? ""),
+    const fallbackKey = getRunModelFallbackKey({
+      strategy_key: run.strategy_key,
+      market: run.market,
       period,
-      String(run.prompt_type ?? ""),
-    ].join("::");
+      prompt_type: run.prompt_type,
+    });
     periodModelByFallbackKey.set(fallbackKey, model);
 
     const bucket = fullRunPeriods.get(groupKey) ?? [];
@@ -625,65 +637,6 @@ export function buildFeatureRegression(
   };
 }
 
-function computeBehavior(runs: RunRow[]): BehaviorRow[] {
-  const gptRuns = runs.filter(
-    (r) => r.prompt_type === "retail" || r.prompt_type === "advanced"
-  );
-  const result: BehaviorRow[] = [];
-
-  for (const pt of ["retail", "advanced"] as const) {
-    const sub = gptRuns.filter((r) => r.prompt_type === pt);
-    if (sub.length === 0) continue;
-
-    const mean = (arr: number[]) =>
-      arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-    const median = (arr: number[]) => {
-      if (!arr.length) return 0;
-      const sorted = [...arr].sort((a, b) => a - b);
-      const middle = Math.floor(sorted.length / 2);
-      return sorted.length % 2
-        ? sorted[middle]
-        : (sorted[middle - 1] + sorted[middle]) / 2;
-    };
-
-    const hhis = sub
-      .map((r) => r.hhi)
-      .filter((value): value is number => value != null && !Number.isNaN(value));
-    const effectiveN = sub
-      .map((r) => r.effective_n_holdings)
-      .filter((value): value is number => value != null && !Number.isNaN(value));
-    const turnovers = sub
-      .map((r) => r.turnover)
-      .filter((value): value is number => value != null && !Number.isNaN(value));
-    const realizedReturns = sub
-      .map((r) => getReturnCol(r))
-      .filter((value): value is number => value != null && !Number.isNaN(value));
-    const expectedReturns = sub
-      .map((r) => r.expected_portfolio_return_6m)
-      .filter((value): value is number => value != null && !Number.isNaN(value));
-    const forecastBias = sub
-      .map((r) => r.forecast_bias)
-      .filter((value): value is number => value != null && !Number.isNaN(value));
-    const forecastAbsError = sub
-      .map((r) => r.forecast_abs_error)
-      .filter((value): value is number => value != null && !Number.isNaN(value));
-
-    result.push({
-      prompt_type: pt,
-      mean_hhi: mean(hhis),
-      mean_effective_n_holdings: mean(effectiveN),
-      mean_turnover: mean(turnovers),
-      median_turnover: median(turnovers),
-      mean_expected_portfolio_return_6m: mean(expectedReturns),
-      mean_realized_net_return: mean(realizedReturns),
-      mean_forecast_bias: mean(forecastBias),
-      mean_forecast_abs_error: mean(forecastAbsError),
-    });
-  }
-
-  return result;
-}
-
 function weightedAverage(
   rows: StrategySummaryApiRow[],
   selector: (row: StrategySummaryApiRow) => number | null
@@ -896,25 +849,33 @@ export function buildStrategySummaryWithRunSharpe(
   return sortSummaryRows(filled);
 }
 
-async function fetchAllRunResults(experimentId: string): Promise<RunRow[]> {
+export async function fetchAllRunResults(experimentId: string): Promise<RunRow[]> {
   const firstPage = await getRunResults({
     experiment_id: experimentId,
     page: 1,
     page_size: 500,
   });
 
-  const remainingRequests: Promise<{ items: RunResultRow[] }>[] = [];
-  for (let page = 2; page <= firstPage.total_pages; page += 1) {
-    remainingRequests.push(
-      getRunResults({
-        experiment_id: experimentId,
-        page,
-        page_size: firstPage.page_size,
-      })
-    );
+  const remainingPages: Array<{ items: RunResultRow[] }> = [];
+  const concurrency = 4;
+  for (let page = 2; page <= firstPage.total_pages; page += concurrency) {
+    const batch = [];
+    for (
+      let currentPage = page;
+      currentPage < page + concurrency && currentPage <= firstPage.total_pages;
+      currentPage += 1
+    ) {
+      batch.push(
+        getRunResults({
+          experiment_id: experimentId,
+          page: currentPage,
+          page_size: firstPage.page_size,
+        })
+      );
+    }
+    remainingPages.push(...(await Promise.all(batch)));
   }
 
-  const remainingPages = await Promise.all(remainingRequests);
   return [firstPage, ...remainingPages].flatMap((page) => page.items as RunRow[]);
 }
 
@@ -927,12 +888,13 @@ export async function fetchEvaluationData({
   experimentId,
   meta,
 }: FetchEvaluationDataArgs): Promise<EvaluationData> {
-  const [filters, summaryRows, runQuality, periods, runs] = await Promise.all([
+  const [overviewSummary, filters, summaryRows, behaviorRows, runQuality, periods] = await Promise.all([
+    getOverviewSummary({ experiment_id: experimentId }),
     getFilters({ experiment_id: experimentId }),
     getStrategySummary({ experiment_id: experimentId }),
+    getBehaviorSummary({ experiment_id: experimentId }),
     getRunQuality({ experiment_id: experimentId }),
     getPeriods({ experiment_id: experimentId }),
-    fetchAllRunResults(experimentId),
   ]);
 
   let factorStyleRows: FactorStyleSummaryRow[] = [];
@@ -958,13 +920,14 @@ export async function fetchEvaluationData({
     meta,
     filters,
     active_experiment_id: experimentId,
+    overview_summary: overviewSummary,
     summary_rows: summaryRows,
-    summary: buildStrategySummaryWithRunSharpe(summaryRows, "All", runs),
+    summary: buildStrategySummaryView(summaryRows, "All"),
     factor_style_rows: factorStyleRows,
     factor_style_error: factorStyleError,
     factor_style_from_exposure_fallback: factorStyleFromExposureFallback,
-    runs,
-    behavior: computeBehavior(runs),
+    runs: [],
+    behavior: behaviorRows,
     run_quality: runQuality,
     periods,
     stats: [],

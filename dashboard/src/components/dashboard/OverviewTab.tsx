@@ -18,19 +18,18 @@ import {
   fmt,
   fmtp,
 } from "@/lib/constants";
-import type { EvaluationData, RunRow, Insight } from "@/lib/types";
+import type { EvaluationData, Insight } from "@/lib/types";
 
 interface OverviewTabProps {
   data: EvaluationData;
-  runs: RunRow[];
 }
 
-export function OverviewTab({ data, runs }: OverviewTabProps) {
+export function OverviewTab({ data }: OverviewTabProps) {
   const { summary } = data;
   const overviewBeatIndexRef = useRef<HTMLDivElement>(null);
-  const nRuns = runs.filter((r) => r.valid !== false).length;
-  const nMarkets = new Set(runs.map((r) => r.market).filter(Boolean)).size;
-  const nPeriods = new Set(runs.map((r) => r.period).filter(Boolean)).size;
+  const nRuns = data.overview_summary?.valid_runs ?? 0;
+  const nMarkets = data.overview_summary?.market_count ?? 0;
+  const nPeriods = data.overview_summary?.period_count ?? 0;
 
   const bestSharpe = useMemo(() => {
     if (!summary.length) return { value: NaN, name: "—" };
@@ -48,19 +47,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     };
   }, [summary]);
 
-  const gptBeatRate = useMemo(() => {
-    const gptRuns = runs.filter(
-      (r) => r.prompt_type === "retail" || r.prompt_type === "advanced"
-    );
-    if (!gptRuns.length) return 0;
-    const idxRow = summary.find((s) => s.strategy_key === "index");
-    const idxSharpe = idxRow?.mean_sharpe ?? 0;
-    if (!idxSharpe) return 0;
-    const beating = gptRuns.filter(
-      (r) => r.sharpe_ratio != null && r.sharpe_ratio > idxSharpe
-    );
-    return (beating.length / gptRuns.length) * 100;
-  }, [runs, summary]);
+  const gptBeatRate = data.overview_summary?.gpt_beat_index_rate ?? null;
 
   // Beat rate chart data
   const beatIndexData = useMemo(() => {
@@ -133,21 +120,17 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       }
     }
 
-    const gptHhi = runs
-      .filter((r) => r.prompt_type === "retail" || r.prompt_type === "advanced")
-      .map((r) => r.hhi)
-      .filter((v): v is number => v != null && !isNaN(v));
-    if (gptHhi.length > 0) {
-      const mh = gptHhi.reduce((a, b) => a + b, 0) / gptHhi.length;
+    const meanGptHhi = data.overview_summary?.mean_gpt_hhi ?? null;
+    if (meanGptHhi != null && Number.isFinite(meanGptHhi)) {
       result.push({
-        type: mh > 0.15 ? "warn" : "pos",
-        title: `Portfolio concentration: HHI = ${mh.toFixed(3)}`,
-        body: `${mh > 0.15 ? "Portfolios tend to be concentrated" : "Portfolios are reasonably diversified"} (HHI ${mh > 0.15 ? "above" : "below"} 0.15 threshold).`,
+        type: meanGptHhi > 0.15 ? "warn" : "pos",
+        title: `Portfolio concentration: HHI = ${meanGptHhi.toFixed(3)}`,
+        body: `${meanGptHhi > 0.15 ? "Portfolios tend to be concentrated" : "Portfolios are reasonably diversified"} (HHI ${meanGptHhi > 0.15 ? "above" : "below"} 0.15 threshold).`,
       });
     }
 
     return result;
-  }, [summary, runs]);
+  }, [data.overview_summary, summary]);
 
   // Strategy Summary Table: group by strategy_key, order groups by best Sharpe desc,
   // within each group order markets us → germany → japan.
@@ -261,7 +244,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         <KpiCard
           label="GPT Beat Rate"
           value={fmtp(gptBeatRate, 0)}
-          color={gptBeatRate > 50 ? COLORS.green : COLORS.red}
+          color={gptBeatRate != null && gptBeatRate > 50 ? COLORS.green : COLORS.red}
           sub="vs market index"
         />
       </div>

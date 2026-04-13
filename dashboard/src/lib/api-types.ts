@@ -78,18 +78,122 @@ export interface StrategySummaryApiRow {
   pct_runs_beating_sixty_forty_sharpe: number | null;
 }
 
+export interface OverviewSummaryResponse {
+  total_runs: number;
+  valid_runs: number;
+  market_count: number;
+  period_count: number;
+  gpt_beat_index_rate: number | null;
+  mean_gpt_hhi: number | null;
+}
+
+export interface BehaviorSummaryRow {
+  prompt_type: string;
+  mean_hhi: number;
+  mean_effective_n_holdings: number;
+  mean_turnover: number;
+  median_turnover: number;
+  mean_expected_portfolio_return_6m: number;
+  mean_realized_net_return: number;
+  mean_forecast_bias: number;
+  mean_forecast_abs_error: number;
+}
+
 export interface RunQualityRow {
   experiment_id: string;
   market: string;
   period: string;
-  prompt_type: string;
-  model: string;
+  prompt_type: string | null;
+  model: string | null;
   failure_type: string | null;
   execution_mode: string | null;
   row_count: number;
   valid_rows: number;
   repaired_rows: number;
   avg_repair_attempts: number | null;
+}
+
+export interface FactorSelectionPromptSummaryRow {
+  strategy_key: string;
+  prompt_type: string;
+  run_count: number;
+  dominant_label: string;
+  dominant_count: number;
+  dominant_share: number;
+  date_count: number;
+  period_count: number;
+}
+
+export interface FactorSelectionAggregateRow {
+  label: string;
+  retail: number;
+  advanced: number;
+}
+
+export interface FactorSelectionMixRow {
+  label: string;
+  retail: number;
+  advanced: number;
+}
+
+export interface FactorSelectionOutcomeRow {
+  dominant_label: string;
+  model: string;
+  prompt_type: string;
+  count: number;
+  mean_sharpe: number | null;
+  mean_return: number | null;
+}
+
+export interface FactorSelectionRegimeRow {
+  market: string;
+  period: string;
+  period_start_date: string | null;
+  period_end_date: string | null;
+  market_regime_label: string | null;
+  vol_regime_label: string | null;
+  rate_regime_label: string | null;
+}
+
+export interface FactorSelectionSummaryResponse {
+  factor_key: string;
+  prompt_summaries: FactorSelectionPromptSummaryRow[];
+  aggregate_counts: FactorSelectionAggregateRow[];
+  run_mix: FactorSelectionMixRow[];
+  outcome_linkage: FactorSelectionOutcomeRow[];
+  regime_context: FactorSelectionRegimeRow[];
+}
+
+export interface BehaviorSectorRow {
+  prompt_type: string;
+  sector: string;
+  count: number;
+  share: number | null;
+  cap_violation: boolean;
+}
+
+export interface BehaviorAssetSelectionCell {
+  market: string;
+  selected_run_count: number;
+  total_runs: number;
+  selection_rate: number | null;
+}
+
+export interface BehaviorAssetSelectionRow {
+  ticker: string;
+  name: string;
+  cells: BehaviorAssetSelectionCell[];
+  total_selected_runs: number;
+  total_runs: number;
+  weighted_rate: number | null;
+  best_market: string | null;
+  best_market_rate: number | null;
+}
+
+export interface BehaviorHoldingsSummaryResponse {
+  sector_rows: BehaviorSectorRow[];
+  market_keys: string[];
+  asset_frequency_rows: BehaviorAssetSelectionRow[];
 }
 
 export interface StrategyDailyRow {

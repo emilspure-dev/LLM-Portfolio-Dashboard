@@ -1,10 +1,14 @@
 import type {
+  BehaviorHoldingsSummaryResponse,
+  BehaviorSummaryRow,
   FactorExposureRow,
+  FactorSelectionSummaryResponse,
   FactorStyleSummaryRow,
   FiltersResponse,
   HealthResponse,
   HoldingDailyRow,
   MetaCurrentResponse,
+  OverviewSummaryResponse,
   PaginatedResponse,
   PeriodRow,
   PriceRow,
@@ -204,8 +208,24 @@ export function getStrategySummary(query?: Record<string, QueryValue>) {
   return requestJson<StrategySummaryApiRow[]>("/summary/strategies", query);
 }
 
+export function getOverviewSummary(query?: Record<string, QueryValue>) {
+  return requestJson<OverviewSummaryResponse>("/summary/overview", query);
+}
+
 export function getFactorStyleSummary(query?: Record<string, QueryValue>) {
   return requestJson<FactorStyleSummaryRow[]>("/summary/factor-style", query);
+}
+
+export function getBehaviorSummary(query?: Record<string, QueryValue>) {
+  return requestJson<BehaviorSummaryRow[]>("/summary/behavior", query);
+}
+
+export function getFactorSelectionSummary(query?: Record<string, QueryValue>) {
+  return requestJson<FactorSelectionSummaryResponse>("/summary/factor-selections", query);
+}
+
+export function getBehaviorHoldingsSummary(query?: Record<string, QueryValue>) {
+  return requestJson<BehaviorHoldingsSummaryResponse>("/summary/behavior-holdings", query);
 }
 
 export function getRunQuality(query?: Record<string, QueryValue>) {

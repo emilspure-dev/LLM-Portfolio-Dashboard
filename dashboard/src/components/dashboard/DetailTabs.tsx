@@ -28,7 +28,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { getDailyHoldings, getEquityChart, getFactorExposureChart, getPeriods, getRegimeChart } from "@/lib/api-client";
+import {
+  getBehaviorHoldingsSummary,
+  getDailyHoldings,
+  getEquityChart,
+  getFactorExposureChart,
+  getPeriods,
+  getRegimeChart,
+} from "@/lib/api-client";
 import {
   buildRunModelMetadata,
   buildCoverageRows,
@@ -38,6 +45,7 @@ import {
   buildStrategySummaryWithRunSharpe,
   computeAutocorrelation,
   collectPathIdsForStrategyMarket,
+  getRunModelFallbackKey,
   getRunModelGroupKey,
   ljungBoxStatistic,
   rollingMetricSeries,
@@ -505,64 +513,6 @@ function singlePathEquitySeries(rows: StrategyDailyRow[]) {
   }));
 }
 
-async function fetchAllDailyHoldings(
-  query: Record<string, string | number | undefined>
-): Promise<HoldingDailyRow[]> {
-  let page = 1;
-  let totalPages = 1;
-  const items: HoldingDailyRow[] = [];
-  while (page <= totalPages) {
-    const response = await getDailyHoldings({
-      ...query,
-      page,
-      page_size: 1000,
-    });
-    items.push(...response.items);
-    totalPages = response.total_pages;
-    page += 1;
-  }
-  return items;
-}
-
-function normalizeSelectionKeyPart(value: string | number | null | undefined) {
-  return String(value ?? "").trim();
-}
-
-function getSelectionPeriodKey(row: {
-  path_id?: string | number | null;
-  run_id?: string | number | null;
-  trajectory_id?: string | null;
-  period?: string | null;
-  strategy_key?: string | null;
-  market?: string | null;
-  prompt_type?: string | null;
-  model?: string | null;
-}) {
-  const period = normalizeSelectionKeyPart(row.period) || "unknown-period";
-  const pathId = normalizeSelectionKeyPart(row.path_id);
-  if (pathId) {
-    return `path:${pathId}:${period}`;
-  }
-
-  const runId = normalizeSelectionKeyPart(row.run_id);
-  if (runId) {
-    return `run:${runId}:${period}`;
-  }
-
-  const trajectoryId = normalizeSelectionKeyPart(row.trajectory_id);
-  if (trajectoryId) {
-    return `trajectory:${trajectoryId}:${period}`;
-  }
-
-  return [
-    normalizeSelectionKeyPart(row.strategy_key) || "unknown-strategy",
-    normalizeSelectionKeyPart(row.market) || "unknown-market",
-    normalizeSelectionKeyPart(row.prompt_type) || "unknown-prompt",
-    normalizeSelectionKeyPart(row.model) || "unknown-model",
-    period,
-  ].join("::");
-}
-
 function mean(values: number[]) {
   return values.length
     ? values.reduce((sum, value) => sum + value, 0) / values.length
@@ -831,12 +781,12 @@ function attachRunLevelModelsToDailyRows(
   return rows.map((row) => {
     const groupKey = getRunModelGroupKey(row);
     const period = String(row.period ?? "").trim() || "unknown";
-    const fallbackKey = [
-      String(row.strategy_key ?? ""),
-      String(row.market ?? ""),
+    const fallbackKey = getRunModelFallbackKey({
+      strategy_key: row.strategy_key,
+      market: row.market,
       period,
-      String(row.prompt_type ?? ""),
-    ].join("::");
+      prompt_type: row.prompt_type,
+    });
     const resolvedModel =
       modelMetadata.periodModelByGroupAndPeriod.get(`${groupKey}::${period}`) ??
       modelMetadata.periodModelByFallbackKey.get(fallbackKey) ??
@@ -1009,7 +959,7 @@ function strategyOrder(key: string) {
 function getStrategyOptions(data: EvaluationData, market: string) {
   const options = new Map<string, StrategySelectOption>();
 
-  for (const row of data.summary_rows) {
+  for (const row of data.summary_rows ?? []) {
     if (market && row.market !== market) {
       continue;
     }
@@ -4284,19 +4234,106 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
     return buildDerivedTransitionMarkers(timelineRows);
   }, [regimeTimelineQuery.data, timelineRows]);
 
-  const recurrenceChartRows = useMemo(
+  const recurrenceRegimeColumns = useMemo(() => {
+    const grouped = new Map<
+      string,
+      {
+        regimeCode: string;
+        stateLabel: string;
+        totalPeriods: number;
+        totalTransitions: number;
+      }
+    >();
+
+    for (const row of regimeSummaryRows) {
+      const bucket = grouped.get(row.regimeCode) ?? {
+        regimeCode: row.regimeCode,
+        stateLabel: describeRegimeState(row.marketLabel, row.volLabel, row.rateLabel),
+        totalPeriods: 0,
+        totalTransitions: 0,
+      };
+      bucket.totalPeriods += row.periodCount;
+      bucket.totalTransitions += row.transitionCount;
+      grouped.set(row.regimeCode, bucket);
+    }
+
+    return Array.from(grouped.values())
+      .sort((left, right) => {
+        if (right.totalPeriods !== left.totalPeriods) {
+          return right.totalPeriods - left.totalPeriods;
+        }
+        return left.regimeCode.localeCompare(right.regimeCode);
+      })
+      .slice(0, marketFilter === "All" ? 8 : 10);
+  }, [regimeSummaryRows, marketFilter]);
+
+  const recurrenceHeatmapRows = useMemo(() => {
+    const columns = recurrenceRegimeColumns.map((column) => column.regimeCode);
+    const rowsByMarket = new Map<
+      string,
+      {
+        market: string;
+        marketLabel: string;
+        totalPeriods: number;
+        totalTransitions: number;
+        cells: Array<{
+          regimeCode: string;
+          stateLabel: string;
+          periodCount: number;
+          transitionCount: number;
+          shareOfMarket: number;
+        }>;
+      }
+    >();
+
+    for (const row of regimeSummaryRows) {
+      const marketBucket = rowsByMarket.get(row.market) ?? {
+        market: row.market,
+        marketLabel: MARKET_LABELS[row.market] ?? row.market,
+        totalPeriods: 0,
+        totalTransitions: 0,
+        cells: [],
+      };
+      marketBucket.totalPeriods += row.periodCount;
+      marketBucket.totalTransitions += row.transitionCount;
+      rowsByMarket.set(row.market, marketBucket);
+    }
+
+    return Array.from(rowsByMarket.values())
+      .map((marketRow) => ({
+        ...marketRow,
+        cells: columns.map((regimeCode) => {
+          const match = regimeSummaryRows.find(
+            (row) => row.market === marketRow.market && row.regimeCode === regimeCode
+          );
+          const periodCount = match?.periodCount ?? 0;
+          const transitionCount = match?.transitionCount ?? 0;
+          return {
+            regimeCode,
+            stateLabel:
+              recurrenceRegimeColumns.find((column) => column.regimeCode === regimeCode)?.stateLabel ??
+              "—",
+            periodCount,
+            transitionCount,
+            shareOfMarket: marketRow.totalPeriods > 0 ? periodCount / marketRow.totalPeriods : 0,
+          };
+        }),
+      }))
+      .sort((left, right) => left.marketLabel.localeCompare(right.marketLabel));
+  }, [regimeSummaryRows, recurrenceRegimeColumns]);
+
+  const transitionByMarketRows = useMemo(
     () =>
-      regimeSummaryRows
+      recurrenceHeatmapRows
         .map((row) => ({
-          ...row,
-          label:
-            marketFilter === "All"
-              ? `${MARKET_LABELS[row.market] ?? row.market} · ${row.regimeCode}`
-              : row.regimeCode,
-          stateLabel: describeRegimeState(row.marketLabel, row.volLabel, row.rateLabel),
+          market: row.market,
+          marketLabel: row.marketLabel,
+          transitionCount: row.totalTransitions,
+          totalPeriods: row.totalPeriods,
+          transitionRate: row.totalPeriods > 0 ? row.totalTransitions / row.totalPeriods : null,
         }))
-        .slice(0, 12),
-    [regimeSummaryRows, marketFilter]
+        .sort((left, right) => (right.transitionRate ?? -Infinity) - (left.transitionRate ?? -Infinity)),
+    [recurrenceHeatmapRows]
   );
 
   const conditionalChartRows = useMemo(() => {
@@ -5562,152 +5599,49 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
   }, [runs, modelMarketFilter, behaviorModelFilter]);
 
   const behaviorHoldingsQuery = useQuery({
-    queryKey: ["behavior-holdings", data.active_experiment_id, modelMarketFilter],
-    queryFn: async () => {
-      const market = modelMarketFilter === "All" ? undefined : modelMarketFilter;
-      const rows = await Promise.all(
-        ["gpt_retail", "gpt_advanced"].map((strategyKey) =>
-          fetchAllDailyHoldings({
-            experiment_id: data.active_experiment_id,
-            strategy_key: strategyKey,
-            market,
-          })
-        )
-      );
-      return rows.flat();
-    },
+    queryKey: [
+      "behavior-holdings-summary",
+      data.active_experiment_id,
+      modelMarketFilter,
+      behaviorModelFilter,
+    ],
+    queryFn: () =>
+      getBehaviorHoldingsSummary({
+        experiment_id: data.active_experiment_id,
+        market: modelMarketFilter === "All" ? undefined : modelMarketFilter,
+        model: behaviorModelFilter === "All" ? undefined : behaviorModelFilter,
+      }),
     enabled: Boolean(data.active_experiment_id),
     staleTime: 60_000,
   });
+  const sectorConcentrationRows = behaviorHoldingsQuery.data?.sector_rows ?? [];
 
-  const filteredBehaviorHoldings = useMemo(
-    () =>
-      (behaviorHoldingsQuery.data ?? []).filter((row) => {
-        const promptType = String(row.prompt_type ?? "").trim();
-        const model = String(row.model ?? "").trim();
-        return (
-          (promptType === "retail" || promptType === "advanced") &&
-          (behaviorModelFilter === "All" || model === behaviorModelFilter)
-        );
-      }),
-    [behaviorHoldingsQuery.data, behaviorModelFilter]
+  const assetSelectionMatrix = useMemo(
+    () => ({
+      marketKeys: behaviorHoldingsQuery.data?.market_keys ?? [],
+      rows: (behaviorHoldingsQuery.data?.asset_frequency_rows ?? []).map((row) => ({
+        ticker: row.ticker,
+        name: row.name,
+        cells: row.cells.map((cell) => ({
+          market: cell.market,
+          marketLabel: MARKET_LABELS[cell.market] ?? cell.market,
+          selectedRunCount: cell.selected_run_count,
+          totalRuns: cell.total_runs,
+          selectionRate: cell.selection_rate,
+        })),
+        totalSelectedRuns: row.total_selected_runs,
+        totalRuns: row.total_runs,
+        weightedRate: row.weighted_rate,
+        marketLabels: row.cells
+          .filter((cell) => cell.selected_run_count > 0)
+          .map((cell) => MARKET_LABELS[cell.market] ?? cell.market)
+          .join(", "),
+        bestMarketLabel: row.best_market ? MARKET_LABELS[row.best_market] ?? row.best_market : "—",
+        bestMarketRate: row.best_market_rate,
+      })),
+    }),
+    [behaviorHoldingsQuery.data]
   );
-
-  const sectorConcentrationRows = useMemo(() => {
-    const grouped = new Map<string, { promptType: string; sector: string; count: number }>();
-    const totals = new Map<string, number>();
-    for (const row of filteredBehaviorHoldings) {
-      const promptType = String(row.prompt_type ?? "").trim();
-      const sector = String(row.sector ?? "Unknown");
-      if (promptType !== "retail" && promptType !== "advanced") continue;
-      const key = `${promptType}::${sector}`;
-      const bucket = grouped.get(key) ?? { promptType, sector, count: 0 };
-      bucket.count += 1;
-      totals.set(promptType, (totals.get(promptType) ?? 0) + 1);
-      grouped.set(key, bucket);
-    }
-    return Array.from(grouped.values())
-      .map((row) => ({
-        ...row,
-        share: (totals.get(row.promptType) ?? 0) > 0 ? row.count / (totals.get(row.promptType) ?? 1) : null,
-        capViolation: (totals.get(row.promptType) ?? 0) > 0 ? row.count / (totals.get(row.promptType) ?? 1) > 0.25 : false,
-      }))
-      .sort((left, right) => (right.share ?? 0) - (left.share ?? 0))
-      .slice(0, 12);
-  }, [filteredBehaviorHoldings]);
-
-  const assetSelectionMatrix = useMemo(() => {
-    const marketRunTotals = new Map<string, Set<string>>();
-    for (const run of runs) {
-      const promptType = String(run.prompt_type ?? "").trim();
-      const market = String(run.market ?? "").trim();
-      const model = String(run.model ?? "").trim();
-      if ((promptType !== "retail" && promptType !== "advanced") || !market) continue;
-      if (modelMarketFilter !== "All" && market !== modelMarketFilter) continue;
-      if (behaviorModelFilter !== "All" && model !== behaviorModelFilter) continue;
-      const bucket = marketRunTotals.get(market) ?? new Set<string>();
-      bucket.add(getSelectionPeriodKey(run));
-      marketRunTotals.set(market, bucket);
-    }
-
-    const tickerBuckets = new Map<
-      string,
-      {
-        ticker: string;
-        name: string;
-        selectedByMarket: Map<string, Set<string>>;
-      }
-    >();
-
-    for (const row of filteredBehaviorHoldings) {
-      const market = String(row.market ?? "").trim();
-      const ticker = String(row.ticker ?? "").trim();
-      if (!market || !ticker || !marketRunTotals.has(market)) continue;
-
-      const bucket = tickerBuckets.get(ticker) ?? {
-        ticker,
-        name: String(row.name ?? ticker),
-        selectedByMarket: new Map<string, Set<string>>(),
-      };
-      const selectedRuns = bucket.selectedByMarket.get(market) ?? new Set<string>();
-      selectedRuns.add(getSelectionPeriodKey(row));
-      bucket.selectedByMarket.set(market, selectedRuns);
-      tickerBuckets.set(ticker, bucket);
-    }
-
-    const marketKeys = Array.from(marketRunTotals.keys()).sort((left, right) =>
-      (MARKET_LABELS[left] ?? left).localeCompare(MARKET_LABELS[right] ?? right)
-    );
-
-    const rows = Array.from(tickerBuckets.values())
-      .map((bucket) => {
-        const cells = marketKeys.map((market) => {
-          const selectedRunCount = bucket.selectedByMarket.get(market)?.size ?? 0;
-          const totalRuns = marketRunTotals.get(market)?.size ?? 0;
-          return {
-            market,
-            marketLabel: MARKET_LABELS[market] ?? market,
-            selectedRunCount,
-            totalRuns,
-            selectionRate: totalRuns > 0 ? selectedRunCount / totalRuns : null,
-          };
-        });
-
-        const totalSelectedRuns = cells.reduce((sum, cell) => sum + cell.selectedRunCount, 0);
-        const totalRuns = cells.reduce((sum, cell) => sum + cell.totalRuns, 0);
-        const activeMarkets = cells.filter((cell) => cell.selectedRunCount > 0);
-        const bestCell = activeMarkets.reduce<(typeof cells)[number] | null>(
-          (best, cell) => {
-            if (!best) return cell;
-            return (cell.selectionRate ?? 0) > (best.selectionRate ?? 0) ? cell : best;
-          },
-          null
-        );
-
-        return {
-          ticker: bucket.ticker,
-          name: bucket.name,
-          cells,
-          totalSelectedRuns,
-          totalRuns,
-          weightedRate: totalRuns > 0 ? totalSelectedRuns / totalRuns : null,
-          marketLabels: activeMarkets.map((cell) => cell.marketLabel).join(", "),
-          bestMarketLabel: bestCell?.marketLabel ?? "—",
-          bestMarketRate: bestCell?.selectionRate ?? null,
-        };
-      })
-      .filter((row) => row.totalSelectedRuns > 0)
-      .sort((left, right) => {
-        const rateDiff = (right.weightedRate ?? 0) - (left.weightedRate ?? 0);
-        if (Math.abs(rateDiff) > 1e-9) return rateDiff;
-        return right.totalSelectedRuns - left.totalSelectedRuns;
-      });
-
-    return {
-      marketKeys,
-      rows,
-    };
-  }, [filteredBehaviorHoldings, runs, modelMarketFilter, behaviorModelFilter]);
 
   const assetFrequencyRows = useMemo(() => {
     return assetSelectionMatrix.rows.slice(0, 15);
@@ -5898,7 +5832,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
     }
     for (const [key, seq] of bySequence.entries()) {
       const sorted = [...seq].sort((a, b) => String(a.period ?? "").localeCompare(String(b.period ?? "")));
-      const promptType = key.split("::").at(-1) ?? "unknown";
+      const promptType = key.split("::").slice(-1)[0] ?? "unknown";
       const label = promptType === "advanced" ? "Advanced prompt" : "Retail prompt";
       const bucket = groups.get(promptType) ?? { label, lossReturns: [], gainReturns: [], lossTurnover: [], gainTurnover: [] };
       for (let index = 1; index < sorted.length; index += 1) {
