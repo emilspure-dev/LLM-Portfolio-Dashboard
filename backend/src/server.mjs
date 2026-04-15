@@ -742,6 +742,49 @@ function handleFactorStyleSummary(url) {
   );
 }
 
+function handleDailySharpeSummary(url) {
+  const { clauses, params } = withExperimentFilters(url, {
+    experimentId: "dpm.experiment_id",
+    strategy_key: normalizedStrategyKeySql("p.strategy_key"),
+    market: "p.market",
+    prompt_type: normalizedPromptTypeSql("p.prompt_type"),
+    model: "p.model",
+  });
+
+  clauses.push("dpm.daily_return IS NOT NULL");
+
+  addDateRangeFilter(
+    clauses,
+    params,
+    "dpm.date",
+    cleanString(url.searchParams.get("date_from")),
+    cleanString(url.searchParams.get("date_to"))
+  );
+
+  return queryAll(`
+    SELECT
+      dpm.date,
+      ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
+      p.strategy,
+      p.source_type,
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
+      AVG(dpm.daily_return) AS mean_daily_return,
+      COUNT(*) AS observations
+    FROM daily_path_metrics dpm
+    JOIN paths p
+      ON p.experiment_id = dpm.experiment_id
+     AND p.path_id = dpm.path_id
+    ${buildWhereClause(clauses)}
+    GROUP BY
+      dpm.date,
+      ${normalizedStrategyKeySql("p.strategy_key")},
+      p.strategy,
+      p.source_type,
+      ${normalizedPromptTypeSql("p.prompt_type")}
+    ORDER BY dpm.date, p.source_type, strategy_key, prompt_type
+  `, params);
+}
+
 function handleRunQuality(url) {
   const { clauses, params } = withExperimentFilters(url, {
     experimentId: "rr.experiment_id",
@@ -1686,6 +1729,7 @@ const routes = new Map([
   ["GET /api/meta/current", () => handleMetaCurrent()],
   ["GET /api/filters", ({ url }) => handleFilters(url)],
   ["GET /api/summary/overview", ({ url }) => handleOverviewSummary(url)],
+  ["GET /api/summary/daily-sharpe", ({ url }) => handleDailySharpeSummary(url)],
   ["GET /api/summary/strategies", ({ url }) => handleStrategySummary(url)],
   ["GET /api/summary/factor-style", ({ url }) => handleFactorStyleSummary(url)],
   ["GET /api/summary/behavior", ({ url }) => handleBehaviorSummary(url)],

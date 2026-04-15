@@ -78,6 +78,16 @@ export interface StrategySummaryApiRow {
   pct_runs_beating_sixty_forty_sharpe: number | null;
 }
 
+export interface DailySharpeSummaryRow {
+  date: string;
+  strategy_key: string;
+  strategy: string;
+  source_type: string;
+  prompt_type: string | null;
+  mean_daily_return: number | null;
+  observations: number;
+}
+
 export interface OverviewSummaryResponse {
   total_runs: number;
   valid_runs: number;

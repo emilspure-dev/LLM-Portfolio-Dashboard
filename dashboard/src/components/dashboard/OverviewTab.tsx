@@ -1,15 +1,15 @@
 import { useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  ReferenceLine, Cell, CartesianGrid,
+  ReferenceLine, Cell, CartesianGrid, LineChart, Line, Legend,
 } from "recharts";
 import { KpiCard } from "./KpiCard";
 import { InsightCard } from "./InsightCard";
 import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
+import { getDailySharpeSummary } from "@/lib/api-client";
 import {
-  COLORS,
-  INDEX_VS_PILL,
   MARKET_LABELS,
   getMarketShortLabel,
   getStrategyColor,
@@ -18,7 +18,61 @@ import {
   fmt,
   fmtp,
 } from "@/lib/constants";
+import { apiRouteLikelyMissing, asFiniteNumber, mean, stdDev } from "@/lib/data-loader";
 import type { EvaluationData, Insight, RunRow } from "@/lib/types";
+
+function rollingSharpeFromAggregatedReturns(
+  rows: Array<{ date: string; mean_daily_return: number | null }>,
+  windowSize = 21
+) {
+  const ordered = [...rows]
+    .filter((row) => asFiniteNumber(row.mean_daily_return) != null)
+    .sort((left, right) => left.date.localeCompare(right.date));
+
+  return ordered.map((row, index) => {
+    const window = ordered
+      .slice(Math.max(0, index - windowSize + 1), index + 1)
+      .map((entry) => entry.mean_daily_return)
+      .filter((value): value is number => asFiniteNumber(value) != null);
+
+    if (window.length < Math.max(5, Math.floor(windowSize / 2))) {
+      return { date: row.date, rollingSharpe: null as number | null };
+    }
+
+    const avg = mean(window);
+    const vol = stdDev(window);
+    return {
+      date: row.date,
+      rollingSharpe:
+        avg != null && vol != null && vol > 0
+          ? (avg / vol) * Math.sqrt(252)
+          : null,
+    };
+  });
+}
+
+function formatChartDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString(undefined, {
+    month: "short",
+    year: "2-digit",
+  });
+}
+
+function formatChartTooltipDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
 
 interface OverviewTabProps {
   data: EvaluationData;
@@ -27,49 +81,25 @@ interface OverviewTabProps {
 
 export function OverviewTab({ data, runs }: OverviewTabProps) {
   const { summary } = data;
+  const overviewDailySharpeRef = useRef<HTMLDivElement>(null);
   const overviewBeatIndexRef = useRef<HTMLDivElement>(null);
-  const nRuns =
-    data.overview_summary?.valid_runs ??
-    runs.filter((r) => r.valid !== false).length;
-  const nMarkets =
-    data.overview_summary?.market_count ??
-    new Set(runs.map((r) => r.market).filter(Boolean)).size;
-  const nPeriods =
-    data.overview_summary?.period_count ??
-    new Set(runs.map((r) => r.period).filter(Boolean)).size;
-
-  const bestSharpe = useMemo(() => {
-    if (!summary.length) return { value: NaN, name: "—" };
-    const finite = summary.filter(
-      (s) => s.mean_sharpe != null && Number.isFinite(s.mean_sharpe)
-    );
-    if (!finite.length) return { value: NaN, name: "—" };
-    let best = finite[0];
-    for (const s of finite) {
-      if ((s.mean_sharpe ?? -Infinity) > (best.mean_sharpe ?? -Infinity)) best = s;
-    }
-    return {
-      value: best.mean_sharpe as number,
-      name: getStrategyDisplayName(best.Strategy, best.strategy_key),
-    };
-  }, [summary]);
-
-  const gptBeatRate = useMemo(() => {
-    if (data.overview_summary?.gpt_beat_index_rate != null) {
-      return data.overview_summary.gpt_beat_index_rate;
-    }
-    const gptRuns = runs.filter(
-      (r) => r.prompt_type === "simple" || r.prompt_type === "advanced"
-    );
-    if (!gptRuns.length) return null;
-    const idxRow = summary.find((s) => s.strategy_key === "index");
-    const idxSharpe = idxRow?.mean_sharpe ?? null;
-    if (idxSharpe == null || !Number.isFinite(idxSharpe)) return null;
-    const beating = gptRuns.filter(
-      (r) => r.sharpe_ratio != null && r.sharpe_ratio > idxSharpe
-    );
-    return (beating.length / gptRuns.length) * 100;
-  }, [data.overview_summary, runs, summary]);
+  const dailySharpeQuery = useQuery({
+    queryKey: ["overview-daily-sharpe", data.active_experiment_id],
+    queryFn: async () => {
+      try {
+        return await getDailySharpeSummary({
+          experiment_id: data.active_experiment_id,
+        });
+      } catch (error) {
+        if (apiRouteLikelyMissing(error)) {
+          return [];
+        }
+        throw error;
+      }
+    },
+    enabled: Boolean(data.active_experiment_id),
+    staleTime: 60_000,
+  });
 
   // Beat rate chart data
   const beatIndexData = useMemo(() => {
@@ -164,35 +194,6 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     return result;
   }, [data.overview_summary, runs, summary]);
 
-  // Strategy Summary Table: group by strategy_key, order groups by best Sharpe desc,
-  // within each group order markets us → germany → japan.
-  const summarySorted = useMemo(() => {
-    const MARKET_ORDER: Record<string, number> = { us: 0, germany: 1, japan: 2 };
-    // Compute best Sharpe per strategy_key for group ordering
-    const bestSharpeByKey = new Map<string, number>();
-    for (const s of summary) {
-      const cur = bestSharpeByKey.get(s.strategy_key) ?? -Infinity;
-      if (s.mean_sharpe != null && Number.isFinite(s.mean_sharpe) && s.mean_sharpe > cur) {
-        bestSharpeByKey.set(s.strategy_key, s.mean_sharpe);
-      }
-    }
-    return [...summary].sort((a, b) => {
-      const aGpt = a.strategy_key.startsWith("gpt_");
-      const bGpt = b.strategy_key.startsWith("gpt_");
-      // GPT rows always first
-      if (aGpt !== bGpt) return aGpt ? -1 : 1;
-      // Same strategy_key → sort by market order
-      if (a.strategy_key === b.strategy_key) {
-        const am = a.markets?.[0] ?? "";
-        const bm = b.markets?.[0] ?? "";
-        return (MARKET_ORDER[am] ?? 99) - (MARKET_ORDER[bm] ?? 99);
-      }
-      // Different strategy groups → sort groups by best Sharpe desc
-      return (bestSharpeByKey.get(b.strategy_key) ?? -Infinity) -
-             (bestSharpeByKey.get(a.strategy_key) ?? -Infinity);
-    });
-  }, [summary]);
-
   // Two-tier strategy grouping: one overall entry per strategy_key + per-market breakdown
   const strategyGroups = useMemo(() => {
     if (!data.summary_rows?.length) return null;
@@ -248,6 +249,92 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     });
   }, [data.summary_rows]);
 
+  const fallbackSharpeBarData = useMemo(() => {
+    if (strategyGroups?.length) {
+      return strategyGroups.map((group) => ({
+        barKey: group.key,
+        Strategy: group.label,
+        strategy_key: group.strategyKey,
+        mean_sharpe: group.overallSharpe,
+      }));
+    }
+
+    return summary.map((row) => ({
+      barKey: `${row.strategy_key}::${row.markets?.[0] ?? "all"}`,
+      Strategy: getStrategyDisplayName(row.Strategy, row.strategy_key),
+      strategy_key: row.strategy_key,
+      mean_sharpe: row.mean_sharpe,
+    }));
+  }, [strategyGroups, summary]);
+
+  const dailySharpeChart = useMemo(() => {
+    const rows = dailySharpeQuery.data ?? [];
+    if (rows.length === 0) {
+      return {
+        chartRows: [] as Array<Record<string, string | number | null>>,
+        series: [] as Array<{ key: string; label: string; color: string }>,
+      };
+    }
+
+    const strategyOrder = new Map<string, number>();
+    summary.forEach((row, index) => {
+      if (!strategyOrder.has(row.strategy_key)) {
+        strategyOrder.set(row.strategy_key, index);
+      }
+    });
+
+    const grouped = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        color: string;
+        rows: Array<{ date: string; mean_daily_return: number | null }>;
+      }
+    >();
+
+    for (const row of rows) {
+      const bucket = grouped.get(row.strategy_key) ?? {
+        key: row.strategy_key,
+        label: getStrategyDisplayName(row.strategy, row.strategy_key),
+        color: getStrategyColor(row.strategy_key),
+        rows: [],
+      };
+      bucket.rows.push({
+        date: row.date,
+        mean_daily_return: row.mean_daily_return,
+      });
+      grouped.set(row.strategy_key, bucket);
+    }
+
+    const series = Array.from(grouped.values()).sort((left, right) => {
+      const leftGpt = left.key.startsWith("gpt_");
+      const rightGpt = right.key.startsWith("gpt_");
+      if (leftGpt !== rightGpt) return leftGpt ? -1 : 1;
+      return (
+        (strategyOrder.get(left.key) ?? Number.MAX_SAFE_INTEGER) -
+        (strategyOrder.get(right.key) ?? Number.MAX_SAFE_INTEGER)
+      );
+    });
+
+    const chartMap = new Map<string, Record<string, string | number | null>>();
+    for (const item of series) {
+      const rollingSeries = rollingSharpeFromAggregatedReturns(item.rows);
+      for (const point of rollingSeries) {
+        const bucket = chartMap.get(point.date) ?? { date: point.date };
+        bucket[item.key] = point.rollingSharpe;
+        chartMap.set(point.date, bucket);
+      }
+    }
+
+    return {
+      chartRows: Array.from(chartMap.values()).sort((left, right) =>
+        String(left.date).localeCompare(String(right.date))
+      ),
+      series: series.map(({ key, label, color }) => ({ key, label, color })),
+    };
+  }, [dailySharpeQuery.data, summary]);
+
   const tooltipStyle = {
     contentStyle: {
       backgroundColor: "#fafafa",
@@ -263,22 +350,136 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
-      {/* Hero KPIs */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard label="Total Runs" value={String(nRuns)} color={COLORS.accent} sub={`${nMarkets} markets`} />
-        <KpiCard label="Periods" value={String(nPeriods)} color={COLORS.cyan} />
-        <KpiCard
-          label="Best Sharpe"
-          value={fmt(bestSharpe.value, 2)}
-          color={sharpeColor(bestSharpe.value)}
-          sub={bestSharpe.name}
-        />
-        <KpiCard
-          label="GPT Beat Rate"
-          value={fmtp(gptBeatRate, 0)}
-          color={gptBeatRate != null && gptBeatRate > 50 ? COLORS.green : COLORS.red}
-          sub="vs market index"
-        />
+      <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="dashboard-label">Daily Sharpe by strategy</p>
+            <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
+              21-day rolling Sharpe from pooled daily returns across all markets and
+              periods.
+            </p>
+          </div>
+          <FigureExportControls
+            captureRef={overviewDailySharpeRef}
+            slug="overview-daily-sharpe-by-strategy"
+            caption="Overview — daily Sharpe by strategy across all periods"
+            experimentId={data.active_experiment_id}
+          />
+        </div>
+
+        {dailySharpeQuery.isLoading ? (
+          <p className="py-20 text-center text-[12px] text-[#737373]">
+            Loading daily Sharpe overview…
+          </p>
+        ) : dailySharpeChart.chartRows.length > 0 ? (
+          <div ref={overviewDailySharpeRef} className="min-w-0">
+            <ResponsiveContainer width="100%" height={340}>
+              <LineChart
+                data={dailySharpeChart.chartRows}
+                margin={{ top: 8, right: 16, left: 6, bottom: 8 }}
+              >
+                <CartesianGrid
+                  stroke="rgba(220, 213, 206, 0.7)"
+                  vertical={false}
+                  strokeDasharray="3 6"
+                />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={formatChartDate}
+                  tick={{ fontSize: 10, fill: "#737373" }}
+                  minTickGap={28}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "#aca49d" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  {...tooltipStyle}
+                  labelFormatter={(value) => formatChartTooltipDate(String(value))}
+                  formatter={(value: number | null, _name, item) => [
+                    value != null && Number.isFinite(value) ? value.toFixed(2) : "—",
+                    item?.name ?? "",
+                  ]}
+                />
+                <Legend wrapperStyle={{ fontSize: 11, color: "#737373", paddingTop: 12 }} />
+                <ReferenceLine
+                  y={0}
+                  stroke="rgba(192, 180, 170, 0.9)"
+                  strokeDasharray="3 6"
+                />
+                {dailySharpeChart.series.map((series) => (
+                  <Line
+                    key={series.key}
+                    type="monotone"
+                    dataKey={series.key}
+                    name={series.label}
+                    stroke={series.color}
+                    strokeWidth={series.key.startsWith("gpt_") ? 2.5 : 1.8}
+                    dot={false}
+                    connectNulls
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : fallbackSharpeBarData.length > 0 ? (
+          <div ref={overviewDailySharpeRef} className="min-w-0">
+            <p className="mb-3 text-[12px] leading-5 text-[#8f8780]">
+              Daily path summary is not available on this API build yet, so this fallback
+              shows mean Sharpe across all periods by strategy.
+            </p>
+            <ResponsiveContainer width="100%" height={320}>
+              <BarChart
+                data={fallbackSharpeBarData}
+                margin={{ top: 6, right: 12, left: 12, bottom: 88 }}
+              >
+                <CartesianGrid
+                  stroke="rgba(220, 213, 206, 0.7)"
+                  vertical={false}
+                  strokeDasharray="3 6"
+                />
+                <XAxis
+                  dataKey="Strategy"
+                  tick={{ fontSize: 9, fill: "#737373" }}
+                  angle={-32}
+                  textAnchor="end"
+                  interval={0}
+                  height={96}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: "#aca49d" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  {...tooltipStyle}
+                  formatter={(value: number | null) =>
+                    value != null && Number.isFinite(value) ? value.toFixed(2) : "—"
+                  }
+                />
+                <ReferenceLine
+                  y={0}
+                  stroke="rgba(192, 180, 170, 0.9)"
+                  strokeDasharray="3 6"
+                />
+                <Bar dataKey="mean_sharpe" radius={[10, 10, 0, 0]}>
+                  {fallbackSharpeBarData.map((row) => (
+                    <Cell key={row.barKey} fill={getStrategyColor(row.strategy_key)} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="py-20 text-center text-[12px] text-[#737373]">
+            No Sharpe series are available for this experiment.
+          </p>
+        )}
       </div>
 
       <SoftHr />

@@ -1,5 +1,6 @@
 import type {
   BehaviorHoldingsSummaryResponse,
+  DailySharpeSummaryRow,
   BehaviorSummaryRow,
   FactorExposureRow,
   FactorSelectionSummaryResponse,
@@ -210,6 +211,10 @@ export function getStrategySummary(query?: Record<string, QueryValue>) {
 
 export function getOverviewSummary(query?: Record<string, QueryValue>) {
   return requestJson<OverviewSummaryResponse>("/summary/overview", query);
+}
+
+export function getDailySharpeSummary(query?: Record<string, QueryValue>) {
+  return requestJson<DailySharpeSummaryRow[]>("/summary/daily-sharpe", query);
 }
 
 export function getFactorStyleSummary(query?: Record<string, QueryValue>) {
