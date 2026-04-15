@@ -27,7 +27,7 @@ import type { FactorStyleSummaryRow, HoldingDailyRow } from "@/lib/api-types";
 import type { EvaluationData } from "@/lib/types";
 
 const FACTOR_STYLE_ORDER = [
-  "gpt_retail",
+  "gpt_simple",
   "gpt_advanced",
   "mean_variance",
   "equal_weight",
@@ -36,9 +36,9 @@ const FACTOR_STYLE_ORDER = [
   "fama_french",
 ] as const;
 
-const GPT_STRATEGY_KEYS = ["gpt_retail", "gpt_advanced"] as const;
+const GPT_STRATEGY_KEYS = ["gpt_simple", "gpt_advanced"] as const;
 const STRATEGY_COLORS = {
-  gpt_retail: CHART_COLORS[0],
+  gpt_simple: CHART_COLORS[0],
   gpt_advanced: CHART_COLORS[2],
 } satisfies Record<(typeof GPT_STRATEGY_KEYS)[number], string>;
 
@@ -260,22 +260,22 @@ function buildRunProfiles(rows: SelectionRow[], displayedLabels: string[]) {
 
 function buildAggregateCountData(rows: SelectionRow[], displayedLabels: string[]) {
   const runProfiles = buildRunProfiles(rows, displayedLabels);
-  const grouped = new Map<string, { label: string; retail: number; advanced: number }>();
+  const grouped = new Map<string, { label: string; simple: number; advanced: number }>();
 
   for (const profile of runProfiles) {
     const bucket = grouped.get(profile.dominantLabel) ?? {
       label: profile.dominantLabel,
-      retail: 0,
+      simple: 0,
       advanced: 0,
     };
-    if (profile.strategyKey === "gpt_retail") bucket.retail += 1;
+    if (profile.strategyKey === "gpt_simple") bucket.simple += 1;
     if (profile.strategyKey === "gpt_advanced") bucket.advanced += 1;
     grouped.set(profile.dominantLabel, bucket);
   }
 
   return displayedLabels
-    .map((label) => grouped.get(label) ?? { label, retail: 0, advanced: 0 })
-    .filter((row) => row.retail > 0 || row.advanced > 0);
+    .map((label) => grouped.get(label) ?? { label, simple: 0, advanced: 0 })
+    .filter((row) => row.simple > 0 || row.advanced > 0);
 }
 
 function buildPromptSummary(rows: SelectionRow[], strategyKey: GptStrategyKey) {
@@ -298,7 +298,7 @@ function buildPromptSummary(rows: SelectionRow[], strategyKey: GptStrategyKey) {
   const runCount = profiles.length;
   return {
     strategy_key: strategyKey,
-    prompt_type: strategyKey === "gpt_advanced" ? "advanced" : "retail",
+    prompt_type: strategyKey === "gpt_advanced" ? "advanced" : "simple",
     run_count: runCount,
     dominant_label: dominantEntry?.[0] ?? "—",
     dominant_count: dominantEntry?.[1] ?? 0,
@@ -332,9 +332,9 @@ function buildRunMixData(profiles: RunProfile[], displayedLabels: string[]) {
 
   return displayedLabels.map((label) => ({
     label,
-    retail:
-      (grouped.get("gpt_retail")?.sums[label] ?? 0) /
-      Math.max(grouped.get("gpt_retail")?.runCount ?? 0, 1),
+    simple:
+      (grouped.get("gpt_simple")?.sums[label] ?? 0) /
+      Math.max(grouped.get("gpt_simple")?.runCount ?? 0, 1),
     advanced:
       (grouped.get("gpt_advanced")?.sums[label] ?? 0) /
       Math.max(grouped.get("gpt_advanced")?.runCount ?? 0, 1),
@@ -457,13 +457,13 @@ function getTopTwoLabels(values: Record<string, number>, labels: string[]) {
 }
 
 function buildOverallAnalysis(
-  aggregateCountData: Array<{ label: string; retail: number; advanced: number }>
+  aggregateCountData: Array<{ label: string; simple: number; advanced: number }>
 ) {
   const labels = aggregateCountData.map((row) => row.label);
   if (labels.length === 0) return "No run-normalized selection pattern is available yet.";
 
-  const retailTop = getTopTwoLabels(
-    Object.fromEntries(aggregateCountData.map((row) => [row.label, row.retail])),
+  const simpleTop = getTopTwoLabels(
+    Object.fromEntries(aggregateCountData.map((row) => [row.label, row.simple])),
     labels
   );
   const advancedTop = getTopTwoLabels(
@@ -471,34 +471,34 @@ function buildOverallAnalysis(
     labels
   );
 
-  const retailLead = retailTop[0];
+  const simpleLead = simpleTop[0];
   const advancedLead = advancedTop[0];
-  if (!retailLead || !advancedLead) return "No run-normalized selection pattern is available yet.";
+  if (!simpleLead || !advancedLead) return "No run-normalized selection pattern is available yet.";
 
-  const retailGap = retailLead.value - (retailTop[1]?.value ?? 0);
+  const simpleGap = simpleLead.value - (simpleTop[1]?.value ?? 0);
   const advancedGap = advancedLead.value - (advancedTop[1]?.value ?? 0);
-  const sameLeader = retailLead.label === advancedLead.label;
+  const sameLeader = simpleLead.label === advancedLead.label;
 
   return sameLeader
-    ? `Both prompts most often finish with ${retailLead.label} as the dominant full-run bucket. This looks sensible if the prompts share a common strategy, although the lead over the next bucket is only ${formatPerRun(
-        Math.max(retailGap, advancedGap),
+    ? `Both prompts most often finish with ${simpleLead.label} as the dominant full-run bucket. This looks sensible if the prompts share a common strategy, although the lead over the next bucket is only ${formatPerRun(
+        Math.max(simpleGap, advancedGap),
         0
       )} runs.`
-    : `GPT (Retail) most often ends with ${retailLead.label} as its dominant full-run bucket, while GPT (Advanced) most often ends with ${advancedLead.label}. That looks like a real prompt difference because the lead over the next bucket is ${formatPerRun(
-        Math.max(retailGap, advancedGap),
+    : `GPT (Simple) most often ends with ${simpleLead.label} as its dominant full-run bucket, while GPT (Advanced) most often ends with ${advancedLead.label}. That looks like a real prompt difference because the lead over the next bucket is ${formatPerRun(
+        Math.max(simpleGap, advancedGap),
         0
       )} runs.`;
 }
 
 function buildMixAnalysis(
-  mixData: Array<{ label: string; retail: number; advanced: number }>
+  mixData: Array<{ label: string; simple: number; advanced: number }>
 ) {
   if (mixData.length === 0) return "No full-run bucket mix is available yet.";
-  const biggestGap = [...mixData].sort((left, right) => Math.abs(right.retail - right.advanced) - Math.abs(left.retail - left.advanced))[0];
+  const biggestGap = [...mixData].sort((left, right) => Math.abs(right.simple - right.advanced) - Math.abs(left.simple - left.advanced))[0];
   if (!biggestGap) return "No full-run bucket mix is available yet.";
-  const leader = biggestGap.retail >= biggestGap.advanced ? "GPT (Retail)" : "GPT (Advanced)";
+  const leader = biggestGap.simple >= biggestGap.advanced ? "GPT (Simple)" : "GPT (Advanced)";
   return `${leader} allocates a larger share of its full-run selection mix to ${biggestGap.label}. The gap is ${formatPct(
-    Math.abs(biggestGap.retail - biggestGap.advanced),
+    Math.abs(biggestGap.simple - biggestGap.advanced),
     0
   )}, which is the clearest cross-prompt difference in the full-run mix.`;
 }
@@ -877,7 +877,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                     formatter={(value: number) => `${Number(value).toFixed(0)} runs`}
                   />
                   <Legend wrapperStyle={{ fontSize: 10, color: "#9b938b", paddingTop: 10 }} iconType="circle" iconSize={8} />
-                  <Bar dataKey="retail" name="GPT (Retail)" fill={STRATEGY_COLORS.gpt_retail} radius={[0, 4, 4, 0]} barSize={14} />
+                  <Bar dataKey="simple" name="GPT (Simple)" fill={STRATEGY_COLORS.gpt_simple} radius={[0, 4, 4, 0]} barSize={14} />
                   <Bar dataKey="advanced" name="GPT (Advanced)" fill={STRATEGY_COLORS.gpt_advanced} radius={[0, 4, 4, 0]} barSize={14} />
                 </BarChart>
               </ResponsiveContainer>
@@ -924,7 +924,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                   />
                   <Tooltip {...tooltipStyle} formatter={(value: number) => formatPct(Number(value), 1)} />
                   <Legend wrapperStyle={{ fontSize: 10, color: "#9b938b", paddingTop: 10 }} iconType="circle" iconSize={8} />
-                  <Bar dataKey="retail" name="GPT (Retail)" fill={STRATEGY_COLORS.gpt_retail} radius={[0, 4, 4, 0]} barSize={14} />
+                  <Bar dataKey="simple" name="GPT (Simple)" fill={STRATEGY_COLORS.gpt_simple} radius={[0, 4, 4, 0]} barSize={14} />
                   <Bar dataKey="advanced" name="GPT (Advanced)" fill={STRATEGY_COLORS.gpt_advanced} radius={[0, 4, 4, 0]} barSize={14} />
                 </BarChart>
               </ResponsiveContainer>

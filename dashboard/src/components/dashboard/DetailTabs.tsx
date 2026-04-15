@@ -115,7 +115,7 @@ const DAILY_STRATEGY_ORDER = [
   "sixty_forty",
   "mean_variance",
   "fama_french",
-  "gpt_retail",
+  "gpt_simple",
   "gpt_advanced",
 ] as const;
 
@@ -484,8 +484,8 @@ function runExplorerPointMeta(run: RunRow) {
   const promptLabel =
     run.prompt_type === "advanced"
       ? "Advanced"
-      : run.prompt_type === "retail"
-        ? "Retail"
+      : run.prompt_type === "simple"
+        ? "Simple"
         : (run.prompt_type ?? "—");
   const marketLabel = MARKET_LABELS[run.market ?? ""] ?? run.market ?? "—";
   return {
@@ -596,7 +596,7 @@ function buildBehaviorHoldingsSummaryFallback(
   for (const row of holdingsRows) {
     const promptType = normalizeString(row.prompt_type);
     const sector = normalizeString(row.sector) || "Unknown";
-    if (promptType !== "retail" && promptType !== "advanced") {
+    if (promptType !== "simple" && promptType !== "advanced") {
       continue;
     }
     const key = `${promptType}::${sector}`;
@@ -910,7 +910,7 @@ function buildPromptModelBenchmarkRows(runs: RunRow[]) {
   }>();
   for (const run of runs) {
     const strategyKey = String(run.strategy_key ?? "");
-    if (strategyKey !== "gpt_retail" && strategyKey !== "gpt_advanced") continue;
+    if (strategyKey !== "gpt_simple" && strategyKey !== "gpt_advanced") continue;
     const model = String(run.model ?? "").trim();
     const promptType = String(run.prompt_type ?? "").trim();
     const sharpe = asNumber(run.sharpe_ratio);
@@ -1007,7 +1007,7 @@ interface SharpeHistBin {
   hi: number;
   name: string;
   mid: number;
-  retail: number;
+  simple: number;
   advanced: number;
 }
 
@@ -1024,12 +1024,12 @@ function runStrategySharpes(runs: RunRow[], strategyKey: string): number[] {
 }
 
 function buildSharpeHistogramBins(
-  retail: number[],
+  simple: number[],
   advanced: number[],
   binWidth: number,
   domainPad: [number, number] = [-2.25, 10],
 ): SharpeHistBin[] {
-  const all = [...retail, ...advanced];
+  const all = [...simple, ...advanced];
   if (all.length === 0) return [];
   let lo = Math.min(domainPad[0], ...all) - binWidth * 0.25;
   let hi = Math.max(domainPad[1], ...all) + binWidth * 0.25;
@@ -1048,7 +1048,7 @@ function buildSharpeHistogramBins(
       hi: h,
       mid: (x + h) / 2,
       name: `${x.toFixed(2)}–${h.toFixed(2)}`,
-      retail: retail.filter(inBin).length,
+      simple: simple.filter(inBin).length,
       advanced: advanced.filter(inBin).length,
     });
   }
@@ -1601,15 +1601,15 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
 
   const sharpeHistogramModel = useMemo(() => {
     const scoped = localRuns;
-    const retail = runStrategySharpes(scoped, "gpt_retail");
+    const simple = runStrategySharpes(scoped, "gpt_simple");
     const advanced = runStrategySharpes(scoped, "gpt_advanced");
     let binWidth = 0.42;
-    let bins = buildSharpeHistogramBins(retail, advanced, binWidth);
+    let bins = buildSharpeHistogramBins(simple, advanced, binWidth);
     while (bins.length > 42 && binWidth < 2.5) {
       binWidth += 0.14;
-      bins = buildSharpeHistogramBins(retail, advanced, binWidth);
+      bins = buildSharpeHistogramBins(simple, advanced, binWidth);
     }
-    const retailMean = retail.length ? mean(retail) : null;
+    const simpleMean = simple.length ? mean(simple) : null;
     const advancedMean = advanced.length ? mean(advanced) : null;
     const summaryMean = (key: string) => {
       const row = summary.find((s) => s.strategy_key === key);
@@ -1623,10 +1623,10 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
     const sfMean = summaryMean("sixty_forty");
     const ffMean = summaryMean("fama_french");
     return {
-      retail,
+      simple,
       advanced,
       bins,
-      retailMean,
+      simpleMean,
       advancedMean,
       ewMean,
       mvMean,
@@ -1637,10 +1637,10 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
   }, [localRuns, summary]);
 
   const {
-    retail: retailSharpes,
+    simple: simpleSharpes,
     advanced: advancedSharpes,
     bins: sharpeBins,
-    retailMean,
+    simpleMean,
     advancedMean,
     ewMean,
     mvMean,
@@ -1652,14 +1652,14 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
   const _allMeanCandidates = useMemo(
     () => [
       { key: "adv", value: advancedMean, label: "GPT Advanced μ", color: SHARPE_HIST_COLORS.gptAdvanced, dashed: true },
-      { key: "ret", value: retailMean, label: "GPT Retail μ", color: SHARPE_HIST_COLORS.gptRetail, dashed: true },
+      { key: "sim", value: simpleMean, label: "GPT Simple μ", color: SHARPE_HIST_COLORS.gptRetail, dashed: true },
       { key: "ew", value: ewMean, label: "Equal weight μ", color: SHARPE_HIST_COLORS.equalWeight, dashed: false },
       { key: "mv", value: mvMean, label: "Mean-Variance μ", color: SHARPE_HIST_COLORS.meanVariance, dashed: false },
       { key: "ix", value: ixMean, label: "Index μ", color: SHARPE_HIST_COLORS.index, dashed: false },
       { key: "sf", value: sfMean, label: "60/40 μ", color: SHARPE_HIST_COLORS.sixtyForty, dashed: false },
       { key: "ff", value: ffMean, label: "Fama-French μ", color: SHARPE_HIST_COLORS.famaFrench, dashed: false },
     ],
-    [advancedMean, ewMean, ffMean, ixMean, mvMean, retailMean, sfMean],
+    [advancedMean, ewMean, ffMean, ixMean, mvMean, simpleMean, sfMean],
   );
 
   const sharpeMeanMarkers = useMemo(
@@ -1746,14 +1746,14 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
       <SoftHr />
 
       <SectionHeader>Sharpe Distribution</SectionHeader>
-      {retailSharpes.length > 0 || advancedSharpes.length > 0 ? (
+      {simpleSharpes.length > 0 || advancedSharpes.length > 0 ? (
         <Panel>
           <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
             <p className="dashboard-label">Distribution of period Sharpe ratios</p>
             <FigureExportControls
               captureRef={sharpeHistCaptureRef}
               slug="sharpe-returns-period-distribution"
-              caption="Distribution of period Sharpe ratios (GPT retail and advanced)"
+              caption="Distribution of period Sharpe ratios (GPT simple and advanced)"
               experimentId={data.active_experiment_id}
             />
           </div>
@@ -1840,8 +1840,8 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
                     wrapperStyle={{ fontSize: 11, color: "#5d5754", paddingBottom: 4 }}
                   />
                   <Area
-                    name="GPT (Retail)"
-                    dataKey="retail"
+                    name="GPT (Simple)"
+                    dataKey="simple"
                     type="stepAfter"
                     stroke={SHARPE_HIST_COLORS.gptRetail}
                     strokeWidth={1.5}
@@ -1899,7 +1899,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
           <p className="text-[12px] leading-5 text-[#8a827a]">
             No GPT run-level Sharpe observations for this market filter. The histogram uses runs with{" "}
             <span className="font-mono text-[11px]">strategy_key</span>{" "}
-            <span className="font-mono">gpt_retail</span> or <span className="font-mono">gpt_advanced</span> and a
+            <span className="font-mono">gpt_simple</span> or <span className="font-mono">gpt_advanced</span> and a
             numeric <span className="font-mono">sharpe_ratio</span>.
           </p>
         </Panel>
@@ -2758,7 +2758,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
                 <p className="mt-3 text-[10px] leading-5 text-[#aaa29a]">
                   Full prompt text is not in the run-results payload; it lives in the experiment bundle (
                   <code className="rounded bg-[rgba(0,0,0,0.04)] px-1">llm_runs/*.json</code>) on the server.
-                  Holdings below load by <strong>path_id</strong> so retail/advanced portfolios match the equity charts.
+                  Holdings below load by <strong>path_id</strong> so simple/advanced portfolios match the equity charts.
                 </p>
               )}
             </>
@@ -3112,7 +3112,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
 
   const MODEL_COLORS = [CHART_COLORS[0], CHART_COLORS[1], CHART_COLORS[2], CHART_COLORS[3], CHART_COLORS[4], COLORS.accent, COLORS.amber];
   const gptFilteredRuns = useMemo(
-    () => filteredRuns.filter((r) => r.prompt_type === "retail" || r.prompt_type === "advanced"),
+    () => filteredRuns.filter((r) => r.prompt_type === "simple" || r.prompt_type === "advanced"),
     [filteredRuns]
   );
 
@@ -3953,7 +3953,7 @@ export function ByMarketTab({ data }: BaseTabProps) {
       buildRegimePerformanceRows(data.runs).filter(
         (row) =>
           row.model !== "unknown" &&
-          (row.promptType === "retail" || row.promptType === "advanced")
+          (row.promptType === "simple" || row.promptType === "advanced")
       ),
     [data.runs]
   );
@@ -4091,7 +4091,7 @@ export function ByMarketTab({ data }: BaseTabProps) {
 
       {/* Period consistency heatmap */}
       {(() => {
-        const gptKeys = ["gpt_advanced", "gpt_retail"];
+        const gptKeys = ["gpt_advanced", "gpt_simple"];
         const gptRuns = data.runs.filter((r) => gptKeys.includes(r.strategy_key ?? ""));
         const indexRuns = data.runs.filter((r) => r.strategy_key === "index");
         const periods = Array.from(new Set(data.runs.map((r) => r.period).filter(Boolean) as string[])).sort();
@@ -5558,7 +5558,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
   const rows = data.behavior;
   const [modelMarketFilter, setModelMarketFilter] = useState("All");
   const [behaviorModelFilter, setBehaviorModelFilter] = useState("All");
-  const [reasoningPromptFilter, setReasoningPromptFilter] = useState<"all" | "retail" | "advanced">("all");
+  const [reasoningPromptFilter, setReasoningPromptFilter] = useState<"all" | "simple" | "advanced">("all");
   const [reasoningSearch, setReasoningSearch] = useState("");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const behaviorDiversificationRef = useRef<HTMLDivElement>(null);
@@ -5583,7 +5583,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
       .filter((run) => {
         const prompt = String(run.prompt_type ?? "");
         const model = String(run.model ?? "").trim();
-        return (prompt === "retail" || prompt === "advanced") && model.length > 0;
+        return (prompt === "simple" || prompt === "advanced") && model.length > 0;
       })
       .map((run) => {
         const model = String(run.model ?? "").trim();
@@ -5599,8 +5599,8 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
           promptLabel:
             run.prompt_type === "advanced"
               ? "Advanced prompt"
-              : run.prompt_type === "retail"
-                ? "Retail prompt"
+              : run.prompt_type === "simple"
+                ? "Simple prompt"
                 : "—",
           marketLabel: MARKET_LABELS[run.market ?? ""] ?? run.market ?? "—",
           periodLabel: run.period ?? "—",
@@ -5675,7 +5675,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
     const models = Array.from(
       new Set(
         runs
-          .filter((run) => run.prompt_type === "retail" || run.prompt_type === "advanced")
+          .filter((run) => run.prompt_type === "simple" || run.prompt_type === "advanced")
           .map((run) => String(run.model ?? "").trim())
           .filter((value) => value.length > 0)
       )
@@ -5731,7 +5731,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
     for (const run of runs) {
       const promptType = String(run.prompt_type ?? "").trim();
       const model = String(run.model ?? "").trim();
-      if (!model || (promptType !== "retail" && promptType !== "advanced")) continue;
+      if (!model || (promptType !== "simple" && promptType !== "advanced")) continue;
       if (modelMarketFilter !== "All" && run.market !== modelMarketFilter) continue;
       if (behaviorModelFilter !== "All" && model !== behaviorModelFilter) continue;
       const key = `${model}::${promptType}`;
@@ -5844,7 +5844,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
 
         const holdingsRows = (
           await Promise.all(
-            ["gpt_retail", "gpt_advanced"].map((strategyKey) =>
+            ["gpt_simple", "gpt_advanced"].map((strategyKey) =>
               fetchAllHoldingsForBehaviorSummary({
                 experiment_id: data.active_experiment_id,
                 strategy_key: strategyKey,
@@ -5857,7 +5857,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
 
         const runRows = runs.filter((run) => {
           const promptType = String(run.prompt_type ?? "").trim();
-          if (promptType !== "retail" && promptType !== "advanced") {
+          if (promptType !== "simple" && promptType !== "advanced") {
             return false;
           }
           if (
@@ -6036,7 +6036,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
     return Array.from(buckets.entries())
       .map(([promptType, bucket]) => ({
         promptType,
-        label: promptType === "advanced" ? "Advanced prompt" : promptType === "retail" ? "Retail prompt" : promptType,
+        label: promptType === "advanced" ? "Advanced prompt" : promptType === "simple" ? "Simple prompt" : promptType,
         sampleCount: bucket.sampleCount,
         recoveryRate: bucket.sampleCount > 0 ? bucket.recovered / bucket.sampleCount : null,
         meanPriorLoss: mean(bucket.priorLosses),
@@ -6100,7 +6100,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
     for (const run of runs) {
       const promptType = String(run.prompt_type ?? "").trim();
       const model = String(run.model ?? "").trim();
-      if ((promptType !== "retail" && promptType !== "advanced") || !model) continue;
+      if ((promptType !== "simple" && promptType !== "advanced") || !model) continue;
       const key = `${run.strategy_key ?? ""}::${run.market ?? ""}::${model}::${promptType}`;
       const bucket = bySequence.get(key) ?? [];
       bucket.push(run);
@@ -6957,7 +6957,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
               {/* Controls */}
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex gap-1 rounded-[12px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] p-1">
-                  {(["all", "retail", "advanced"] as const).map((opt) => (
+                  {(["all", "simple", "advanced"] as const).map((opt) => (
                     <button
                       key={opt}
                       onClick={() => setReasoningPromptFilter(opt)}
@@ -6991,7 +6991,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                     const summary = String((run as Record<string, unknown>).reasoning_summary ?? "");
                     const hasReasoning = summary.length > 0;
                     const isExpanded = expandedKey === key;
-                    const promptLabel = run.prompt_type === "advanced" ? "Advanced" : "Retail";
+                    const promptLabel = run.prompt_type === "advanced" ? "Advanced" : "Simple";
                     const promptColor = run.prompt_type === "advanced" ? COLORS.accent : COLORS.cyan;
                     return (
                       <div
@@ -7322,7 +7322,7 @@ export function RollingRiskTab({ data, runs }: BaseTabProps) {
     queryKey: ["rolling-risk", data.active_experiment_id, marketFilter],
     queryFn: async () => {
       const rows = await Promise.all(
-        ["gpt_retail", "gpt_advanced"].map((strategyKey) =>
+        ["gpt_simple", "gpt_advanced"].map((strategyKey) =>
           fetchEquitySeriesWithPathFallback(
             data.active_experiment_id,
             marketFilter,

@@ -59,7 +59,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       return data.overview_summary.gpt_beat_index_rate;
     }
     const gptRuns = runs.filter(
-      (r) => r.prompt_type === "retail" || r.prompt_type === "advanced"
+      (r) => r.prompt_type === "simple" || r.prompt_type === "advanced"
     );
     if (!gptRuns.length) return null;
     const idxRow = summary.find((s) => s.strategy_key === "index");
@@ -87,10 +87,10 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
   const insights = useMemo(() => {
     const result: Insight[] = [];
     const gptRows = summary.filter(
-      (s) => s.strategy_key === "gpt_retail" || s.strategy_key === "gpt_advanced"
+      (s) => s.strategy_key === "gpt_simple" || s.strategy_key === "gpt_advanced"
     );
     const benchRows = summary.filter(
-      (s) => s.strategy_key !== "gpt_retail" && s.strategy_key !== "gpt_advanced"
+      (s) => s.strategy_key !== "gpt_simple" && s.strategy_key !== "gpt_advanced"
     );
 
     if (gptRows.length > 0 && benchRows.length > 0) {
@@ -146,7 +146,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       data.overview_summary?.mean_gpt_hhi ??
       (() => {
         const gptHhi = runs
-          .filter((r) => r.prompt_type === "retail" || r.prompt_type === "advanced")
+          .filter((r) => r.prompt_type === "simple" || r.prompt_type === "advanced")
           .map((r) => r.hhi)
           .filter((v): v is number => v != null && !isNaN(v));
         return gptHhi.length > 0

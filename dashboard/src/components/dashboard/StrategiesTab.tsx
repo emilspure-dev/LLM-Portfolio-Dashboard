@@ -137,23 +137,23 @@ function runStrategySharpes(runs: RunRow[], strategyKey: string): number[] {
 }
 
 function buildSharpeHistogramBins(
-  retail: number[],
+  simple: number[],
   advanced: number[],
   binWidth: number
 ) {
-  const all = [...retail, ...advanced];
+  const all = [...simple, ...advanced];
   if (all.length === 0) return [];
   const minValue = Math.min(...all);
   const maxValue = Math.max(...all);
   const start = Math.floor((minValue - binWidth) / binWidth) * binWidth;
   const end = Math.ceil((maxValue + binWidth) / binWidth) * binWidth;
-  const bins: Array<{ mid: number; retail: number; advanced: number }> = [];
+  const bins: Array<{ mid: number; simple: number; advanced: number }> = [];
   for (let left = start; left < end; left += binWidth) {
     const right = left + binWidth;
     const mid = left + binWidth / 2;
     bins.push({
       mid,
-      retail: retail.filter((value) => value >= left && value < right).length,
+      simple: simple.filter((value) => value >= left && value < right).length,
       advanced: advanced.filter((value) => value >= left && value < right).length,
     });
   }
@@ -232,13 +232,13 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
   );
 
   const sharpeHistogramModel = useMemo(() => {
-    const retail = runStrategySharpes(localRuns, "gpt_retail");
+    const simple = runStrategySharpes(localRuns, "gpt_simple");
     const advanced = runStrategySharpes(localRuns, "gpt_advanced");
     let binWidth = 0.42;
-    let bins = buildSharpeHistogramBins(retail, advanced, binWidth);
+    let bins = buildSharpeHistogramBins(simple, advanced, binWidth);
     while (bins.length > 42 && binWidth < 2.5) {
       binWidth += 0.14;
-      bins = buildSharpeHistogramBins(retail, advanced, binWidth);
+      bins = buildSharpeHistogramBins(simple, advanced, binWidth);
     }
     const summaryMean = (key: string) => {
       const row = summary.find((item) => item.strategy_key === key);
@@ -247,12 +247,12 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         : null;
     };
     return {
-      retail,
+      simple,
       advanced,
       bins,
       meanMarkers: [
         { key: "adv", value: mean(advanced), label: "GPT (Advanced) mean", color: SHARPE_HIST_COLORS.gptAdvanced, dashed: true },
-        { key: "ret", value: mean(retail), label: "GPT (Retail) mean", color: SHARPE_HIST_COLORS.gptRetail, dashed: true },
+        { key: "sim", value: mean(simple), label: "GPT (Simple) mean", color: SHARPE_HIST_COLORS.gptRetail, dashed: true },
         { key: "ew", value: summaryMean("equal_weight"), label: "Equal Weight mean", color: SHARPE_HIST_COLORS.equalWeight, dashed: false },
         { key: "mv", value: summaryMean("mean_variance"), label: "Mean-Variance mean", color: SHARPE_HIST_COLORS.meanVariance, dashed: false },
         { key: "ix", value: summaryMean("index"), label: "Market Index mean", color: SHARPE_HIST_COLORS.index, dashed: false },
@@ -266,7 +266,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
   }, [localRuns, summary]);
 
   const dispersionStats = useMemo(() => {
-    const retail = sharpeHistogramModel.retail;
+    const simple = sharpeHistogramModel.simple;
     const advanced = sharpeHistogramModel.advanced;
     const build = (values: number[]) => {
       const q1 = percentile(values, 0.25);
@@ -278,7 +278,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
       };
     };
     return {
-      retail: build(retail),
+      simple: build(simple),
       advanced: build(advanced),
     };
   }, [sharpeHistogramModel]);
@@ -286,7 +286,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
   const sharpeOutliers = useMemo(() => {
     const rows = [
       ...localRuns
-        .filter((run) => run.strategy_key === "gpt_retail" || run.strategy_key === "gpt_advanced")
+        .filter((run) => run.strategy_key === "gpt_simple" || run.strategy_key === "gpt_advanced")
         .map((run) => ({
           runLabel:
             run.run_id != null && String(run.run_id).length > 0
@@ -322,7 +322,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
   );
 
   const cumulativePathData = useMemo(() => {
-    const strategyKeys = ["gpt_retail", "gpt_advanced", "index", "equal_weight", "mean_variance", "sixty_forty", "fama_french"];
+    const strategyKeys = ["gpt_simple", "gpt_advanced", "index", "equal_weight", "mean_variance", "sixty_forty", "fama_french"];
     const grouped = new Map<string, Map<string, number[]>>();
     for (const run of localRuns) {
       const strategyKey = String(run.strategy_key ?? "");
@@ -357,7 +357,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
   }, [localRuns]);
 
   const periodContributionRows = useMemo(() => {
-    const targetKeys = ["gpt_retail", "gpt_advanced", "index"];
+    const targetKeys = ["gpt_simple", "gpt_advanced", "index"];
     const grouped = new Map<string, Map<string, number[]>>();
     for (const run of localRuns) {
       const strategyKey = String(run.strategy_key ?? "");
@@ -375,7 +375,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
       .sort((left, right) => left[0].localeCompare(right[0]))
       .map(([period, strategyMap]) => ({
         period,
-        gpt_retail: mean(strategyMap.get("gpt_retail") ?? []),
+        gpt_simple: mean(strategyMap.get("gpt_simple") ?? []),
         gpt_advanced: mean(strategyMap.get("gpt_advanced") ?? []),
         index: mean(strategyMap.get("index") ?? []),
       }));
@@ -553,7 +553,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
           markers anchor those runs against benchmark and GPT mean Sharpe levels.
         </p>
       </div>
-      {sharpeHistogramModel.retail.length > 0 || sharpeHistogramModel.advanced.length > 0 ? (
+      {sharpeHistogramModel.simple.length > 0 || sharpeHistogramModel.advanced.length > 0 ? (
         <Panel>
           <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
             <p className="dashboard-label">Distribution of GPT run Sharpe ratios</p>
@@ -565,7 +565,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             />
           </div>
           <p className="mb-3 text-[11px] leading-5 text-[#8a827a]">
-            The filled areas show the run-level Sharpe distribution for GPT (Retail) and GPT (Advanced). Dashed markers show
+            The filled areas show the run-level Sharpe distribution for GPT (Simple) and GPT (Advanced). Dashed markers show
             GPT means; dotted markers show benchmark means for the same market scope.
           </p>
           <div className="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 border-b border-[rgba(232,224,217,0.65)] pb-3 text-[10px] sm:grid-cols-3 lg:grid-cols-4">
@@ -632,8 +632,8 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                       wrapperStyle={{ fontSize: 11, color: "#5d5754", paddingBottom: 4 }}
                     />
                     <Area
-                      name="GPT (Retail)"
-                      dataKey="retail"
+                      name="GPT (Simple)"
+                      dataKey="simple"
                       type="stepAfter"
                       stroke={SHARPE_HIST_COLORS.gptRetail}
                       strokeWidth={1.5}
@@ -675,7 +675,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             <div className="rounded-[14px] border border-[rgba(232,224,217,0.8)] bg-[rgba(255,255,252,0.62)] px-3 py-2">
               <p className="text-[11px] font-semibold text-[#6f6863]">Distribution width</p>
               <p className="mt-1 text-[11px] text-[#8d857f]">
-                GPT (Retail): sd {dispersionStats.retail.std?.toFixed(2) ?? "—"} | IQR {dispersionStats.retail.iqr?.toFixed(2) ?? "—"}
+                GPT (Simple): sd {dispersionStats.simple.std?.toFixed(2) ?? "—"} | IQR {dispersionStats.simple.iqr?.toFixed(2) ?? "—"}
               </p>
               <p className="text-[11px] text-[#8d857f]">
                 GPT (Advanced): sd {dispersionStats.advanced.std?.toFixed(2) ?? "—"} | IQR {dispersionStats.advanced.iqr?.toFixed(2) ?? "—"}
@@ -790,7 +790,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                 <YAxis tick={CHART_Y_TICK} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v.toFixed(0)}%`} />
                 <Tooltip {...tooltipStyle} formatter={(value: number) => `${value.toFixed(1)}%`} />
                 <Legend wrapperStyle={CHART_LEGEND_WRAPPER} iconType="line" />
-                <Area type="monotone" dataKey="gpt_retail" name="GPT (Retail)" stroke={SHARPE_HIST_COLORS.gptRetail} fill={SHARPE_HIST_COLORS.gptRetail} fillOpacity={0.08} />
+                <Area type="monotone" dataKey="gpt_simple" name="GPT (Simple)" stroke={SHARPE_HIST_COLORS.gptRetail} fill={SHARPE_HIST_COLORS.gptRetail} fillOpacity={0.08} />
                 <Area type="monotone" dataKey="gpt_advanced" name="GPT (Advanced)" stroke={SHARPE_HIST_COLORS.gptAdvanced} fill={SHARPE_HIST_COLORS.gptAdvanced} fillOpacity={0.08} />
                 <Area type="monotone" dataKey="index" name="Market Index" stroke={SHARPE_HIST_COLORS.index} fill={SHARPE_HIST_COLORS.index} fillOpacity={0.03} />
                 <Area type="monotone" dataKey="equal_weight" name="Equal Weight" stroke={SHARPE_HIST_COLORS.equalWeight} fillOpacity={0} fill="transparent" />
@@ -822,7 +822,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                 <YAxis tick={CHART_Y_TICK} axisLine={false} tickLine={false} />
                 <Tooltip {...tooltipStyle} formatter={(value: number | null) => (value != null ? value.toFixed(2) : "—")} />
                 <Legend wrapperStyle={CHART_LEGEND_WRAPPER} />
-                <Bar dataKey="gpt_retail" name="GPT (Retail)" fill={SHARPE_HIST_COLORS.gptRetail} radius={[6, 6, 0, 0]} />
+                <Bar dataKey="gpt_simple" name="GPT (Simple)" fill={SHARPE_HIST_COLORS.gptRetail} radius={[6, 6, 0, 0]} />
                 <Bar dataKey="gpt_advanced" name="GPT (Advanced)" fill={SHARPE_HIST_COLORS.gptAdvanced} radius={[6, 6, 0, 0]} />
                 <Bar dataKey="index" name="Market Index" fill={SHARPE_HIST_COLORS.index} radius={[6, 6, 0, 0]} />
               </BarChart>
@@ -978,14 +978,14 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
         </Panel>
       </div>
 
-      {/* Sharpe dispersion — GPT runs only (retail + advanced prompts) */}
+      {/* Sharpe dispersion — GPT runs only (simple + advanced prompts) */}
       {(() => {
-        const GPT_DISPERSION_KEYS = ["gpt_advanced", "gpt_retail"] as const;
+        const GPT_DISPERSION_KEYS = ["gpt_advanced", "gpt_simple"] as const;
         const gptDispersionRuns = localRuns.filter(
           (r) =>
-            (r.prompt_type === "retail" || r.prompt_type === "advanced") &&
+            (r.prompt_type === "simple" || r.prompt_type === "advanced") &&
             r.strategy_key &&
-            (r.strategy_key === "gpt_advanced" || r.strategy_key === "gpt_retail")
+            (r.strategy_key === "gpt_advanced" || r.strategy_key === "gpt_simple")
         );
         const strategyOrder = GPT_DISPERSION_KEYS.filter((k) =>
           gptDispersionRuns.some((r) => r.strategy_key === k && r.sharpe_ratio != null)
@@ -1019,7 +1019,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
               <FigureExportControls
                 captureRef={strategiesDispersionRef}
                 slug="strategies-sharpe-dispersion-gpt"
-                caption="Performance — Sharpe Dispersion (GPT Retail and GPT Advanced)"
+                caption="Performance — Sharpe Dispersion (GPT Simple and GPT Advanced)"
                 experimentId={data.active_experiment_id}
               />
             </div>
@@ -1087,7 +1087,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
               </ScatterChart>
             </ResponsiveContainer>
             <p className="mt-2 text-[10px] text-[#b4aca5]">
-              GPT strategy runs only (retail and advanced prompts). Each dot is one run; horizontal spread is jitter.
+              GPT strategy runs only (simple and advanced prompts). Each dot is one run; horizontal spread is jitter.
             </p>
             </div>
           </Panel>

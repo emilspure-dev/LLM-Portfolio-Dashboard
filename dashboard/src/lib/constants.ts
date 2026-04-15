@@ -16,6 +16,7 @@ export const CHART_COLORS = [
 ];
 
 export const STRATEGY_COLORS: Record<string, string> = {
+  gpt_simple: COLORS.accent,
   gpt_retail: COLORS.accent,
   gpt_advanced: COLORS.orange,
   mean_variance: COLORS.purple,
@@ -23,6 +24,7 @@ export const STRATEGY_COLORS: Record<string, string> = {
   sixty_forty: COLORS.slate,
   index: COLORS.amber,
   fama_french: "#818CF8",
+  "GPT (Simple)": COLORS.accent,
   "GPT (Retail)": COLORS.accent,
   "GPT (Advanced)": COLORS.orange,
   "Mean-Variance": COLORS.purple,
@@ -30,6 +32,7 @@ export const STRATEGY_COLORS: Record<string, string> = {
   "60/40": COLORS.slate,
   "Market Index": COLORS.amber,
   "Fama-French": "#818CF8",
+  "GPT (Simple Prompting)": COLORS.accent,
   "GPT (Retail prompt)": COLORS.accent,
   "GPT (Advanced Prompting)": COLORS.orange,
   "Mean-variance": COLORS.purple,
@@ -49,7 +52,8 @@ export const MARKET_SHORT_LABELS: Record<string, string> = Object.fromEntries(
 );
 
 export const STRATEGY_DISPLAY_NAMES: Record<string, string> = {
-  gpt_retail: "GPT (Retail)",
+  gpt_simple: "GPT (Simple)",
+  gpt_retail: "GPT (Simple)",
   gpt_advanced: "GPT (Advanced)",
   mean_variance: "Mean-Variance",
   equal_weight: "Equal Weight",
@@ -64,7 +68,8 @@ export const SOURCE_DISPLAY_NAMES: Record<string, string> = {
 };
 
 export const STRATEGY_KEY_MAP: Record<string, string> = {
-  "gpt (retail": "gpt_retail",
+  "gpt (simple": "gpt_simple",
+  "gpt (retail": "gpt_simple",
   "gpt (advanced": "gpt_advanced",
   "mean-variance": "mean_variance",
   "equal weight": "equal_weight",
@@ -104,9 +109,11 @@ export function getStrategyDisplayName(
   if (!raw) return "—";
   const normalized = normalizeStrategyValue(raw);
 
-  if (normalized.includes("gpt") && normalized.includes("retail")) return "GPT (Retail)";
+  if (normalized.includes("gpt") && normalized.includes("simple")) return "GPT (Simple)";
+  if (normalized.includes("gpt") && normalized.includes("retail")) return "GPT (Simple)";
   if (normalized.includes("gpt") && normalized.includes("advanced")) return "GPT (Advanced)";
-  if (normalized.includes("retail prompt")) return "GPT (Retail)";
+  if (normalized.includes("simple prompt")) return "GPT (Simple)";
+  if (normalized.includes("retail prompt")) return "GPT (Simple)";
   if (normalized.includes("advanced prompt")) return "GPT (Advanced)";
   if (normalized.includes("mean") && normalized.includes("variance")) return "Mean-Variance";
   if (normalized.includes("equal") && normalized.includes("weight")) return "Equal Weight";
@@ -119,7 +126,9 @@ export function getStrategyDisplayName(
     .replace("prompting", "Prompting")
     .replace("Advanced Prompting", "Advanced")
     .replace("Advanced prompting", "Advanced")
-    .replace("Retail prompt", "Retail")
+    .replace("Simple Prompting", "Simple")
+    .replace("Simple prompt", "Simple")
+    .replace("Retail prompt", "Simple")
     .replace(" (market-matched)", "")
     .replace(" (buy-and-hold)", "")
     .replace(" proxy", "")

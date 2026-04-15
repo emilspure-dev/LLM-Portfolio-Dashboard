@@ -96,6 +96,44 @@ function readJsonBody(request, limit = 128 * 1024) {
   });
 }
 
+function normalizePromptTypeValue(value) {
+  const normalized = cleanString(value)?.toLowerCase() ?? null;
+  if (normalized == null) {
+    return null;
+  }
+  return normalized === "retail" ? "simple" : normalized;
+}
+
+function normalizeStrategyKeyValue(value) {
+  const normalized = cleanString(value)?.toLowerCase().replace(/-/g, "_") ?? null;
+  if (normalized == null) {
+    return null;
+  }
+  return normalized === "gpt_retail" ? "gpt_simple" : normalized;
+}
+
+function normalizedPromptTypeSql(columnExpression) {
+  return `CASE
+    WHEN LOWER(TRIM(COALESCE(${columnExpression}, ''))) = 'retail' THEN 'simple'
+    ELSE NULLIF(LOWER(TRIM(COALESCE(${columnExpression}, ''))), '')
+  END`;
+}
+
+function normalizedStrategyKeySql(columnExpression) {
+  return `CASE
+    WHEN LOWER(TRIM(COALESCE(${columnExpression}, ''))) = 'gpt_retail' THEN 'gpt_simple'
+    ELSE NULLIF(LOWER(TRIM(COALESCE(${columnExpression}, ''))), '')
+  END`;
+}
+
+function gptPromptTypeFilterSql(columnExpression) {
+  return `${normalizedPromptTypeSql(columnExpression)} IN ('simple', 'advanced')`;
+}
+
+function gptStrategyKeyFilterSql(columnExpression) {
+  return `${normalizedStrategyKeySql(columnExpression)} IN ('gpt_simple', 'gpt_advanced')`;
+}
+
 async function handlePostFactorStyleAnalysis(request, response) {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) {
@@ -149,7 +187,7 @@ async function handlePostFactorStyleAnalysis(request, response) {
     factor_definitions: factorDefs,
   };
 
-  const system = `You are helping interpret an academic empirical-finance backtest dashboard. Focus first on the GPT prompt portfolios (gpt_retail and gpt_advanced): explain what factor strategies they appear to be following, compare them with benchmarks, and discuss how much those tilts may plausibly explain return differences. Be explicit that this is suggestive interpretation, not causal attribution or investment advice. Use Markdown with ## headings and stay under 900 words.`;
+  const system = `You are helping interpret an academic empirical-finance backtest dashboard. Focus first on the GPT prompt portfolios (gpt_simple and gpt_advanced): explain what factor strategies they appear to be following, compare them with benchmarks, and discuss how much those tilts may plausibly explain return differences. Be explicit that this is suggestive interpretation, not causal attribution or investment advice. Use Markdown with ## headings and stay under 900 words.`;
 
   const user = `Analyze the following factor-exposure summary JSON. Use strategy_glossary to explain what each strategy_key represents, but prioritize the GPT prompt portfolios. Answer the question: "What factor strategies are the GPT models following, and how much might that explain their returns?" Distinguish clearly between plausible explanation and proven cause.\n\n${JSON.stringify(userPayload, null, 2)}`;
 
@@ -270,7 +308,12 @@ function withExperimentFilters(url, fieldMap = {}) {
       continue;
     }
 
-    const value = cleanString(url.searchParams.get(queryParam));
+    let value = cleanString(url.searchParams.get(queryParam));
+    if (queryParam === "prompt_type") {
+      value = normalizePromptTypeValue(value);
+    } else if (queryParam === "strategy_key") {
+      value = normalizeStrategyKeyValue(value);
+    }
     addEqualsFilter(clauses, params, column, value, queryParam);
   }
 
@@ -370,17 +413,17 @@ function handleMetaCurrent() {
     ),
     available_strategies: queryAll(`
       SELECT DISTINCT
-        p.strategy_key,
+        ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
         p.strategy,
         p.source_type,
-        NULLIF(p.prompt_type, '') AS prompt_type
+        ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type
       FROM paths p
       WHERE p.experiment_id = :experiment_id
-      ORDER BY p.source_type, p.strategy_key, p.strategy, NULLIF(p.prompt_type, '')
+      ORDER BY p.source_type, strategy_key, p.strategy, prompt_type
     `, { experiment_id: experimentId }),
     available_prompt_types: rowsToValues(
       queryAll(`
-        SELECT DISTINCT NULLIF(prompt_type, '') AS prompt_type
+        SELECT DISTINCT ${normalizedPromptTypeSql("prompt_type")} AS prompt_type
         FROM paths
         WHERE experiment_id = :experiment_id
           AND COALESCE(prompt_type, '') <> ''
@@ -442,7 +485,7 @@ function handleFilters(url) {
     ),
     strategy_keys: rowsToValues(
       queryAll(`
-        SELECT DISTINCT strategy_key
+        SELECT DISTINCT ${normalizedStrategyKeySql("strategy_key")} AS strategy_key
         FROM paths
         WHERE experiment_id = :experiment_id
         ORDER BY strategy_key
@@ -451,7 +494,7 @@ function handleFilters(url) {
     ),
     prompt_types: rowsToValues(
       queryAll(`
-        SELECT DISTINCT NULLIF(prompt_type, '') AS prompt_type
+        SELECT DISTINCT ${normalizedPromptTypeSql("prompt_type")} AS prompt_type
         FROM paths
         WHERE experiment_id = :experiment_id
           AND COALESCE(prompt_type, '') <> ''
@@ -522,7 +565,7 @@ function handleStrategySummary(url) {
     clauses,
     params,
     "s.strategy_key",
-    cleanString(url.searchParams.get("strategy_key")),
+    normalizeStrategyKeyValue(url.searchParams.get("strategy_key")),
     "strategy_key"
   );
   addEqualsFilter(
@@ -536,7 +579,7 @@ function handleStrategySummary(url) {
     clauses,
     params,
     "s.prompt_type",
-    cleanString(url.searchParams.get("prompt_type")),
+    normalizePromptTypeValue(url.searchParams.get("prompt_type")),
     "prompt_type"
   );
 
@@ -558,9 +601,9 @@ function handleStrategySummary(url) {
     gpt_beat_rates AS (
       SELECT
         ppm.experiment_id,
-        p.strategy_key,
+        ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
         p.market,
-        NULLIF(p.prompt_type, '') AS prompt_type,
+        ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
         AVG(
           CASE
             WHEN idx.mean_sharpe IS NOT NULL AND ppm.sharpe_ratio IS NOT NULL
@@ -588,17 +631,17 @@ function handleStrategySummary(url) {
        AND sf.market = p.market
        AND sf.strategy_key = 'sixty_forty'
       WHERE ppm.experiment_id = :experiment_id
-        AND p.strategy_key IN ('gpt_retail', 'gpt_advanced')
-      GROUP BY ppm.experiment_id, p.strategy_key, p.market, NULLIF(p.prompt_type, '')
+        AND ${gptStrategyKeyFilterSql("p.strategy_key")}
+      GROUP BY ppm.experiment_id, strategy_key, p.market, prompt_type
     ),
     s AS (
       SELECT
         ppm.experiment_id,
         p.source_type,
-        p.strategy_key,
+        ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
         p.strategy,
         p.market,
-        NULLIF(p.prompt_type, '') AS prompt_type,
+        ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
         COUNT(*) AS observations,
         AVG(ppm.period_return) AS mean_return,
         AVG(ppm.annualized_return) AS mean_annualized_return,
@@ -614,10 +657,10 @@ function handleStrategySummary(url) {
       GROUP BY
         ppm.experiment_id,
         p.source_type,
-        p.strategy_key,
+        strategy_key,
         p.strategy,
         p.market,
-        NULLIF(p.prompt_type, '')
+        prompt_type
     )
     SELECT
       s.experiment_id,
@@ -660,9 +703,9 @@ function handleFactorStyleSummary(url) {
     WITH path_means AS (
       SELECT
         dpm.path_id,
-        p.strategy_key,
+        ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
         p.strategy,
-        NULLIF(TRIM(COALESCE(p.prompt_type, '')), '') AS prompt_type,
+        ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
         p.market,
         AVG(dpm.portfolio_size_exposure) AS avg_size,
         AVG(dpm.portfolio_value_exposure) AS avg_value,
@@ -674,7 +717,7 @@ function handleFactorStyleSummary(url) {
         ON p.experiment_id = dpm.experiment_id
        AND p.path_id = dpm.path_id
       ${whereClause}
-      GROUP BY dpm.path_id, p.strategy_key, p.strategy, NULLIF(TRIM(COALESCE(p.prompt_type, '')), ''), p.market
+      GROUP BY dpm.path_id, strategy_key, p.strategy, prompt_type, p.market
     )
     SELECT
       strategy_key,
@@ -700,7 +743,7 @@ function handleRunQuality(url) {
     experimentId: "rr.experiment_id",
     market: "rr.market",
     period: "rr.period",
-    prompt_type: "rr.prompt_type",
+    prompt_type: normalizedPromptTypeSql("rr.prompt_type"),
     model: "rr.model",
     failure_type: "rr.failure_type",
     execution_mode: "rr.execution_mode",
@@ -711,7 +754,7 @@ function handleRunQuality(url) {
       rr.experiment_id,
       rr.market,
       rr.period,
-      NULLIF(rr.prompt_type, '') AS prompt_type,
+      ${normalizedPromptTypeSql("rr.prompt_type")} AS prompt_type,
       NULLIF(rr.model, '') AS model,
       rr.failure_type,
       rr.execution_mode,
@@ -725,11 +768,11 @@ function handleRunQuality(url) {
       rr.experiment_id,
       rr.market,
       rr.period,
-      rr.prompt_type,
+      prompt_type,
       rr.model,
       rr.failure_type,
       rr.execution_mode
-    ORDER BY rr.market, rr.period, rr.prompt_type, rr.model, rr.failure_type, rr.execution_mode
+    ORDER BY rr.market, rr.period, prompt_type, rr.model, rr.failure_type, rr.execution_mode
   `, params);
 }
 
@@ -786,7 +829,7 @@ function handleOverviewSummary(url) {
         COUNT(DISTINCT ppm.period) AS period_count,
         AVG(
           CASE
-            WHEN NULLIF(p.prompt_type, '') IN ('retail', 'advanced')
+            WHEN ${gptPromptTypeFilterSql("p.prompt_type")}
               AND idx.mean_sharpe IS NOT NULL
               AND ppm.sharpe_ratio IS NOT NULL
             THEN CASE WHEN ppm.sharpe_ratio > idx.mean_sharpe THEN 100.0 ELSE 0.0 END
@@ -795,7 +838,7 @@ function handleOverviewSummary(url) {
         ) AS gpt_beat_index_rate,
         AVG(
           CASE
-            WHEN NULLIF(p.prompt_type, '') IN ('retail', 'advanced')
+            WHEN ${gptPromptTypeFilterSql("p.prompt_type")}
             THEN COALESCE(rr.hhi, holdings.hhi)
             ELSE NULL
           END
@@ -867,7 +910,7 @@ function handleBehaviorSummary(url) {
       GROUP BY base.experiment_id, base.path_id, base.period
     )
     SELECT
-      NULLIF(p.prompt_type, '') AS prompt_type,
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
       COALESCE(rr_dedup.hhi, holdings.hhi) AS hhi,
       COALESCE(rr_dedup.effective_n_holdings, holdings.effective_n_holdings) AS effective_n_holdings,
       ppm.turnover,
@@ -888,7 +931,7 @@ function handleBehaviorSummary(url) {
      AND holdings.path_id = ppm.path_id
      AND holdings.period = ppm.period
     WHERE ppm.experiment_id = :experiment_id
-      AND NULLIF(p.prompt_type, '') IN ('retail', 'advanced')
+      AND ${gptPromptTypeFilterSql("p.prompt_type")}
   `,
     { experiment_id: experimentId }
   );
@@ -908,7 +951,7 @@ function handleBehaviorSummary(url) {
       : (sorted[middle - 1] + sorted[middle]) / 2;
   };
 
-  return ["advanced", "retail"]
+  return ["simple", "advanced"]
     .map((promptType) => {
       const promptRows = rows.filter((row) => row.prompt_type === promptType);
       if (promptRows.length === 0) {
@@ -964,14 +1007,14 @@ function handleFactorSelectionSummary(url) {
 
   const holdingClauses = [
     "dh.experiment_id = :experiment_id",
-    "p.strategy_key IN ('gpt_retail', 'gpt_advanced')",
+    gptStrategyKeyFilterSql("p.strategy_key"),
   ];
   const holdingParams = { experiment_id: experimentId };
   addEqualsFilter(holdingClauses, holdingParams, "p.market", market, "market");
 
   const runClauses = [
     "ppm.experiment_id = :experiment_id",
-    "p.strategy_key IN ('gpt_retail', 'gpt_advanced')",
+    gptStrategyKeyFilterSql("p.strategy_key"),
   ];
   const runParams = { experiment_id: experimentId };
   addEqualsFilter(runClauses, runParams, "p.market", market, "market");
@@ -979,8 +1022,8 @@ function handleFactorSelectionSummary(url) {
   const holdingsRows = queryAll(
     `
     SELECT
-      p.strategy_key,
-      NULLIF(p.prompt_type, '') AS prompt_type,
+      ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
       NULLIF(p.model, '') AS model,
       NULLIF(p.trajectory_id, '') AS trajectory_id,
       p.run_id,
@@ -1006,8 +1049,8 @@ function handleFactorSelectionSummary(url) {
   const outcomeRows = queryAll(
     `
     SELECT
-      p.strategy_key,
-      NULLIF(p.prompt_type, '') AS prompt_type,
+      ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
       NULLIF(p.model, '') AS model,
       CASE
         WHEN p.run_id IS NOT NULL AND TRIM(CAST(p.run_id AS TEXT)) <> ''
@@ -1016,7 +1059,7 @@ function handleFactorSelectionSummary(url) {
           THEN 'path:' || CAST(ppm.path_id AS TEXT)
         WHEN NULLIF(p.trajectory_id, '') IS NOT NULL
           THEN 'trajectory:' || p.trajectory_id
-        ELSE p.strategy_key || '::' || p.market || '::' || COALESCE(NULLIF(p.prompt_type, ''), 'unknown-prompt') || '::' || COALESCE(NULLIF(p.model, ''), 'unknown-model')
+        ELSE ${normalizedStrategyKeySql("p.strategy_key")} || '::' || p.market || '::' || COALESCE(${normalizedPromptTypeSql("p.prompt_type")}, 'unknown-prompt') || '::' || COALESCE(NULLIF(p.model, ''), 'unknown-model')
       END AS run_key,
       AVG(ppm.sharpe_ratio) AS mean_sharpe,
       AVG(ppm.period_return) AS mean_return
@@ -1026,8 +1069,8 @@ function handleFactorSelectionSummary(url) {
      AND p.path_id = ppm.path_id
     ${buildWhereClause(runClauses)}
     GROUP BY
-      p.strategy_key,
-      NULLIF(p.prompt_type, ''),
+      strategy_key,
+      prompt_type,
       NULLIF(p.model, ''),
       run_key
   `,
@@ -1069,7 +1112,7 @@ function handleBehaviorHoldingsSummary(url) {
 
   const holdingClauses = [
     "dh.experiment_id = :experiment_id",
-    "NULLIF(p.prompt_type, '') IN ('retail', 'advanced')",
+    gptPromptTypeFilterSql("p.prompt_type"),
   ];
   const holdingParams = { experiment_id: experimentId };
   addEqualsFilter(holdingClauses, holdingParams, "p.market", market, "market");
@@ -1077,7 +1120,7 @@ function handleBehaviorHoldingsSummary(url) {
 
   const runClauses = [
     "ppm.experiment_id = :experiment_id",
-    "NULLIF(p.prompt_type, '') IN ('retail', 'advanced')",
+    gptPromptTypeFilterSql("p.prompt_type"),
   ];
   const runParams = { experiment_id: experimentId };
   addEqualsFilter(runClauses, runParams, "p.market", market, "market");
@@ -1086,8 +1129,8 @@ function handleBehaviorHoldingsSummary(url) {
   const holdingsRows = queryAll(
     `
     SELECT
-      p.strategy_key,
-      NULLIF(p.prompt_type, '') AS prompt_type,
+      ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
       NULLIF(p.model, '') AS model,
       NULLIF(p.trajectory_id, '') AS trajectory_id,
       p.run_id,
@@ -1116,9 +1159,9 @@ function handleBehaviorHoldingsSummary(url) {
   const runRows = queryAll(
     `
     SELECT
-      p.strategy_key,
+      ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
       p.market,
-      NULLIF(p.prompt_type, '') AS prompt_type,
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
       NULLIF(p.model, '') AS model,
       NULLIF(p.trajectory_id, '') AS trajectory_id,
       p.run_id,
@@ -1142,9 +1185,9 @@ function handleBehaviorHoldingsSummary(url) {
 function handleEquity(url) {
   const { clauses, params } = withExperimentFilters(url, {
     experimentId: "dpm.experiment_id",
-    strategy_key: "p.strategy_key",
+    strategy_key: normalizedStrategyKeySql("p.strategy_key"),
     market: "p.market",
-    prompt_type: "p.prompt_type",
+    prompt_type: normalizedPromptTypeSql("p.prompt_type"),
     model: "p.model",
     path_id: "dpm.path_id",
   });
@@ -1162,10 +1205,10 @@ function handleEquity(url) {
       dpm.experiment_id,
       dpm.path_id,
       p.source_type,
-      p.strategy_key,
+      ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
       p.strategy,
       p.market,
-      NULLIF(p.prompt_type, '') AS prompt_type,
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
       NULLIF(p.model, '') AS model,
       NULLIF(p.trajectory_id, '') AS trajectory_id,
       p.run_id,
@@ -1210,9 +1253,9 @@ function handleEquity(url) {
 function handleFactorExposures(url) {
   const { clauses, params } = withExperimentFilters(url, {
     experimentId: "dpm.experiment_id",
-    strategy_key: "p.strategy_key",
+    strategy_key: normalizedStrategyKeySql("p.strategy_key"),
     market: "p.market",
-    prompt_type: "p.prompt_type",
+    prompt_type: normalizedPromptTypeSql("p.prompt_type"),
     model: "p.model",
     path_id: "dpm.path_id",
   });
@@ -1230,10 +1273,10 @@ function handleFactorExposures(url) {
       dpm.experiment_id,
       dpm.path_id,
       p.source_type,
-      p.strategy_key,
+      ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
       p.strategy,
       p.market,
-      NULLIF(p.prompt_type, '') AS prompt_type,
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
       NULLIF(p.model, '') AS model,
       NULLIF(p.trajectory_id, '') AS trajectory_id,
       p.run_id,
@@ -1266,9 +1309,9 @@ function handleFactorExposures(url) {
 function handleRegimes(url) {
   const { clauses, params } = withExperimentFilters(url, {
     experimentId: "dpm.experiment_id",
-    strategy_key: "p.strategy_key",
+    strategy_key: normalizedStrategyKeySql("p.strategy_key"),
     market: "p.market",
-    prompt_type: "p.prompt_type",
+    prompt_type: normalizedPromptTypeSql("p.prompt_type"),
     model: "p.model",
     path_id: "dpm.path_id",
   });
@@ -1286,10 +1329,10 @@ function handleRegimes(url) {
       dpm.experiment_id,
       dpm.path_id,
       p.source_type,
-      p.strategy_key,
+      ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
       p.strategy,
       p.market,
-      NULLIF(p.prompt_type, '') AS prompt_type,
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
       NULLIF(p.model, '') AS model,
       NULLIF(p.trajectory_id, '') AS trajectory_id,
       p.run_id,
@@ -1331,9 +1374,9 @@ function handleHoldings(url) {
     experiment_id: resolveExperimentId(url),
   };
 
-  addEqualsFilter(clauses, params, "p.strategy_key", cleanString(url.searchParams.get("strategy_key")), "strategy_key");
+  addEqualsFilter(clauses, params, normalizedStrategyKeySql("p.strategy_key"), normalizeStrategyKeyValue(url.searchParams.get("strategy_key")), "strategy_key");
   addEqualsFilter(clauses, params, "p.market", cleanString(url.searchParams.get("market")), "market");
-  addEqualsFilter(clauses, params, "p.prompt_type", cleanString(url.searchParams.get("prompt_type")), "prompt_type");
+  addEqualsFilter(clauses, params, normalizedPromptTypeSql("p.prompt_type"), normalizePromptTypeValue(url.searchParams.get("prompt_type")), "prompt_type");
   addEqualsFilter(clauses, params, "p.model", cleanString(url.searchParams.get("model")), "model");
   addEqualsFilter(clauses, params, "dh.path_id", cleanString(url.searchParams.get("path_id")), "path_id");
   addEqualsFilter(clauses, params, "dh.period", cleanString(url.searchParams.get("period")), "period");
@@ -1379,10 +1422,10 @@ function handleHoldings(url) {
       dh.experiment_id,
       dh.path_id,
       p.source_type,
-      p.strategy_key,
+      ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
       p.strategy,
       p.market,
-      NULLIF(p.prompt_type, '') AS prompt_type,
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
       NULLIF(p.model, '') AS model,
       NULLIF(p.trajectory_id, '') AS trajectory_id,
       p.run_id,
@@ -1508,10 +1551,10 @@ function buildRunResultsSelectList() {
     "rr.path_id AS path_id",
     "rr.period AS period",
     "p.source_type AS source_type",
-    "p.strategy_key AS strategy_key",
+    `${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key`,
     "p.strategy AS strategy",
     textColumn("market", "p.market"),
-    textColumn("prompt_type", "NULLIF(p.prompt_type, '')"),
+    `${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type`,
     textColumn("model", "NULLIF(p.model, '')"),
     textColumn("trajectory_id", "NULLIF(p.trajectory_id, '')"),
     rrColumnSet.has("run_id")
@@ -1539,15 +1582,18 @@ function handleRunResults(url) {
 
   const marketColumn = rrColumnSet.has("market") ? "rr.market" : "p.market";
   const promptTypeColumn = rrColumnSet.has("prompt_type")
-    ? "rr.prompt_type"
-    : "p.prompt_type";
+    ? normalizedPromptTypeSql("rr.prompt_type")
+    : normalizedPromptTypeSql("p.prompt_type");
   const modelColumn = rrColumnSet.has("model") ? "rr.model" : "p.model";
+  const strategyKeyColumn = rrColumnSet.has("strategy_key")
+    ? normalizedStrategyKeySql("rr.strategy_key")
+    : normalizedStrategyKeySql("p.strategy_key");
 
   addEqualsFilter(clauses, params, marketColumn, cleanString(url.searchParams.get("market")), "market");
   addEqualsFilter(clauses, params, "rr.period", cleanString(url.searchParams.get("period")), "period");
-  addEqualsFilter(clauses, params, promptTypeColumn, cleanString(url.searchParams.get("prompt_type")), "prompt_type");
+  addEqualsFilter(clauses, params, promptTypeColumn, normalizePromptTypeValue(url.searchParams.get("prompt_type")), "prompt_type");
   addEqualsFilter(clauses, params, modelColumn, cleanString(url.searchParams.get("model")), "model");
-  addEqualsFilter(clauses, params, "p.strategy_key", cleanString(url.searchParams.get("strategy_key")), "strategy_key");
+  addEqualsFilter(clauses, params, strategyKeyColumn, normalizeStrategyKeyValue(url.searchParams.get("strategy_key")), "strategy_key");
   addEqualsFilter(clauses, params, "rr.failure_type", cleanString(url.searchParams.get("failure_type")), "failure_type");
   addEqualsFilter(clauses, params, "rr.execution_mode", cleanString(url.searchParams.get("execution_mode")), "execution_mode");
 

@@ -63,9 +63,9 @@ export function buildFactorStyleSummaryFromExposureRows(
   for (const group of byPath.values()) {
     const first = group[0];
     const ptRaw = first.prompt_type?.trim() ?? "";
-    const prompt_type = ptRaw === "" ? null : ptRaw;
+    const prompt_type = ptRaw === "" ? null : normalizePromptType(ptRaw);
     pathAggs.push({
-      strategy_key: first.strategy_key,
+      strategy_key: normalizeStrategyKey(first.strategy_key),
       strategy: first.strategy,
       prompt_type,
       market: first.market,
@@ -163,7 +163,88 @@ export function isValidRun(run: RunRow): boolean {
 }
 
 export function normalizePromptType(value: string | null | undefined): string {
-  return String(value ?? "").trim().toLowerCase() || "unknown";
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return "unknown";
+  return normalized === "retail" ? "simple" : normalized;
+}
+
+export function normalizeStrategyKey(value: string | null | undefined): string {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, "_");
+  if (!normalized) return "unknown";
+  return normalized === "gpt_retail" ? "gpt_simple" : normalized;
+}
+
+function normalizePromptTypeOrNull(value: string | null | undefined): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  return normalizePromptType(raw);
+}
+
+function normalizeStrategyKeyOrNull(value: string | null | undefined): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  return normalizeStrategyKey(raw);
+}
+
+function normalizeFiltersResponse<T extends {
+  strategy_keys: string[];
+  prompt_types: string[];
+}>(filters: T): T {
+  return {
+    ...filters,
+    strategy_keys: Array.from(new Set(filters.strategy_keys.map((value) => normalizeStrategyKey(value)))).sort(),
+    prompt_types: Array.from(new Set(filters.prompt_types.map((value) => normalizePromptType(value)))).sort(),
+  };
+}
+
+function normalizeMetaResponse(meta: MetaCurrentResponse): MetaCurrentResponse {
+  return {
+    ...meta,
+    available_strategies: meta.available_strategies.map((row) => ({
+      ...row,
+      strategy_key: normalizeStrategyKey(row.strategy_key),
+      prompt_type: normalizePromptTypeOrNull(row.prompt_type),
+    })),
+    available_prompt_types: Array.from(
+      new Set(meta.available_prompt_types.map((value) => normalizePromptType(value)))
+    ).sort(),
+  };
+}
+
+function normalizeStrategySummaryApiRows(rows: StrategySummaryApiRow[]): StrategySummaryApiRow[] {
+  return rows.map((row) => ({
+    ...row,
+    strategy_key: normalizeStrategyKey(row.strategy_key),
+    prompt_type: normalizePromptTypeOrNull(row.prompt_type),
+  }));
+}
+
+function normalizeFactorStyleSummaryRows(rows: FactorStyleSummaryRow[]): FactorStyleSummaryRow[] {
+  return rows.map((row) => ({
+    ...row,
+    strategy_key: normalizeStrategyKey(row.strategy_key),
+    prompt_type: normalizePromptTypeOrNull(row.prompt_type),
+  }));
+}
+
+function normalizeBehaviorRows<
+  T extends { prompt_type: string | null | undefined }
+>(rows: T[]): T[] {
+  return rows.map((row) => ({
+    ...row,
+    prompt_type: normalizePromptTypeOrNull(row.prompt_type) ?? "unknown",
+  }));
+}
+
+function normalizeRunRows<T extends RunRow>(rows: T[]): T[] {
+  return rows.map((row) => ({
+    ...row,
+    strategy_key: normalizeStrategyKeyOrNull(row.strategy_key) ?? row.strategy_key,
+    prompt_type: normalizePromptTypeOrNull(row.prompt_type),
+  }));
 }
 
 export function normalizeModelLabel(value: string | null | undefined): string {
@@ -472,12 +553,18 @@ export function buildBenchmarkComparisonRows(runs: RunRow[]) {
   }> = [];
 
   const validRuns = runs.filter(isValidRun);
-  const gptKeys = Array.from(new Set(validRuns.map((run) => run.strategy_key).filter((key): key is string => key === "gpt_retail" || key === "gpt_advanced")));
+  const gptKeys = Array.from(
+    new Set(
+      validRuns
+        .map((run) => normalizeStrategyKey(run.strategy_key))
+        .filter((key): key is string => key === "gpt_simple" || key === "gpt_advanced")
+    )
+  );
   for (const strategyKey of gptKeys) {
     for (const benchmarkKey of benchmarks) {
       const benchmarkMap = new Map<string, number>();
       for (const run of validRuns) {
-        if (run.strategy_key !== benchmarkKey) continue;
+        if (normalizeStrategyKey(run.strategy_key) !== benchmarkKey) continue;
         const sharpe = asFiniteNumber(run.sharpe_ratio);
         if (sharpe == null) continue;
         benchmarkMap.set(`${run.market ?? ""}::${run.period ?? ""}`, sharpe);
@@ -486,7 +573,7 @@ export function buildBenchmarkComparisonRows(runs: RunRow[]) {
       let total = 0;
       const deltas: number[] = [];
       for (const run of validRuns) {
-        if (run.strategy_key !== strategyKey) continue;
+        if (normalizeStrategyKey(run.strategy_key) !== strategyKey) continue;
         const sharpe = asFiniteNumber(run.sharpe_ratio);
         const benchmarkSharpe = benchmarkMap.get(`${run.market ?? ""}::${run.period ?? ""}`);
         if (sharpe == null || benchmarkSharpe == null) continue;
@@ -638,12 +725,12 @@ export function buildFeatureRegression(
 
 export function computeBehavior(runs: RunRow[]) {
   const gptRuns = runs.filter(
-    (r) => r.prompt_type === "retail" || r.prompt_type === "advanced"
+    (r) => normalizePromptType(r.prompt_type) === "simple" || normalizePromptType(r.prompt_type) === "advanced"
   );
   const result = [];
 
-  for (const pt of ["retail", "advanced"] as const) {
-    const sub = gptRuns.filter((r) => r.prompt_type === pt);
+  for (const pt of ["simple", "advanced"] as const) {
+    const sub = gptRuns.filter((r) => normalizePromptType(r.prompt_type) === pt);
     if (sub.length === 0) continue;
 
     const avg = (arr: number[]) =>
@@ -812,10 +899,7 @@ export function buildStrategySummaryView(
 }
 
 function canonicalStrategyKey(key: string | null | undefined): string {
-  return String(key ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/-/g, "_");
+  return normalizeStrategyKey(key);
 }
 
 /**
@@ -974,7 +1058,9 @@ export async function fetchAllRunResults(experimentId: string): Promise<RunRow[]
         page_size: firstPage.page_size,
       })
   );
-  return [firstPage, ...remainingPages].flatMap((page) => page.items as RunRow[]);
+  return normalizeRunRows(
+    [firstPage, ...remainingPages].flatMap((page) => page.items as RunRow[])
+  );
 }
 
 const SAFE_FACTOR_STYLE_FALLBACK_MAX_PATHS = 24;
@@ -1049,7 +1135,7 @@ export async function fetchEvaluationData({
   experimentId,
   meta,
 }: FetchEvaluationDataArgs): Promise<EvaluationData> {
-  const [overviewSummary, filters, summaryRows, behaviorRows, runQuality, periods] = await Promise.all([
+  const [overviewSummary, rawFilters, rawSummaryRows, rawBehaviorRows, rawRunQuality, periods] = await Promise.all([
     getOverviewSummary({ experiment_id: experimentId }).catch((error) => {
       if (apiRouteLikelyMissing(error)) {
         return null;
@@ -1067,6 +1153,11 @@ export async function fetchEvaluationData({
     getRunQuality({ experiment_id: experimentId }),
     getPeriods({ experiment_id: experimentId }),
   ]);
+
+  const filters = normalizeFiltersResponse(rawFilters);
+  const summaryRows = normalizeStrategySummaryApiRows(rawSummaryRows);
+  const behaviorRows = normalizeBehaviorRows(rawBehaviorRows);
+  const runQuality = normalizeBehaviorRows(rawRunQuality);
 
   let factorStyleRows: FactorStyleSummaryRow[] = [];
   let factorStyleError: string | null = null;
@@ -1100,13 +1191,13 @@ export async function fetchEvaluationData({
   }
 
   return {
-    meta,
+    meta: normalizeMetaResponse(meta),
     filters,
     active_experiment_id: experimentId,
     overview_summary: overviewSummary,
     summary_rows: summaryRows,
     summary: buildStrategySummaryView(summaryRows, "All"),
-    factor_style_rows: factorStyleRows,
+    factor_style_rows: normalizeFactorStyleSummaryRows(factorStyleRows),
     factor_style_error: factorStyleError,
     factor_style_from_exposure_fallback: factorStyleFromExposureFallback,
     runs: [],

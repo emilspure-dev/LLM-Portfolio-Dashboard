@@ -126,13 +126,13 @@ export interface FactorSelectionPromptSummaryRow {
 
 export interface FactorSelectionAggregateRow {
   label: string;
-  retail: number;
+  simple: number;
   advanced: number;
 }
 
 export interface FactorSelectionMixRow {
   label: string;
-  retail: number;
+  simple: number;
   advanced: number;
 }
 

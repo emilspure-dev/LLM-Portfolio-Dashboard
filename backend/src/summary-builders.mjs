@@ -10,6 +10,22 @@ function normalizeString(value) {
   return String(value ?? "").trim();
 }
 
+function normalizePromptType(value) {
+  const promptType = normalizeString(value).toLowerCase();
+  if (!promptType) {
+    return "";
+  }
+  return promptType === "retail" ? "simple" : promptType;
+}
+
+function normalizeStrategyKey(value) {
+  const strategyKey = normalizeString(value).toLowerCase().replace(/-/g, "_");
+  if (!strategyKey) {
+    return "";
+  }
+  return strategyKey === "gpt_retail" ? "gpt_simple" : strategyKey;
+}
+
 function normalizeLabel(value) {
   const label = normalizeString(value);
   return label.length > 0 ? label : null;
@@ -46,9 +62,9 @@ export function getRunKey(row) {
   }
 
   return [
-    normalizeString(row.strategy_key) || "unknown-strategy",
+    normalizeStrategyKey(row.strategy_key) || "unknown-strategy",
     normalizeString(row.market) || "unknown-market",
-    normalizeString(row.prompt_type) || "unknown-prompt",
+    normalizePromptType(row.prompt_type) || "unknown-prompt",
     normalizeString(row.model) || "unknown-model",
   ].join("::");
 }
@@ -71,9 +87,9 @@ export function getSelectionPeriodKey(row) {
   }
 
   return [
-    normalizeString(row.strategy_key) || "unknown-strategy",
+    normalizeStrategyKey(row.strategy_key) || "unknown-strategy",
     normalizeString(row.market) || "unknown-market",
-    normalizeString(row.prompt_type) || "unknown-prompt",
+    normalizePromptType(row.prompt_type) || "unknown-prompt",
     normalizeString(row.model) || "unknown-model",
     period,
   ].join("::");
@@ -100,8 +116,8 @@ export function buildFactorSelectionSummary({
       continue;
     }
 
-    const strategyKey = normalizeString(row.strategy_key);
-    const promptType = normalizeString(row.prompt_type);
+    const strategyKey = normalizeStrategyKey(row.strategy_key);
+    const promptType = normalizePromptType(row.prompt_type);
     const runKey = getRunKey(row);
     const profileKey = `${strategyKey}::${promptType}::${runKey}`;
     const profile =
@@ -169,9 +185,9 @@ export function buildFactorSelectionSummary({
 
       const aggregateBucket =
         aggregateBuckets.get(profile.dominant_label) ??
-        { label: profile.dominant_label, retail: 0, advanced: 0 };
-      if (strategyKey === "gpt_retail") {
-        aggregateBucket.retail += 1;
+        { label: profile.dominant_label, simple: 0, advanced: 0 };
+      if (strategyKey === "gpt_simple") {
+        aggregateBucket.simple += 1;
       }
       if (strategyKey === "gpt_advanced") {
         aggregateBucket.advanced += 1;
@@ -183,9 +199,9 @@ export function buildFactorSelectionSummary({
         const share =
           profile.totalSelections > 0 ? count / profile.totalSelections : 0;
         const mixBucket =
-          mixBuckets.get(label) ?? { label, retail: [], advanced: [] };
-        if (strategyKey === "gpt_retail") {
-          mixBucket.retail.push(share);
+          mixBuckets.get(label) ?? { label, simple: [], advanced: [] };
+        if (strategyKey === "gpt_simple") {
+          mixBucket.simple.push(share);
         }
         if (strategyKey === "gpt_advanced") {
           mixBucket.advanced.push(share);
@@ -222,10 +238,10 @@ export function buildFactorSelectionSummary({
     .filter(Boolean);
 
   const run_mix = labelOrder.map((label) => {
-    const bucket = mixBuckets.get(label) ?? { label, retail: [], advanced: [] };
+    const bucket = mixBuckets.get(label) ?? { label, simple: [], advanced: [] };
     return {
       label,
-      retail: mean(bucket.retail) ?? 0,
+      simple: mean(bucket.simple) ?? 0,
       advanced: mean(bucket.advanced) ?? 0,
     };
   });
@@ -242,8 +258,8 @@ export function buildFactorSelectionSummary({
 
   const outcomeBuckets = new Map();
   for (const row of outcomeRows) {
-    const strategyKey = normalizeString(row.strategy_key);
-    const promptType = normalizeString(row.prompt_type);
+    const strategyKey = normalizeStrategyKey(row.strategy_key);
+    const promptType = normalizePromptType(row.prompt_type);
     const dominantLabel = dominantByRunKey.get(
       `${strategyKey}::${promptType}::${normalizeString(row.run_key)}`
     );
@@ -313,9 +329,9 @@ export function buildBehaviorHoldingsSummary({
   const grouped = new Map();
   const totals = new Map();
   for (const row of holdingsRows) {
-    const promptType = normalizeString(row.prompt_type);
+    const promptType = normalizePromptType(row.prompt_type);
     const sector = normalizeString(row.sector) || "Unknown";
-    if (promptType !== "retail" && promptType !== "advanced") {
+    if (promptType !== "simple" && promptType !== "advanced") {
       continue;
     }
     const key = `${promptType}::${sector}`;

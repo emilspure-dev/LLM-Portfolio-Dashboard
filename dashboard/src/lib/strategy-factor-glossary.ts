@@ -4,15 +4,15 @@ export const STRATEGY_GLOSSARY: Record<
   string,
   { title: string; summary: string }
 > = {
-  gpt_retail: {
-    title: "GPT (Retail)",
+  gpt_simple: {
+    title: "GPT (Simple)",
     summary:
-      "Large-language-model chooses portfolio weights using a shorter, retail-style prompt. Each run can differ by model draw and period; exposures shown are averages over paths and trading days. Compare to benchmarks to see whether the LLM tilts systematically toward size, value, momentum, defensive, or quality factors versus simple rules.",
+      "Large-language-model chooses portfolio weights using a shorter, simple prompt. Each run can differ by model draw and period; exposures shown are averages over paths and trading days. Compare to benchmarks to see whether the LLM tilts systematically toward size, value, momentum, defensive, or quality factors versus simple rules.",
   },
   gpt_advanced: {
     title: "GPT (Advanced)",
     summary:
-      "Same LLM setup with a richer prompt (more context and instructions). Use this row to see if additional prompting changes average factor loadings relative to the retail prompt and to deterministic baselines.",
+      "Same LLM setup with a richer prompt (more context and instructions). Use this row to see if additional prompting changes average factor loadings relative to the simple prompt and to deterministic baselines.",
   },
   mean_variance: {
     title: "Mean-Variance",

@@ -198,7 +198,7 @@ export function DashboardSidebar({
         <p className="dashboard-label mb-3">Research Scope</p>
         <div className="space-y-1.5 text-[12px] leading-relaxed text-[#9c948c]">
           <p>Markets: S&amp;P 500, DAX 40, Nikkei 225</p>
-          <p>Prompts: GPT (Retail), GPT (Advanced)</p>
+          <p>Prompts: GPT (Simple), GPT (Advanced)</p>
           <p>Benchmarks: Mean-Variance, Equal Weight, 60/40, Market Index, Fama-French</p>
         </div>
         <p className="mt-3 border-t border-[rgba(232,224,217,0.75)] pt-3 text-[10px] leading-4 text-[#c4bcb4]">

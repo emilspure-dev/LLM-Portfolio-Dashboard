@@ -11,8 +11,8 @@ test("buildFactorSelectionSummary compacts holdings into prompt-level summaries"
     factorKey: "value",
     holdingsRows: [
       {
-        strategy_key: "gpt_retail",
-        prompt_type: "retail",
+        strategy_key: "gpt_simple",
+        prompt_type: "simple",
         run_id: "r1",
         path_id: "p1",
         date: "2024-01-01",
@@ -21,8 +21,8 @@ test("buildFactorSelectionSummary compacts holdings into prompt-level summaries"
         value_label: "Value",
       },
       {
-        strategy_key: "gpt_retail",
-        prompt_type: "retail",
+        strategy_key: "gpt_simple",
+        prompt_type: "simple",
         run_id: "r1",
         path_id: "p1",
         date: "2024-01-02",
@@ -53,8 +53,8 @@ test("buildFactorSelectionSummary compacts holdings into prompt-level summaries"
     ],
     outcomeRows: [
       {
-        strategy_key: "gpt_retail",
-        prompt_type: "retail",
+        strategy_key: "gpt_simple",
+        prompt_type: "simple",
         model: "gpt-4o-mini",
         run_key: "run:r1",
         mean_sharpe: 1.2,
@@ -84,8 +84,8 @@ test("buildFactorSelectionSummary compacts holdings into prompt-level summaries"
 
   assert.equal(summary.prompt_summaries.length, 2);
   assert.deepEqual(summary.aggregate_counts, [
-    { label: "Growth", retail: 0, advanced: 1 },
-    { label: "Value", retail: 1, advanced: 0 },
+    { label: "Growth", simple: 0, advanced: 1 },
+    { label: "Value", simple: 1, advanced: 0 },
   ]);
   assert.equal(summary.outcome_linkage[0].dominant_label, "Growth");
   assert.equal(summary.regime_context[0].market_regime_label, "Bull");
@@ -95,7 +95,7 @@ test("buildBehaviorHoldingsSummary returns compact sector and asset summaries", 
   const summary = buildBehaviorHoldingsSummary({
     holdingsRows: [
       {
-        prompt_type: "retail",
+        prompt_type: "simple",
         sector: "Tech",
         market: "us",
         ticker: "AAPL",
@@ -105,7 +105,7 @@ test("buildBehaviorHoldingsSummary returns compact sector and asset summaries", 
         period: "2024H1",
       },
       {
-        prompt_type: "retail",
+        prompt_type: "simple",
         sector: "Tech",
         market: "us",
         ticker: "AAPL",
@@ -128,14 +128,14 @@ test("buildBehaviorHoldingsSummary returns compact sector and asset summaries", 
     runRows: [
       {
         market: "us",
-        prompt_type: "retail",
+        prompt_type: "simple",
         run_id: "r1",
         path_id: "p1",
         period: "2024H1",
       },
       {
         market: "us",
-        prompt_type: "retail",
+        prompt_type: "simple",
         run_id: "r2",
         path_id: "p2",
         period: "2024H1",
