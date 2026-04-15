@@ -271,7 +271,7 @@ export default function Index() {
         ) : (
           <>
             <div className="dashboard-tab-bar mt-4">
-              <div className="flex min-w-0 gap-1 overflow-x-auto">
+              <div className="flex flex-wrap gap-1">
                 {TAB_NAMES.map((name, index) => (
                   <button
                     key={name}
