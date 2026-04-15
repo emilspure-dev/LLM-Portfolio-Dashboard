@@ -157,11 +157,11 @@
   }
 
   .dashboard-stat {
-    background: #ffffff;
-    border: 1px solid #d9d9d9;
+    background: transparent;
+    border: none;
     border-radius: 0;
-    padding: 0.9rem 1rem;
-    min-height: 82px;
+    padding: 0.25rem 0.25rem;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
