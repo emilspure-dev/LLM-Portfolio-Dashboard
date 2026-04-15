@@ -92,7 +92,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         });
       } catch (error) {
         if (apiRouteLikelyMissing(error)) {
-          return [];
+          return null;
         }
         throw error;
       }
@@ -248,24 +248,6 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       return (b.overallSharpe ?? -Infinity) - (a.overallSharpe ?? -Infinity);
     });
   }, [data.summary_rows]);
-
-  const fallbackSharpeBarData = useMemo(() => {
-    if (strategyGroups?.length) {
-      return strategyGroups.map((group) => ({
-        barKey: group.key,
-        Strategy: group.label,
-        strategy_key: group.strategyKey,
-        mean_sharpe: group.overallSharpe,
-      }));
-    }
-
-    return summary.map((row) => ({
-      barKey: `${row.strategy_key}::${row.markets?.[0] ?? "all"}`,
-      Strategy: getStrategyDisplayName(row.Strategy, row.strategy_key),
-      strategy_key: row.strategy_key,
-      mean_sharpe: row.mean_sharpe,
-    }));
-  }, [strategyGroups, summary]);
 
   const dailySharpeChart = useMemo(() => {
     const rows = dailySharpeQuery.data ?? [];
@@ -425,56 +407,10 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
               </LineChart>
             </ResponsiveContainer>
           </div>
-        ) : fallbackSharpeBarData.length > 0 ? (
-          <div ref={overviewDailySharpeRef} className="min-w-0">
-            <p className="mb-3 text-[12px] leading-5 text-[#8f8780]">
-              Daily path summary is not available on this API build yet, so this fallback
-              shows mean Sharpe across all periods by strategy.
-            </p>
-            <ResponsiveContainer width="100%" height={320}>
-              <BarChart
-                data={fallbackSharpeBarData}
-                margin={{ top: 6, right: 12, left: 12, bottom: 88 }}
-              >
-                <CartesianGrid
-                  stroke="rgba(220, 213, 206, 0.7)"
-                  vertical={false}
-                  strokeDasharray="3 6"
-                />
-                <XAxis
-                  dataKey="Strategy"
-                  tick={{ fontSize: 9, fill: "#737373" }}
-                  angle={-32}
-                  textAnchor="end"
-                  interval={0}
-                  height={96}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 10, fill: "#aca49d" }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  {...tooltipStyle}
-                  formatter={(value: number | null) =>
-                    value != null && Number.isFinite(value) ? value.toFixed(2) : "—"
-                  }
-                />
-                <ReferenceLine
-                  y={0}
-                  stroke="rgba(192, 180, 170, 0.9)"
-                  strokeDasharray="3 6"
-                />
-                <Bar dataKey="mean_sharpe" radius={[10, 10, 0, 0]}>
-                  {fallbackSharpeBarData.map((row) => (
-                    <Cell key={row.barKey} fill={getStrategyColor(row.strategy_key)} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        ) : dailySharpeQuery.data === null ? (
+          <p className="py-20 text-center text-[12px] text-[#737373]">
+            Daily Sharpe history is not available on this backend yet.
+          </p>
         ) : (
           <p className="py-20 text-center text-[12px] text-[#737373]">
             No Sharpe series are available for this experiment.
