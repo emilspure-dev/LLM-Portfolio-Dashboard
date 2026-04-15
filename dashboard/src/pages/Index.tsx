@@ -91,22 +91,6 @@ function ErrorPanel({ message, onRetry }: ErrorPanelProps) {
   );
 }
 
-function formatCompletedAt(value: string | null | undefined) {
-  if (!value) {
-    return "Unknown completion";
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-
-  return parsed.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
-
 function computeCoverageYears(
   periods: Array<{ period_start_date: string; period_end_date: string }>
 ) {
@@ -217,7 +201,6 @@ export default function Index() {
     !errorMessage &&
     metaQuery.status === "success" &&
     !resolvedExperimentId;
-  const completedAtLabel = formatCompletedAt(metaQuery.data?.latest_completed_at);
   const runCount =
     allRuns.length > 0
       ? allRuns.length
@@ -300,10 +283,6 @@ export default function Index() {
               ))}
             </div>
           </figure>
-
-          <div className="mt-6 flex flex-wrap items-center gap-2">
-            <span className="dashboard-pill">Completed {completedAtLabel}</span>
-          </div>
 
           {healthQuery.data &&
             healthQuery.data.routes?.factor_style !== true &&
