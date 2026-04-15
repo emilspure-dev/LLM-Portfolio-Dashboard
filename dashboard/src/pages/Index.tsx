@@ -107,17 +107,34 @@ function formatCompletedAt(value: string | null | undefined) {
   });
 }
 
-function countDistinctYears(periods: string[]) {
-  const years = new Set(
-    periods
-      .map((period) => {
-        const match = String(period).match(/\b(20\d{2})\b/);
-        return match ? match[1] : null;
-      })
-      .filter((year): year is string => Boolean(year))
-  );
+function computeCoverageYears(
+  periods: Array<{ period_start_date: string; period_end_date: string }>
+) {
+  const timestamps = periods
+    .flatMap((period) => {
+      const start = new Date(period.period_start_date);
+      const end = new Date(period.period_end_date);
+      return [
+        Number.isNaN(start.getTime()) ? null : start.getTime(),
+        Number.isNaN(end.getTime()) ? null : end.getTime(),
+      ];
+    })
+    .filter((value): value is number => value != null);
 
-  return years.size;
+  if (timestamps.length === 0) {
+    return null;
+  }
+
+  const minTime = Math.min(...timestamps);
+  const maxTime = Math.max(...timestamps);
+  const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
+
+  return (maxTime - minTime) / msPerYear;
+}
+
+function formatYears(value: number) {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1);
 }
 
 export default function Index() {
@@ -208,17 +225,19 @@ export default function Index() {
   const periodCount =
     data?.filters.periods.length ?? metaQuery.data?.available_periods.length ?? 0;
   const yearCount = useMemo(() => {
-    const periods = data?.filters.periods ?? metaQuery.data?.available_periods ?? [];
-    const distinctYears = countDistinctYears(periods);
-    return distinctYears > 0 ? distinctYears : periodCount;
-  }, [data?.filters.periods, metaQuery.data?.available_periods, periodCount]);
+    const coverageYears = computeCoverageYears(data?.periods ?? []);
+    if (coverageYears != null && Number.isFinite(coverageYears) && coverageYears > 0) {
+      return coverageYears;
+    }
+    return periodCount / 2;
+  }, [data?.periods, periodCount]);
   const marketCount =
     data?.filters.markets.length ?? metaQuery.data?.available_markets.length ?? 0;
   const modelCount =
     data?.filters.models.length ?? metaQuery.data?.available_models.length ?? 0;
   const headlineStats = [
     { label: "Runs", value: runCount.toLocaleString() },
-    { label: "Years", value: yearCount.toLocaleString() },
+    { label: "Years", value: formatYears(yearCount) },
     { label: "Markets", value: marketCount.toLocaleString() },
     { label: "Models", value: modelCount.toLocaleString() },
   ];
