@@ -217,16 +217,16 @@ export default function Index() {
   return (
     <div className="min-h-screen">
       <main className="dashboard-board mx-auto max-w-[1520px] px-4 py-5 md:px-8 md:py-8">
-        <header className="border-b border-[#ececec] pb-6">
+        <header className="border-b border-[#111111] pb-6">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 flex-1">
               <p className="dashboard-topline">Empirical Research</p>
-              <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.03em] text-[#0a0a0a] md:text-[36px]">
+              <h1 className="mt-3 text-[34px] font-semibold leading-[1.15] text-[#111111] md:text-[44px]">
                 LLM Portfolio Evaluation Dashboard
               </h1>
-              <p className="mt-2 max-w-3xl text-[14px] leading-6 text-[#525252]">
-                Empirical study of AI-based portfolio construction and rebalancing
-                for retail investors.
+              <p className="mt-3 max-w-3xl text-[15px] leading-[1.6] text-[#333333]">
+                An empirical study of AI-based portfolio construction and
+                rebalancing for retail investors.
               </p>
             </div>
 

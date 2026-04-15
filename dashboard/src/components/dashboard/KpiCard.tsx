@@ -12,21 +12,22 @@ export function KpiCard({ label, value, color, sub, className }: KpiCardProps) {
   return (
     <div
       className={cn(
-        "dashboard-panel min-h-[108px] rounded-[8px] px-4 py-4 animate-fade-in",
+        "dashboard-panel min-h-[100px] rounded-[2px] px-4 py-3 animate-fade-in",
         className
       )}
     >
-      <p className="dashboard-label">
-        {label}
-      </p>
+      <p className="dashboard-label">{label}</p>
       <p
-        className="mt-3 text-[24px] font-medium leading-none tracking-[-0.04em] text-[#0a0a0a]"
-        style={{ color }}
+        className="mt-2 text-[26px] font-medium leading-none text-[#111111]"
+        style={{
+          color,
+          fontVariantNumeric: "oldstyle-nums tabular-nums",
+        }}
       >
         {value}
       </p>
       {sub && (
-        <p className="mt-2.5 text-[12px] leading-4 text-[#737373]">{sub}</p>
+        <p className="mt-2 text-[12.5px] leading-5 text-[#555555]">{sub}</p>
       )}
     </div>
   );
