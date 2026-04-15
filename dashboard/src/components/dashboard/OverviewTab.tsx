@@ -8,7 +8,7 @@ import { KpiCard } from "./KpiCard";
 import { InsightCard } from "./InsightCard";
 import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
-import { getExpandingSharpeSummary } from "@/lib/api-client";
+import { getCumulativeReturnSummary } from "@/lib/api-client";
 import {
   MARKET_LABELS,
   getMarketShortLabel,
@@ -44,6 +44,15 @@ function formatChartTooltipDate(value: string) {
   });
 }
 
+function formatReturnPercent(value: number | string | null | undefined, decimals = 1) {
+  const numericValue =
+    typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(numericValue)) {
+    return "—";
+  }
+  return `${(numericValue * 100).toFixed(decimals)}%`;
+}
+
 interface OverviewTabProps {
   data: EvaluationData;
   runs: RunRow[];
@@ -51,13 +60,13 @@ interface OverviewTabProps {
 
 export function OverviewTab({ data, runs }: OverviewTabProps) {
   const { summary } = data;
-  const overviewExpandingSharpeRef = useRef<HTMLDivElement>(null);
+  const overviewAccumulatedReturnRef = useRef<HTMLDivElement>(null);
   const overviewBeatIndexRef = useRef<HTMLDivElement>(null);
-  const expandingSharpeQuery = useQuery({
-    queryKey: ["overview-expanding-sharpe", data.active_experiment_id],
+  const cumulativeReturnQuery = useQuery({
+    queryKey: ["overview-cumulative-return", data.active_experiment_id],
     queryFn: async () => {
       try {
-        return await getExpandingSharpeSummary({
+        return await getCumulativeReturnSummary({
           experiment_id: data.active_experiment_id,
         });
       } catch (error) {
@@ -219,8 +228,8 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     });
   }, [data.summary_rows]);
 
-  const expandingSharpeChart = useMemo(() => {
-    const rows = expandingSharpeQuery.data ?? [];
+  const cumulativeReturnChart = useMemo(() => {
+    const rows = cumulativeReturnQuery.data ?? [];
     if (rows.length === 0) {
       return {
         chartRows: [] as Array<Record<string, string | number | null>>,
@@ -271,7 +280,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     for (const item of series) {
       for (const point of item.rows) {
         const bucket = chartMap.get(point.date) ?? { date: point.date };
-        bucket[item.key] = point.mean_expanding_sharpe;
+        bucket[item.key] = point.mean_cumulative_return;
         chartMap.set(point.date, bucket);
       }
     }
@@ -282,7 +291,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       ),
       series: series.map(({ key, label, color }) => ({ key, label, color })),
     };
-  }, [expandingSharpeQuery.data, summary]);
+  }, [cumulativeReturnQuery.data, summary]);
 
   const tooltipStyle = {
     contentStyle: {
@@ -302,29 +311,29 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="dashboard-label">Expanding Sharpe by Strategy</p>
+            <p className="dashboard-label">Accumulated Return by Strategy</p>
             <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
-              Expanding Sharpe computed from daily excess returns and annualized to
-              252 trading days, using all observations up to each date.
+              Mean cumulative return over time, aggregated to one line per strategy
+              and weighted by path count across all available markets and prompt types.
             </p>
           </div>
           <FigureExportControls
-            captureRef={overviewExpandingSharpeRef}
-            slug="overview-expanding-sharpe-by-strategy"
-            caption="Overview — expanding Sharpe by strategy across all periods"
+            captureRef={overviewAccumulatedReturnRef}
+            slug="overview-accumulated-return-by-strategy"
+            caption="Overview — accumulated return by strategy across all periods"
             experimentId={data.active_experiment_id}
           />
         </div>
 
-        {expandingSharpeQuery.isLoading ? (
+        {cumulativeReturnQuery.isLoading ? (
           <p className="py-20 text-center text-[12px] text-[#737373]">
-            Loading expanding Sharpe overview…
+            Loading accumulated return overview…
           </p>
-        ) : expandingSharpeChart.chartRows.length > 0 ? (
-          <div ref={overviewExpandingSharpeRef} className="min-w-0">
+        ) : cumulativeReturnChart.chartRows.length > 0 ? (
+          <div ref={overviewAccumulatedReturnRef} className="min-w-0">
             <ResponsiveContainer width="100%" height={340}>
               <LineChart
-                data={expandingSharpeChart.chartRows}
+                data={cumulativeReturnChart.chartRows}
                 margin={{ top: 8, right: 16, left: 6, bottom: 8 }}
               >
                 <CartesianGrid
@@ -341,6 +350,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   tickLine={false}
                 />
                 <YAxis
+                  tickFormatter={(value) => formatReturnPercent(value, 0)}
                   tick={{ fontSize: 10, fill: "#aca49d" }}
                   axisLine={false}
                   tickLine={false}
@@ -349,7 +359,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   {...tooltipStyle}
                   labelFormatter={(value) => formatChartTooltipDate(String(value))}
                   formatter={(value: number | null, _name, item) => [
-                    value != null && Number.isFinite(value) ? value.toFixed(2) : "—",
+                    formatReturnPercent(value, 1),
                     item?.name ?? "",
                   ]}
                 />
@@ -359,7 +369,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   stroke="rgba(192, 180, 170, 0.9)"
                   strokeDasharray="3 6"
                 />
-                {expandingSharpeChart.series.map((series) => (
+                {cumulativeReturnChart.series.map((series) => (
                   <Line
                     key={series.key}
                     type="monotone"
@@ -374,13 +384,13 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
               </LineChart>
             </ResponsiveContainer>
           </div>
-        ) : expandingSharpeQuery.data === null ? (
+        ) : cumulativeReturnQuery.data === null ? (
           <p className="py-20 text-center text-[12px] text-[#737373]">
-            Expanding Sharpe history is not available on this backend yet.
+            Accumulated return history is not available on this backend yet.
           </p>
         ) : (
           <p className="py-20 text-center text-[12px] text-[#737373]">
-            No expanding Sharpe series are available for this experiment.
+            No accumulated return series are available for this experiment.
           </p>
         )}
       </div>

@@ -135,8 +135,8 @@ function gptStrategyKeyFilterSql(columnExpression) {
   return `${normalizedStrategyKeySql(columnExpression)} IN ('gpt_simple', 'gpt_advanced')`;
 }
 
-const EXPANDING_SHARPE_CACHE_TTL_MS = 10 * 60 * 1000;
-const expandingSharpeCache = new Map();
+const TIME_SERIES_CACHE_TTL_MS = 10 * 60 * 1000;
+const timeSeriesCache = new Map();
 
 function toSqliteLiteral(value) {
   if (value == null) {
@@ -162,7 +162,7 @@ function inlineSqlParams(sql, params) {
   });
 }
 
-function queryExpandingSharpeRows(sql, params) {
+function queryTimeSeriesRows(sql, params, valueField) {
   try {
     const output = execFileSync(
       process.env.SQLITE3_BIN?.trim() || "/usr/bin/sqlite3",
@@ -180,11 +180,11 @@ function queryExpandingSharpeRows(sql, params) {
     }
 
     return trimmed.split("\n").map((line) => {
-      const [date, strategy_key, meanExpandingSharpeRaw, pathCountRaw] = line.split("\t");
-      const meanExpandingSharpe =
-        meanExpandingSharpeRaw == null || meanExpandingSharpeRaw === ""
+      const [date, strategy_key, valueRaw, pathCountRaw] = line.split("\t");
+      const value =
+        valueRaw == null || valueRaw === ""
           ? null
-          : Number(meanExpandingSharpeRaw);
+          : Number(valueRaw);
       const pathCount = pathCountRaw == null || pathCountRaw === ""
         ? 0
         : Number(pathCountRaw);
@@ -192,9 +192,9 @@ function queryExpandingSharpeRows(sql, params) {
       return {
         date,
         strategy_key,
-        mean_expanding_sharpe:
-          meanExpandingSharpe != null && Number.isFinite(meanExpandingSharpe)
-            ? meanExpandingSharpe
+        [valueField]:
+          value != null && Number.isFinite(value)
+            ? value
             : null,
         path_count: Number.isFinite(pathCount) ? pathCount : 0,
       };
@@ -812,17 +812,17 @@ function handleFactorStyleSummary(url) {
   );
 }
 
-function handleDailySharpeSummary(url) {
+function handleCumulativeReturnSummary(url) {
   const cacheKey = url.toString();
-  const cached = expandingSharpeCache.get(cacheKey);
+  const cached = timeSeriesCache.get(cacheKey);
   if (
     cached &&
-    Date.now() - cached.createdAt <= EXPANDING_SHARPE_CACHE_TTL_MS
+    Date.now() - cached.createdAt <= TIME_SERIES_CACHE_TTL_MS
   ) {
     return cached.rows;
   }
 
-  const clauses = ["vsd.experiment_id = :experiment_id"];
+  const clauses = ["vcr.experiment_id = :experiment_id"];
   const params = {
     experiment_id: resolveExperimentId(url),
   };
@@ -830,28 +830,21 @@ function handleDailySharpeSummary(url) {
   addEqualsFilter(
     clauses,
     params,
-    normalizedStrategyKeySql("vsd.strategy_key"),
+    normalizedStrategyKeySql("vcr.strategy_key"),
     normalizeStrategyKeyValue(url.searchParams.get("strategy_key")),
     "strategy_key"
   );
   addEqualsFilter(
     clauses,
     params,
-    "vsd.market",
+    "vcr.market",
     cleanString(url.searchParams.get("market")),
     "market"
   );
   addEqualsFilter(
     clauses,
     params,
-    "vsd.period",
-    cleanString(url.searchParams.get("period")),
-    "period"
-  );
-  addEqualsFilter(
-    clauses,
-    params,
-    normalizedPromptTypeSql("vsd.prompt_type"),
+    normalizedPromptTypeSql("vcr.prompt_type"),
     normalizePromptTypeValue(url.searchParams.get("prompt_type")),
     "prompt_type"
   );
@@ -859,7 +852,7 @@ function handleDailySharpeSummary(url) {
   addDateRangeFilter(
     clauses,
     params,
-    "vsd.date",
+    "vcr.date",
     cleanString(url.searchParams.get("date_from")),
     cleanString(url.searchParams.get("date_to"))
   );
@@ -868,40 +861,40 @@ function handleDailySharpeSummary(url) {
 
   const sql = `
     SELECT
-      vsd.date,
-      NULLIF(LOWER(TRIM(COALESCE(vsd.strategy_key, ''))), '') AS strategy_key,
-      SUM(vsd.mean_expanding_sharpe * COALESCE(vsd.path_count, 0)) * 1.0
-        / NULLIF(SUM(COALESCE(vsd.path_count, 0)), 0) AS mean_expanding_sharpe,
-      SUM(COALESCE(vsd.path_count, 0)) AS path_count
-    FROM vw_strategy_sharpe_daily vsd
+      vcr.date,
+      NULLIF(LOWER(TRIM(COALESCE(vcr.strategy_key, ''))), '') AS strategy_key,
+      SUM(vcr.mean_cumulative_return * COALESCE(vcr.path_count, 0)) * 1.0
+        / NULLIF(SUM(COALESCE(vcr.path_count, 0)), 0) AS mean_cumulative_return,
+      SUM(COALESCE(vcr.path_count, 0)) AS path_count
+    FROM vw_strategy_cumulative_return_daily vcr
     ${whereClause}
     GROUP BY
-      vsd.date,
-      vsd.strategy_key
+      vcr.date,
+      vcr.strategy_key
   `;
 
-  const rows = queryExpandingSharpeRows(sql, params);
+  const rows = queryTimeSeriesRows(sql, params, "mean_cumulative_return");
 
   const grouped = new Map();
   for (const row of rows) {
     const strategyKey = normalizeStrategyKeyValue(row.strategy_key) ?? row.strategy_key;
     const pathCount = Number(row.path_count ?? 0);
-    const sharpe =
-      typeof row.mean_expanding_sharpe === "number" &&
-      Number.isFinite(row.mean_expanding_sharpe)
-        ? row.mean_expanding_sharpe
+    const cumulativeReturn =
+      typeof row.mean_cumulative_return === "number" &&
+      Number.isFinite(row.mean_cumulative_return)
+        ? row.mean_cumulative_return
         : null;
 
     const bucketKey = `${row.date}::${strategyKey}`;
     const bucket = grouped.get(bucketKey) ?? {
       date: row.date,
       strategy_key: strategyKey,
-      weightedSharpeSum: 0,
+      weightedReturnSum: 0,
       path_count: 0,
     };
 
-    if (sharpe != null && Number.isFinite(pathCount) && pathCount > 0) {
-      bucket.weightedSharpeSum += sharpe * pathCount;
+    if (cumulativeReturn != null && Number.isFinite(pathCount) && pathCount > 0) {
+      bucket.weightedReturnSum += cumulativeReturn * pathCount;
       bucket.path_count += pathCount;
     }
 
@@ -912,8 +905,8 @@ function handleDailySharpeSummary(url) {
     .map((row) => ({
       date: row.date,
       strategy_key: row.strategy_key,
-      mean_expanding_sharpe:
-        row.path_count > 0 ? row.weightedSharpeSum / row.path_count : null,
+      mean_cumulative_return:
+        row.path_count > 0 ? row.weightedReturnSum / row.path_count : null,
       path_count: row.path_count,
     }))
     .sort((left, right) => {
@@ -923,7 +916,7 @@ function handleDailySharpeSummary(url) {
       return String(left.date).localeCompare(String(right.date));
     });
 
-  expandingSharpeCache.set(cacheKey, {
+  timeSeriesCache.set(cacheKey, {
     createdAt: Date.now(),
     rows: result,
   });
@@ -1875,7 +1868,8 @@ const routes = new Map([
   ["GET /api/meta/current", () => handleMetaCurrent()],
   ["GET /api/filters", ({ url }) => handleFilters(url)],
   ["GET /api/summary/overview", ({ url }) => handleOverviewSummary(url)],
-  ["GET /api/summary/daily-sharpe", ({ url }) => handleDailySharpeSummary(url)],
+  ["GET /api/summary/daily-sharpe", ({ url }) => handleCumulativeReturnSummary(url)],
+  ["GET /api/summary/cumulative-return", ({ url }) => handleCumulativeReturnSummary(url)],
   ["GET /api/summary/strategies", ({ url }) => handleStrategySummary(url)],
   ["GET /api/summary/factor-style", ({ url }) => handleFactorStyleSummary(url)],
   ["GET /api/summary/behavior", ({ url }) => handleBehaviorSummary(url)],

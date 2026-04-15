@@ -78,10 +78,10 @@ export interface StrategySummaryApiRow {
   pct_runs_beating_sixty_forty_sharpe: number | null;
 }
 
-export interface ExpandingSharpeSummaryRow {
+export interface CumulativeReturnSummaryRow {
   date: string;
   strategy_key: string;
-  mean_expanding_sharpe: number | null;
+  mean_cumulative_return: number | null;
   path_count: number;
 }
 
