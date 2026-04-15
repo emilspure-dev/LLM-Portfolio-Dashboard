@@ -228,6 +228,9 @@ export default function Index() {
                 An empirical study of AI-based portfolio construction and
                 rebalancing for retail investors.
               </p>
+              <p className="mt-2 max-w-3xl text-[14px] leading-[1.6] text-[#444444]">
+                <span className="italic">Authors:</span> Jonathan K. Mogensen and Emil S. Olsen
+              </p>
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:mt-10 xl:min-w-[420px] xl:self-end">
