@@ -642,7 +642,7 @@ function handleFactorStyleSummary(url) {
   const clauses = ["dpm.experiment_id = :experiment_id"];
   const params = { experiment_id: experimentId };
 
-  addEqualsFilter(clauses, params, "market", cleanString(url.searchParams.get("market")), "p.market");
+  addEqualsFilter(clauses, params, "p.market", cleanString(url.searchParams.get("market")), "market");
 
   const whereClause = buildWhereClause(clauses);
 

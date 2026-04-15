@@ -14,7 +14,6 @@ import type {
   FactorStyleSummaryRow,
   MetaCurrentResponse,
   StrategyDailyRow,
-  RunResultRow,
   StrategySummaryApiRow,
 } from "./api-types";
 import type {
@@ -827,7 +826,7 @@ export function collectPathIdsForStrategyMarket(
   runs: RunRow[],
   market: string,
   strategyKey: string,
-  maxPaths = 48
+  maxPaths = Number.POSITIVE_INFINITY
 ): string[] {
   const target = canonicalStrategyKey(strategyKey);
   const ordered: string[] = [];
@@ -857,6 +856,52 @@ export function collectPathIdsForStrategyMarket(
     }
   }
   return ordered;
+}
+
+export function collectDistinctPathIds(
+  runs: Pick<RunRow, "path_id">[],
+  maxPaths = Number.POSITIVE_INFINITY
+): string[] {
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+
+  for (const run of runs) {
+    const pathId = run.path_id;
+    if (pathId == null || !String(pathId).trim()) {
+      continue;
+    }
+
+    const normalized = String(pathId).trim();
+    if (seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    ordered.push(normalized);
+    if (ordered.length >= maxPaths) {
+      break;
+    }
+  }
+
+  return ordered;
+}
+
+export async function mapInBatches<T, R>(
+  items: T[],
+  batchSize: number,
+  mapper: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = [];
+
+  for (let start = 0; start < items.length; start += batchSize) {
+    const batch = items.slice(start, start + batchSize);
+    const batchResults = await Promise.all(
+      batch.map((item, batchIndex) => mapper(item, start + batchIndex))
+    );
+    results.push(...batchResults);
+  }
+
+  return results;
 }
 
 /**
@@ -915,27 +960,84 @@ export async function fetchAllRunResults(experimentId: string): Promise<RunRow[]
     page_size: 500,
   });
 
-  const remainingPages: Array<{ items: RunResultRow[] }> = [];
-  const concurrency = 4;
-  for (let page = 2; page <= firstPage.total_pages; page += concurrency) {
-    const batch = [];
-    for (
-      let currentPage = page;
-      currentPage < page + concurrency && currentPage <= firstPage.total_pages;
-      currentPage += 1
-    ) {
-      batch.push(
-        getRunResults({
-          experiment_id: experimentId,
-          page: currentPage,
-          page_size: firstPage.page_size,
-        })
-      );
-    }
-    remainingPages.push(...(await Promise.all(batch)));
+  const remainingPageNumbers = Array.from(
+    { length: Math.max(0, firstPage.total_pages - 1) },
+    (_, index) => index + 2
+  );
+  const remainingPages = await mapInBatches(
+    remainingPageNumbers,
+    6,
+    (page) =>
+      getRunResults({
+        experiment_id: experimentId,
+        page,
+        page_size: firstPage.page_size,
+      })
+  );
+  return [firstPage, ...remainingPages].flatMap((page) => page.items as RunRow[]);
+}
+
+const SAFE_FACTOR_STYLE_FALLBACK_MAX_PATHS = 24;
+const SAFE_FACTOR_STYLE_FALLBACK_BATCH = 8;
+
+async function fetchFactorStyleSummaryFromPathFallback(
+  experimentId: string,
+  runs: RunRow[]
+): Promise<{
+  rows: FactorStyleSummaryRow[];
+  usedFallback: boolean;
+  error: string | null;
+}> {
+  const pathIds = collectDistinctPathIds(runs);
+  if (pathIds.length === 0) {
+    return {
+      rows: [],
+      usedFallback: false,
+      error: "No path IDs were available for the safe factor-style fallback.",
+    };
   }
 
-  return [firstPage, ...remainingPages].flatMap((page) => page.items as RunRow[]);
+  if (pathIds.length > SAFE_FACTOR_STYLE_FALLBACK_MAX_PATHS) {
+    return {
+      rows: [],
+      usedFallback: false,
+      error:
+        `Safe factor-style fallback skipped for ${pathIds.length} paths to avoid ` +
+        "oversized raw exposure requests on older API builds.",
+    };
+  }
+
+  const exposurePages = await mapInBatches(
+    pathIds,
+    SAFE_FACTOR_STYLE_FALLBACK_BATCH,
+    (pathId) =>
+      getFactorExposureChart({
+        experiment_id: experimentId,
+        path_id: pathId,
+      })
+  );
+  const exposureRows = exposurePages.flat();
+
+  if (exposureRows.length === 0) {
+    return {
+      rows: [],
+      usedFallback: false,
+      error: "Safe factor-style fallback returned no exposure rows.",
+    };
+  }
+
+  return {
+    rows: buildFactorStyleSummaryFromExposureRows(exposureRows),
+    usedFallback: true,
+    error: null,
+  };
+}
+
+function combineErrorMessages(...messages: Array<string | null | undefined>) {
+  return messages
+    .map((message) => String(message ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 interface FetchEvaluationDataArgs {
@@ -972,16 +1074,28 @@ export async function fetchEvaluationData({
   try {
     factorStyleRows = await getFactorStyleSummary({ experiment_id: experimentId });
   } catch (e) {
+    const routeMessage = e instanceof Error ? e.message : String(e);
     if (apiRouteLikelyMissing(e)) {
       try {
-        const exposureRows = await getFactorExposureChart({ experiment_id: experimentId });
-        factorStyleRows = buildFactorStyleSummaryFromExposureRows(exposureRows);
-        factorStyleFromExposureFallback = true;
-      } catch {
-        factorStyleError = e instanceof Error ? e.message : String(e);
+        const runsForFallback = await fetchAllRunResults(experimentId);
+        const fallback = await fetchFactorStyleSummaryFromPathFallback(
+          experimentId,
+          runsForFallback
+        );
+        factorStyleRows = fallback.rows;
+        factorStyleFromExposureFallback = fallback.usedFallback;
+        factorStyleError = fallback.error
+          ? combineErrorMessages(routeMessage, fallback.error)
+          : null;
+      } catch (fallbackError) {
+        factorStyleError = combineErrorMessages(
+          routeMessage,
+          "Safe factor-style fallback failed.",
+          fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+        );
       }
     } else {
-      factorStyleError = e instanceof Error ? e.message : String(e);
+      factorStyleError = routeMessage;
     }
   }
 

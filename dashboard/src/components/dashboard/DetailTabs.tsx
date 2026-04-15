@@ -49,6 +49,7 @@ import {
   getRunModelFallbackKey,
   getRunModelGroupKey,
   ljungBoxStatistic,
+  mapInBatches,
   rollingMetricSeries,
 } from "@/lib/data-loader";
 import {
@@ -2055,7 +2056,17 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
   );
 }
 
-const EQUITY_PATH_BATCH = 12;
+const CHART_PATH_BATCH = 8;
+
+async function fetchRowsByPathBatch<T>(
+  pathIds: string[],
+  fetcher: (pathId: string) => Promise<T[]>
+): Promise<T[]> {
+  const batches = await mapInBatches(pathIds, CHART_PATH_BATCH, (pathId) =>
+    fetcher(pathId)
+  );
+  return batches.flat();
+}
 
 async function fetchEquitySeriesWithPathFallback(
   experimentId: string,
@@ -2063,33 +2074,26 @@ async function fetchEquitySeriesWithPathFallback(
   strategyKey: string,
   runs: RunRow[]
 ): Promise<StrategyDailyRow[]> {
-  const direct = await getEquityChart({
+  const pathIds = collectPathIdsForStrategyMarket(
+    runs,
+    market,
+    strategyKey,
+    Number.POSITIVE_INFINITY
+  );
+  if (pathIds.length > 0) {
+    const merged = await fetchRowsByPathBatch(pathIds, (pathId) =>
+      getEquityChart({ experiment_id: experimentId, path_id: pathId })
+    );
+    if (merged.length > 0) {
+      return merged;
+    }
+  }
+
+  return getEquityChart({
     experiment_id: experimentId,
     market,
     strategy_key: strategyKey,
   });
-  if (direct.length > 0) {
-    return direct;
-  }
-
-  const pathIds = collectPathIdsForStrategyMarket(runs, market, strategyKey);
-  if (pathIds.length === 0) {
-    return [];
-  }
-
-  const merged: StrategyDailyRow[] = [];
-  for (let i = 0; i < pathIds.length; i += EQUITY_PATH_BATCH) {
-    const batch = pathIds.slice(i, i + EQUITY_PATH_BATCH);
-    const results = await Promise.all(
-      batch.map((path_id) =>
-        getEquityChart({ experiment_id: experimentId, market, path_id })
-      )
-    );
-    for (const chunk of results) {
-      merged.push(...chunk);
-    }
-  }
-  return merged;
 }
 
 async function fetchFactorExposuresWithPathFallback(
@@ -2098,33 +2102,54 @@ async function fetchFactorExposuresWithPathFallback(
   strategyKey: string,
   runs: RunRow[]
 ): Promise<FactorExposureRow[]> {
-  const direct = await getFactorExposureChart({
+  const pathIds = collectPathIdsForStrategyMarket(
+    runs,
+    market,
+    strategyKey,
+    Number.POSITIVE_INFINITY
+  );
+  if (pathIds.length > 0) {
+    const merged = await fetchRowsByPathBatch(pathIds, (pathId) =>
+      getFactorExposureChart({ experiment_id: experimentId, path_id: pathId })
+    );
+    if (merged.length > 0) {
+      return merged;
+    }
+  }
+
+  return getFactorExposureChart({
     experiment_id: experimentId,
     market,
     strategy_key: strategyKey,
   });
-  if (direct.length > 0) {
-    return direct;
-  }
+}
 
-  const pathIds = collectPathIdsForStrategyMarket(runs, market, strategyKey);
-  if (pathIds.length === 0) {
-    return [];
-  }
-
-  const merged: FactorExposureRow[] = [];
-  for (let i = 0; i < pathIds.length; i += EQUITY_PATH_BATCH) {
-    const batch = pathIds.slice(i, i + EQUITY_PATH_BATCH);
-    const results = await Promise.all(
-      batch.map((path_id) =>
-        getFactorExposureChart({ experiment_id: experimentId, market, path_id })
-      )
+async function fetchRegimeSeriesWithPathFallback(
+  experimentId: string,
+  market: string,
+  strategyKey: string,
+  runs: RunRow[]
+): Promise<RegimeRow[]> {
+  const pathIds = collectPathIdsForStrategyMarket(
+    runs,
+    market,
+    strategyKey,
+    Number.POSITIVE_INFINITY
+  );
+  if (pathIds.length > 0) {
+    const merged = await fetchRowsByPathBatch(pathIds, (pathId) =>
+      getRegimeChart({ experiment_id: experimentId, path_id: pathId })
     );
-    for (const chunk of results) {
-      merged.push(...chunk);
+    if (merged.length > 0) {
+      return merged;
     }
   }
-  return merged;
+
+  return getRegimeChart({
+    experiment_id: experimentId,
+    market,
+    strategy_key: strategyKey,
+  });
 }
 
 export function EquityCurvesTab({ data }: BaseTabProps) {
@@ -4387,16 +4412,21 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
       timelineSelection.selectedStrategyKey,
     ],
     queryFn: async (): Promise<RegimeTimelinePayload> => {
-      const base = {
-        experiment_id: data.active_experiment_id,
-        market: timelineSelection.selectedMarket,
-        strategy_key: timelineSelection.selectedStrategyKey,
-      };
-      const regimes = await getRegimeChart(base);
+      const regimes = await fetchRegimeSeriesWithPathFallback(
+        data.active_experiment_id,
+        timelineSelection.selectedMarket,
+        timelineSelection.selectedStrategyKey,
+        data.runs
+      );
       if (regimes.length > 0) {
         return { source: "Regime metrics", rows: regimes };
       }
-      const equity = await getEquityChart(base);
+      const equity = await fetchEquitySeriesWithPathFallback(
+        data.active_experiment_id,
+        timelineSelection.selectedMarket,
+        timelineSelection.selectedStrategyKey,
+        data.runs
+      );
       return { source: "Path metrics fallback", rows: equity };
     },
     enabled: Boolean(
@@ -7055,16 +7085,21 @@ export function DrawdownsTab({ data }: BaseTabProps) {
       selection.selectedStrategyKey,
     ],
     queryFn: async (): Promise<DrawdownSeriesPayload> => {
-      const base = {
-        experiment_id: data.active_experiment_id,
-        market: selection.selectedMarket,
-        strategy_key: selection.selectedStrategyKey,
-      };
-      const regimes = await getRegimeChart(base);
+      const regimes = await fetchRegimeSeriesWithPathFallback(
+        data.active_experiment_id,
+        selection.selectedMarket,
+        selection.selectedStrategyKey,
+        data.runs
+      );
       if (regimes.length > 0) {
         return { source: "Regime metrics", rows: regimes };
       }
-      const equity = await getEquityChart(base);
+      const equity = await fetchEquitySeriesWithPathFallback(
+        data.active_experiment_id,
+        selection.selectedMarket,
+        selection.selectedStrategyKey,
+        data.runs
+      );
       return { source: "Path metrics fallback", rows: equity };
     },
     enabled: Boolean(selection.selectedMarket && selection.selectedStrategyKey),
@@ -7288,11 +7323,12 @@ export function RollingRiskTab({ data, runs }: BaseTabProps) {
     queryFn: async () => {
       const rows = await Promise.all(
         ["gpt_retail", "gpt_advanced"].map((strategyKey) =>
-          getEquityChart({
-            experiment_id: data.active_experiment_id,
-            market: marketFilter,
-            strategy_key: strategyKey,
-          })
+          fetchEquitySeriesWithPathFallback(
+            data.active_experiment_id,
+            marketFilter,
+            strategyKey,
+            runs
+          )
         )
       );
       return rows.flat();
