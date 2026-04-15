@@ -183,7 +183,7 @@ function Panel({
   className?: string;
 }) {
   return (
-    <div className={`dashboard-panel-strong rounded-[20px] p-4 md:p-5 ${className}`}>
+    <div className={`dashboard-panel-strong rounded-none p-4 md:p-5 ${className}`}>
       {children}
     </div>
   );
@@ -199,7 +199,7 @@ function EmptyState({
   return (
     <Panel className="flex min-h-[260px] items-center justify-center">
       <div className="max-w-lg text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-[#ececec] bg-[#fafafa]">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-none border border-[#ececec] bg-[#fafafa]">
           <AlertCircle className="h-5 w-5 text-[#a3a3a3]" />
         </div>
         <p className="mt-4 text-[14px] font-semibold tracking-[-0.03em] text-[#404040]">
@@ -219,7 +219,7 @@ function LoadingState({
   return (
     <Panel className="flex min-h-[260px] items-center justify-center">
       <div className="text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-[#ececec] bg-[#fafafa]">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-none border border-[#ececec] bg-[#fafafa]">
           <Database className="h-5 w-5 text-[#a3a3a3]" />
         </div>
         <p className="mt-4 text-[14px] font-semibold tracking-[-0.03em] text-[#404040]">
@@ -276,7 +276,7 @@ function TabMarketSelector({
 }) {
   if (markets.length === 0) return null;
   return (
-    <div className="dashboard-panel rounded-[18px] px-4 py-3">
+    <div className="dashboard-panel rounded-none px-4 py-3">
       <div className="flex flex-wrap items-center gap-3">
         <span className="dashboard-label shrink-0">Market</span>
         <select
@@ -367,7 +367,7 @@ function RegimeBadge({
   const tone = getRegimeBadgeStyle(kind, label);
   return (
     <span
-      className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold"
+      className="inline-flex rounded-none px-2.5 py-1 text-[10px] font-semibold"
       style={tone}
     >
       {display}
@@ -2003,7 +2003,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
               {scatterData.map((row) => (
                 <div key={row.strategyKey} className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
-                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} />
+                    <span className="inline-block h-2.5 w-2.5 rounded-none" style={{ backgroundColor: row.color }} />
                     {row.name}
                   </span>
                   <span>
@@ -2289,7 +2289,7 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
               label: formatStrategyLabel(option.strategy, option.strategy_key),
             }))}
           />
-          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Series source</p>
             <p className="mt-2 text-[13px] font-semibold text-[#404040]">
               {selectedStrategy ? `${getSourceDisplayName(selectedStrategy.source_type)} path metrics` : "Path metrics"}
@@ -2298,7 +2298,7 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
               The chart is loaded from raw daily path metrics through the backend.
             </p>
           </div>
-          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Loaded rows</p>
             <p className="mt-2 text-[13px] font-semibold text-[#404040]">
               {equityQuery.data?.length ?? 0}
@@ -2422,7 +2422,7 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
                 {curveRows.slice(-6).reverse().map((row) => (
                   <div
                     key={row.date}
-                    className="flex items-center justify-between rounded-[14px] border border-[#ececec] bg-[#fafafa] px-4 py-3"
+                    className="flex items-center justify-between rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3"
                   >
                     <div>
                       <p className="text-[11px] font-semibold text-[#67615d]">{formatDateLabel(row.date)}</p>
@@ -2514,7 +2514,7 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
                       {factorChangeMarkers.map((m) => (
                         <span
                           key={`factor-marker-${m.date}-${m.kind}-${m.label}`}
-                          className="rounded-full border border-[#ececec] bg-[#fafafa] px-2.5 py-1 text-[10px] leading-4 text-[#737373]"
+                          className="rounded-none border border-[#ececec] bg-[#fafafa] px-2.5 py-1 text-[10px] leading-4 text-[#737373]"
                         >
                           <span className="font-medium text-[#404040]">
                             {m.kind === "model" ? "Model change" : "Period"}
@@ -2710,7 +2710,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
                 : [{ value: "", label: "Benchmark / aggregate path" }]
             }
           />
-          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Snapshot date</p>
             <p className="mt-2 text-[13px] font-semibold text-[#404040]">
               {selectedDate || "Auto-selecting latest"}
@@ -2748,7 +2748,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
                 </p>
               </div>
               {promptSnippet ? (
-                <div className="mt-4 rounded-[14px] border border-[#ececec] bg-[#fafafa] p-3">
+                <div className="mt-4 rounded-none border border-[#ececec] bg-[#fafafa] p-3">
                   <p className="dashboard-label mb-2">Prompt excerpt (from run record)</p>
                   <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-[#404040]">
                     {promptSnippet.length > 4000 ? `${promptSnippet.slice(0, 4000)}…` : promptSnippet}
@@ -2842,7 +2842,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
             </table>
           </Panel>
 
-          <div className="flex items-center justify-between rounded-[18px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="flex items-center justify-between rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <div className="text-[11px] text-[#737373]">
               Page {holdingsQuery.data?.page ?? 1} of {holdingsQuery.data?.total_pages ?? 1}
               {selectedDate && <span className="ml-2">Latest snapshot: {selectedDate}</span>}
@@ -2852,7 +2852,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
                 variant="outline"
                 size="sm"
                 disabled={(holdingsQuery.data?.page ?? 1) <= 1}
-                className="rounded-full"
+                className="rounded-none"
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
               >
                 <ChevronLeft className="mr-1 h-3 w-3" />
@@ -2862,7 +2862,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
                 variant="outline"
                 size="sm"
                 disabled={(holdingsQuery.data?.page ?? 1) >= (holdingsQuery.data?.total_pages ?? 1)}
-                className="rounded-full"
+                className="rounded-none"
                 onClick={() =>
                   setPage((current) =>
                     Math.min(holdingsQuery.data?.total_pages ?? current, current + 1)
@@ -3409,7 +3409,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                       <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
                         {modelScatterData.models.map((m) => (
                           <span key={m} className="flex items-center gap-1">
-                            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: modelScatterData.colorMap.get(m) }} />
+                            <span className="inline-block h-2.5 w-2.5 rounded-none" style={{ backgroundColor: modelScatterData.colorMap.get(m) }} />
                             {m}
                           </span>
                         ))}
@@ -3548,7 +3548,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                       <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
                         {hhiScatterData.models.map((m) => (
                           <span key={m} className="flex items-center gap-1">
-                            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: hhiScatterData.colorMap.get(m) }} />
+                            <span className="inline-block h-2.5 w-2.5 rounded-none" style={{ backgroundColor: hhiScatterData.colorMap.get(m) }} />
                             {m}
                           </span>
                         ))}
@@ -3569,7 +3569,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
 
           <SectionHeader>Selected run — daily path</SectionHeader>
           {selectedRun && (
-            <Panel className="rounded-[20px] border border-[#ececec] bg-[#fafafa] p-4">
+            <Panel className="rounded-none border border-[#ececec] bg-[#fafafa] p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="dashboard-label">Selected</p>
@@ -3826,7 +3826,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                           {runFactorChangeMarkers.map((m) => (
                             <span
                               key={`run-factor-marker-${m.date}-${m.kind}-${m.label}`}
-                              className="rounded-full border border-[#ececec] bg-[#fafafa] px-2.5 py-1 text-[10px] leading-4 text-[#737373]"
+                              className="rounded-none border border-[#ececec] bg-[#fafafa] px-2.5 py-1 text-[10px] leading-4 text-[#737373]"
                             >
                               <span className="font-medium text-[#404040]">
                                 {m.kind === "model" ? "Model change" : "Period"}
@@ -3923,16 +3923,16 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
             </table>
           </Panel>
 
-          <div className="flex items-center justify-between rounded-[18px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="flex items-center justify-between rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <div className="text-[11px] text-[#737373]">
               Page {page} of {totalPages}
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} className="rounded-full" onClick={() => setPage((current) => Math.max(1, current - 1))}>
+              <Button variant="outline" size="sm" disabled={page <= 1} className="rounded-none" onClick={() => setPage((current) => Math.max(1, current - 1))}>
                 <ChevronLeft className="mr-1 h-3 w-3" />
                 Previous
               </Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} className="rounded-full" onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} className="rounded-none" onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>
                 Next
                 <ChevronRight className="ml-1 h-3 w-3" />
               </Button>
@@ -4068,7 +4068,7 @@ export function ByMarketTab({ data }: BaseTabProps) {
                     return (
                       <td key={market} className="px-3 py-2.5 text-center">
                         <div
-                          className="rounded-[12px] px-3 py-2"
+                          className="rounded-none px-3 py-2"
                           style={{ backgroundColor: background }}
                         >
                           <div className="font-semibold" style={{ color: sharpeColor(sharpe) }}>
@@ -4168,7 +4168,7 @@ export function ByMarketTab({ data }: BaseTabProps) {
                         return (
                           <td key={col.colKey} className="px-2 py-2 text-center">
                             <span
-                              className="inline-block rounded-[8px] px-2 py-1 text-[10px] font-semibold"
+                              className="inline-block rounded-none px-2 py-1 text-[10px] font-semibold"
                               style={{
                                 backgroundColor: pill.backgroundColor,
                                 color: pill.color,
@@ -4699,7 +4699,7 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
               label: prompt,
             }))}
           />
-          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Latest classified period</p>
             <p className="mt-2 text-[13px] font-semibold text-[#404040]">
               {latestPeriodRow?.period ?? "—"}
@@ -4845,14 +4845,14 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
               label: formatStrategyLabel(option.strategy, option.strategy_key),
             }))}
           />
-          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Timeline source</p>
             <p className="mt-2 text-[13px] font-semibold text-[#404040]">{timelineSourceLabel}</p>
             <p className="mt-1 text-[11px] text-[#737373]">
               Regime metrics when present; otherwise the chart falls back to path metrics with regime labels.
             </p>
           </div>
-          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Timeline rows</p>
             <p className="mt-2 text-[13px] font-semibold text-[#404040]">{timelineRawRowCount}</p>
             <p className="mt-1 text-[11px] text-[#737373]">
@@ -4943,7 +4943,7 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
                   {timelineTransitionMarkers.slice(0, 8).map((marker) => (
                     <span
                       key={`timeline-marker-${marker.date}-${marker.regime}`}
-                      className="rounded-full border border-[#ececec] bg-[#fafafa] px-2.5 py-1 text-[10px] leading-4 text-[#737373]"
+                      className="rounded-none border border-[#ececec] bg-[#fafafa] px-2.5 py-1 text-[10px] leading-4 text-[#737373]"
                     >
                       <span className="font-medium text-[#404040]">{formatDateLabel(marker.date)}</span>
                       {" · "}
@@ -5083,7 +5083,7 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
         </p>
         <Accordion
           type="multiple"
-          className="dashboard-panel rounded-[16px] border border-[#ececec] px-3"
+          className="dashboard-panel rounded-none border border-[#ececec] px-3"
         >
           <AccordionItem value="regime-labels" className="border-[#ececec]">
             <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#404040] hover:no-underline">
@@ -5190,7 +5190,7 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <span
-                          className="inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                          className="inline-flex rounded-none px-2.5 py-1 text-[10px] font-semibold"
                           style={
                             Number(row.any_regime_changed ?? 0) > 0
                               ? { backgroundColor: "rgba(116, 188, 160, 0.18)", color: "#4b7667" }
@@ -6270,7 +6270,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                               <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
                                 {filteredModelComparisonData.models.map((model) => (
                                   <span key={model} className="flex items-center gap-1">
-                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: filteredModelComparisonData.colorMap.get(model) }} />
+                                    <span className="inline-block h-2.5 w-2.5 rounded-none" style={{ backgroundColor: filteredModelComparisonData.colorMap.get(model) }} />
                                     {model}
                                   </span>
                                 ))}
@@ -6390,7 +6390,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                               <div className="-mt-1 flex flex-wrap gap-3 text-[10px]">
                                 {filteredModelComparisonData.models.map((model) => (
                                   <span key={model} className="flex items-center gap-1">
-                                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: filteredModelComparisonData.colorMap.get(model) }} />
+                                    <span className="inline-block h-2.5 w-2.5 rounded-none" style={{ backgroundColor: filteredModelComparisonData.colorMap.get(model) }} />
                                     {model}
                                   </span>
                                 ))}
@@ -6765,7 +6765,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
 
                         {assetSelectionMatrix.rows.slice(0, 12).map((row) => (
                           <div key={`selection-row-${row.ticker}`} className="contents">
-                            <div className="rounded-[14px] border border-[#ececec] bg-[#fafafa] px-3 py-2">
+                            <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-3 py-2">
                               <p className="text-[12px] font-semibold text-[#404040]">{row.ticker}</p>
                               <p className="mt-0.5 truncate text-[10px] text-[#737373]">{row.name}</p>
                               <p className="mt-1 text-[10px] text-[#a19a93]">{row.marketLabels || "Not selected"}</p>
@@ -6775,7 +6775,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                               return (
                                 <div
                                   key={`selection-cell-${row.ticker}-${cell.market}`}
-                                  className="rounded-[14px] border px-2 py-2 text-center"
+                                  className="rounded-none border px-2 py-2 text-center"
                                   style={{
                                     backgroundColor: `rgba(137, 182, 199, ${alpha})`,
                                     borderColor: "rgba(215, 226, 230, 0.95)",
@@ -6791,7 +6791,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                                 </div>
                               );
                             })}
-                            <div className="rounded-[14px] border border-[#ececec] bg-[#fafafa] px-2 py-2 text-center">
+                            <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-2 py-2 text-center">
                               <p className="text-[11px] font-semibold text-[#404040]">
                                 {formatPctFromRatio(row.weightedRate, 1)}
                               </p>
@@ -6921,7 +6921,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                         <span className="w-[80px] truncate text-[11px] font-medium text-[#404040]">{word}</span>
                         <div className="flex-1">
                           <div
-                            className="h-[6px] rounded-full"
+                            className="h-[6px] rounded-none"
                             style={{
                               width: `${(count / maxCount) * 100}%`,
                               backgroundColor: "rgba(188,160,130,0.45)",
@@ -6956,12 +6956,12 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
             <>
               {/* Controls */}
               <div className="flex flex-wrap items-center gap-3">
-                <div className="flex gap-1 rounded-[12px] border border-[#ececec] bg-[#fafafa] p-1">
+                <div className="flex gap-1 rounded-none border border-[#ececec] bg-[#fafafa] p-1">
                   {(["all", "simple", "advanced"] as const).map((opt) => (
                     <button
                       key={opt}
                       onClick={() => setReasoningPromptFilter(opt)}
-                      className={`rounded-[9px] px-3 py-1 text-[11px] font-medium transition-colors ${
+                      className={`rounded-none px-3 py-1 text-[11px] font-medium transition-colors ${
                         reasoningPromptFilter === opt
                           ? "bg-[rgba(188,160,130,0.28)] text-[#5c534c]"
                           : "text-[#737373] hover:text-[#5c534c]"
@@ -6976,7 +6976,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                   placeholder="Search reasoning…"
                   value={reasoningSearch}
                   onChange={(e) => setReasoningSearch(e.target.value)}
-                  className="flex-1 rounded-[12px] border border-[#ececec] bg-[#fafafa] px-3 py-1.5 text-[11px] text-[#5c534c] placeholder-[#a3a3a3] outline-none focus:border-[rgba(188,160,130,0.6)]"
+                  className="flex-1 rounded-none border border-[#ececec] bg-[#fafafa] px-3 py-1.5 text-[11px] text-[#5c534c] placeholder-[#a3a3a3] outline-none focus:border-[rgba(188,160,130,0.6)]"
                 />
                 <span className="text-[11px] text-[#a3a3a3]">{filteredPostLoss.length} shown</span>
               </div>
@@ -6996,13 +6996,13 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                     return (
                       <div
                         key={key}
-                        className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3"
+                        className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3"
                       >
                         {/* Header row */}
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2 text-[11px]">
                             <span
-                              className="rounded-[8px] px-2 py-0.5 font-medium"
+                              className="rounded-none px-2 py-0.5 font-medium"
                               style={{ backgroundColor: `${promptColor}22`, color: promptColor }}
                             >
                               {promptLabel}
@@ -7168,14 +7168,14 @@ export function DrawdownsTab({ data }: BaseTabProps) {
               label: formatStrategyLabel(option.strategy, option.strategy_key),
             }))}
           />
-          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Source</p>
             <p className="mt-2 text-[13px] font-semibold text-[#404040]">{dataSourceLabel}</p>
             <p className="mt-1 text-[11px] text-[#737373]">
               Regime metrics when present; otherwise the drawdown chart falls back to daily path metrics, averaged across paths.
             </p>
           </div>
-          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Rows</p>
             <p className="mt-2 text-[13px] font-semibold text-[#404040]">{rawRowCount}</p>
             <p className="mt-1 text-[11px] text-[#737373]">Loaded from the live backend</p>
@@ -7775,7 +7775,7 @@ export function DataQualityTab({ data }: BaseTabProps) {
 }
 
 const SUBTAB_BUTTON_BASE =
-  "rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors";
+  "rounded-none border px-3 py-1.5 text-[11px] font-semibold transition-colors";
 const SUBTAB_BUTTON_ACTIVE =
   "border-[#0a0a0a] bg-[#0a0a0a] text-[#faf7f2] shadow-[0_8px_20px_rgba(39,33,27,0.14)]";
 const SUBTAB_BUTTON_INACTIVE =
@@ -7793,7 +7793,7 @@ export function PathsTab({ data, runs }: BaseTabProps) {
         </p>
       </Panel>
 
-      <div className="dashboard-panel rounded-[18px] px-4 py-3">
+      <div className="dashboard-panel rounded-none px-4 py-3">
         <div className="flex flex-wrap gap-2">
           {[
             { key: "equity", label: "Equity & Factors" },
@@ -7837,7 +7837,7 @@ export function DiagnosticsTab({ data, runs }: BaseTabProps) {
         </p>
       </Panel>
 
-      <div className="dashboard-panel rounded-[18px] px-4 py-3">
+      <div className="dashboard-panel rounded-none px-4 py-3">
         <div className="flex flex-wrap gap-2">
           {[
             { key: "confidence", label: "Confidence" },

@@ -57,7 +57,7 @@ function Panel({
   className?: string;
 }) {
   return (
-    <div className={`dashboard-panel-strong rounded-[20px] p-4 md:p-5 ${className}`}>
+    <div className={`dashboard-panel-strong rounded-none p-4 md:p-5 ${className}`}>
       {children}
     </div>
   );
@@ -446,7 +446,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
     return (
       <div className="space-y-4 pb-1">
         {allMarkets.length > 0 && (
-          <div className="dashboard-panel rounded-[18px] px-4 py-3">
+          <div className="dashboard-panel rounded-none px-4 py-3">
             <div className="flex flex-wrap items-center gap-3">
               <span className="dashboard-label shrink-0">Market</span>
               <select
@@ -475,7 +475,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
   return (
     <div className="space-y-4 pb-1">
       {allMarkets.length > 0 && (
-        <div className="dashboard-panel rounded-[18px] px-4 py-3">
+        <div className="dashboard-panel rounded-none px-4 py-3">
           <div className="flex flex-wrap items-center gap-3">
             <span className="dashboard-label shrink-0">Market</span>
             <select
@@ -672,7 +672,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             X-axis: Sharpe ratio. Y-axis: run count per bin.
           </p>
           <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="rounded-[14px] border border-[#ececec] bg-[#fafafa] px-3 py-2">
+            <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-3 py-2">
               <p className="text-[11px] font-semibold text-[#404040]">Distribution width</p>
               <p className="mt-1 text-[11px] text-[#737373]">
                 GPT (Simple): sd {dispersionStats.simple.std?.toFixed(2) ?? "—"} | IQR {dispersionStats.simple.iqr?.toFixed(2) ?? "—"}
@@ -681,7 +681,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                 GPT (Advanced): sd {dispersionStats.advanced.std?.toFixed(2) ?? "—"} | IQR {dispersionStats.advanced.iqr?.toFixed(2) ?? "—"}
               </p>
             </div>
-            <div className="rounded-[14px] border border-[#ececec] bg-[#fafafa] px-3 py-2">
+            <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-3 py-2">
               <p className="text-[11px] font-semibold text-[#404040]">Outlier flagging</p>
               <p className="mt-1 text-[11px] text-[#737373]">
                 {sharpeOutliers.length > 0
@@ -962,7 +962,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        className="h-2.5 w-2.5 shrink-0 rounded-none"
                         style={{ backgroundColor: getStrategyColor(row.strategy_key) }}
                       />
                       <span className="truncate text-[#404040]">{row.legendLabel}</span>

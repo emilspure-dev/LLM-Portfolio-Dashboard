@@ -39,7 +39,7 @@
     --input: 0 0% 92%;
     --ring: 0 0% 4%;
 
-    --radius: 0.5rem;
+    --radius: 0rem;
 
     --chart-accent: 0 0% 20%;
     --chart-green: 142 52% 38%;
@@ -110,21 +110,21 @@
   .dashboard-panel {
     background: #ffffff;
     border: 1px solid #d9d9d9;
-    border-radius: 2px;
+    border-radius: 0;
     box-shadow: none;
   }
 
   .dashboard-panel-strong {
     background: #ffffff;
     border: 1px solid #c9c9c9;
-    border-radius: 2px;
+    border-radius: 0;
     box-shadow: none;
   }
 
   .dashboard-glass-inset {
     background: #fafafa;
     border: 1px solid #dedede;
-    border-radius: 2px;
+    border-radius: 0;
     box-shadow: none;
   }
 
@@ -159,7 +159,7 @@
   .dashboard-stat {
     background: #ffffff;
     border: 1px solid #d9d9d9;
-    border-radius: 2px;
+    border-radius: 0;
     padding: 0.9rem 1rem;
     min-height: 82px;
     display: flex;
@@ -196,7 +196,7 @@
   .dashboard-pill {
     background: #ffffff;
     border: 1px solid #d9d9d9;
-    border-radius: 2px;
+    border-radius: 0;
     color: #333333;
     font-family:
       "Computer Modern Serif", "Latin Modern Roman", "EB Garamond",
@@ -212,7 +212,7 @@
     appearance: none;
     background-color: #ffffff;
     border: 1px solid #b5b5b5;
-    border-radius: 2px;
+    border-radius: 0;
     color: #111111;
     font-family:
       "Computer Modern Serif", "Latin Modern Roman", "EB Garamond",

@@ -56,9 +56,9 @@ export function DashboardSidebar({
 
   return (
     <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto border-b border-white/45 px-4 py-4 lg:w-[280px] lg:border-b-0 lg:border-r lg:px-5 lg:py-6">
-      <div className="dashboard-panel-strong rounded-[20px] p-4">
+      <div className="dashboard-panel-strong rounded-none p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-[#f5f5f5]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-none bg-[#f5f5f5]">
             <BarChart3 className="h-4 w-4 text-[#0a0a0a]" />
           </div>
           <div>
@@ -70,9 +70,9 @@ export function DashboardSidebar({
         </div>
       </div>
 
-      <div className="dashboard-panel rounded-[18px] p-4">
+      <div className="dashboard-panel rounded-none p-4">
         <p className="dashboard-label mb-3">Data Source</p>
-        <div className="dashboard-glass-inset rounded-[14px] px-4 py-3">
+        <div className="dashboard-glass-inset rounded-none px-4 py-3">
           <div className="flex items-start gap-3">
             <Database className="mt-0.5 h-4 w-4 text-[#a3a3a3]" />
             <div className="min-w-0 flex-1">
@@ -112,7 +112,7 @@ export function DashboardSidebar({
           <Button
             variant="outline"
             size="sm"
-            className="mt-3 h-10 w-full rounded-full border border-white/45 bg-white/50 text-[11px] font-semibold text-[#404040] shadow-sm backdrop-blur-sm hover:bg-white/75 hover:text-[#404040]"
+            className="mt-3 h-10 w-full rounded-none border border-white/45 bg-white/50 text-[11px] font-semibold text-[#404040] shadow-sm backdrop-blur-sm hover:bg-white/75 hover:text-[#404040]"
             onClick={onRefresh}
           >
             <RefreshCw className="mr-1 h-3 w-3" />
@@ -122,14 +122,14 @@ export function DashboardSidebar({
       </div>
 
       {meta && meta.available_experiments.length > 0 && (
-        <div className="dashboard-panel rounded-[18px] p-4">
+        <div className="dashboard-panel rounded-none p-4">
           <p className="dashboard-label mb-3">Experiment</p>
           <select
             value={resolvedExperimentId ?? ""}
             onChange={(event) =>
               onExperimentChange(event.target.value || undefined)
             }
-            className="dashboard-glass-inset w-full rounded-[14px] px-3 py-2.5 text-[12px] font-medium text-[#404040] outline-none"
+            className="dashboard-glass-inset w-full rounded-none px-3 py-2.5 text-[12px] font-medium text-[#404040] outline-none"
           >
             {meta.available_experiments.map((experiment) => (
               <option
@@ -151,7 +151,7 @@ export function DashboardSidebar({
       )}
 
       {data && (
-        <div className="dashboard-panel rounded-[18px] p-4">
+        <div className="dashboard-panel rounded-none p-4">
           <p className="dashboard-label mb-3">Dataset snapshot</p>
           <div className="space-y-2 text-[12px] text-[#737373]">
             <p>
@@ -182,11 +182,11 @@ export function DashboardSidebar({
         </div>
       )}
 
-      <div className="dashboard-panel rounded-[18px] p-3">
+      <div className="dashboard-panel rounded-none p-3">
         <Button
           variant="outline"
           size="sm"
-          className="h-10 w-full rounded-full border border-white/45 bg-white/50 text-[11px] font-semibold text-[#404040] shadow-sm backdrop-blur-sm hover:bg-white/75 hover:text-[#404040]"
+          className="h-10 w-full rounded-none border border-white/45 bg-white/50 text-[11px] font-semibold text-[#404040] shadow-sm backdrop-blur-sm hover:bg-white/75 hover:text-[#404040]"
           onClick={onReset}
         >
           <X className="mr-1 h-3 w-3" />
@@ -194,7 +194,7 @@ export function DashboardSidebar({
         </Button>
       </div>
 
-      <div className="dashboard-panel mt-auto rounded-[18px] p-4">
+      <div className="dashboard-panel mt-auto rounded-none p-4">
         <p className="dashboard-label mb-3">Research Scope</p>
         <div className="space-y-1.5 text-[12px] leading-relaxed text-[#737373]">
           <p>Markets: S&amp;P 500, DAX 40, Nikkei 225</p>

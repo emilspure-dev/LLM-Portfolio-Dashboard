@@ -565,7 +565,7 @@ function FactorStyleAiSection({
   }, [experimentId, marketFilter, factorStyleFiltered]);
 
   return (
-    <div className="dashboard-panel-strong mt-4 rounded-[20px] p-4 md:p-5">
+    <div className="dashboard-panel-strong mt-4 rounded-none p-4 md:p-5">
       <p className="dashboard-label mb-2">Optional AI narrative</p>
       <p className="mb-3 max-w-3xl text-[12px] leading-5 text-[#737373]">
         Use this after reviewing the count-based charts if you want an extra natural-language interpretation.
@@ -575,7 +575,7 @@ function FactorStyleAiSection({
           type="button"
           size="sm"
           variant="outline"
-          className="rounded-full border-[#ececec] bg-[#fafafa] text-[12px] font-semibold"
+          className="rounded-none border-[#ececec] bg-[#fafafa] text-[12px] font-semibold"
           disabled={loading || factorStyleFiltered.length === 0}
           onClick={() => void runAnalysis()}
         >
@@ -597,7 +597,7 @@ function FactorStyleAiSection({
         </p>
       )}
       {analysis && (
-        <div className="mt-4 max-h-[min(70vh,520px)] overflow-y-auto rounded-[14px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+        <div className="mt-4 max-h-[min(70vh,520px)] overflow-y-auto rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
           <div className="whitespace-pre-wrap text-[12px] leading-6 text-[#404040] [word-break:break-word]">
             {analysis}
           </div>
@@ -733,7 +733,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
-      <div className="dashboard-panel rounded-[18px] px-4 py-3">
+      <div className="dashboard-panel rounded-none px-4 py-3">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label className="flex flex-col gap-2">
             <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#737373]">Market</span>
@@ -787,7 +787,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
       <SoftHr />
 
       {selectionSummaryQuery.isLoading ? (
-        <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+        <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
           <InsightCard
             type="info"
             title="Loading prompt selection counts"
@@ -795,7 +795,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
           />
         </div>
       ) : selectionSummaryQuery.error ? (
-        <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+        <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
           <InsightCard
             type="warn"
             title="Holdings request failed"
@@ -803,7 +803,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
           />
         </div>
       ) : aggregateCountData.length === 0 ? (
-        <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+        <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
           <InsightCard
             type="info"
             title="No labeled holdings for this factor"
@@ -819,7 +819,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
               const dominantCount = summary?.dominant_count ?? 0;
               const dominantShare = summary?.dominant_share ?? 0;
               return (
-                <div key={strategyKey} className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+                <div key={strategyKey} className="dashboard-panel-strong rounded-none p-4 md:p-5">
                   <p className="dashboard-label mb-2">{formatPromptLabel(strategyKey)}</p>
                   <p className="text-[18px] font-semibold text-[#534b45]">{summary?.dominant_label ?? "—"}</p>
                   <p className="mt-2 text-[12px] leading-5 text-[#525252]">
@@ -827,13 +827,13 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                     {dominantCount} of {runCount} runs ({formatPct(dominantShare, 0)}).
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#737373]">
-                    <span className="rounded-full border border-[#ececec] px-2.5 py-1">
+                    <span className="rounded-none border border-[#ececec] px-2.5 py-1">
                       Runs: {runCount}
                     </span>
-                    <span className="rounded-full border border-[#ececec] px-2.5 py-1">
+                    <span className="rounded-none border border-[#ececec] px-2.5 py-1">
                       Dates: {summary?.date_count ?? 0}
                     </span>
-                    <span className="rounded-full border border-[#ececec] px-2.5 py-1">
+                    <span className="rounded-none border border-[#ececec] px-2.5 py-1">
                       Periods: {summary?.period_count ?? 0}
                     </span>
                   </div>
@@ -842,7 +842,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             })}
           </div>
 
-          <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+          <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="dashboard-label">What each prompt selects</p>
@@ -885,7 +885,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             <p className="mt-3 text-[12px] leading-5 text-[#525252]">{overallAnalysis}</p>
           </div>
 
-          <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+          <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="dashboard-label">Average full-run mix</p>
@@ -933,7 +933,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
           </div>
 
           {outcomeLinkageRows.length > 0 && (
-            <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+            <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
               <div className="mb-3">
                 <p className="dashboard-label">Outcome linkage by dominant full-run bucket</p>
                 <p className="mt-1 text-[12px] leading-5 text-[#737373]">
@@ -971,7 +971,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
           )}
 
           {regimeContextRows.length > 0 && (
-            <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+            <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
               <div className="mb-3">
                 <p className="dashboard-label">Regime context</p>
                 <p className="mt-1 text-[12px] leading-5 text-[#737373]">
@@ -1024,7 +1024,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
               {FACTOR_DEFINITIONS_BLURB} Each run is collapsed into one full-run selection profile before charting, so the
               main view reflects whole-backtest behavior instead of repeated half-year windows.
             </p>
-            <Accordion type="multiple" className="dashboard-panel rounded-[16px] border border-[#ececec] px-3">
+            <Accordion type="multiple" className="dashboard-panel rounded-none border border-[#ececec] px-3">
               {GPT_STRATEGY_KEYS.map((key) => {
                 const g = STRATEGY_GLOSSARY[key];
                 const title = g?.title ?? key;

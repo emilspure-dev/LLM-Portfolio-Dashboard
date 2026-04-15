@@ -12,7 +12,7 @@ export function KpiCard({ label, value, color, sub, className }: KpiCardProps) {
   return (
     <div
       className={cn(
-        "dashboard-panel min-h-[100px] rounded-[2px] px-4 py-3 animate-fade-in",
+        "dashboard-panel min-h-[100px] rounded-none px-4 py-3 animate-fade-in",
         className
       )}
     >

@@ -17,7 +17,7 @@ export function InsightCard({ type, title, body }: InsightCardProps) {
   const c = config[type];
   return (
     <div
-      className="rounded-[2px] border p-4 animate-fade-in"
+      className="rounded-none border p-4 animate-fade-in"
       style={{ backgroundColor: c.bg, borderColor: c.border }}
     >
       <p className="text-[13px]" style={{ color: c.color }}>

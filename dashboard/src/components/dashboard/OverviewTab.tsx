@@ -410,7 +410,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
-      <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+      <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="dashboard-label">Accumulated Return by Strategy</p>
@@ -503,7 +503,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
           {strategyGroups ? (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {strategyGroups.map((group) => (
-                <div key={group.key} className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+                <div key={group.key} className="dashboard-panel-strong rounded-none p-4 md:p-5">
                   {/* Overall row */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -522,7 +522,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                         ret · n={group.totalObs}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-[8px] bg-[rgba(0,0,0,0.04)] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#a3a3a3]">
+                    <span className="shrink-0 rounded-none bg-[rgba(0,0,0,0.04)] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#a3a3a3]">
                       All Markets
                     </span>
                   </div>
@@ -533,7 +533,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                       {group.byMarket.map((m) => (
                         <div
                           key={m.market}
-                          className="min-w-[90px] flex-1 rounded-[10px] bg-[rgba(0,0,0,0.03)] px-3 py-2"
+                          className="min-w-[90px] flex-1 rounded-none bg-[rgba(0,0,0,0.03)] px-3 py-2"
                         >
                           <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">
                             {getMarketShortLabel(m.market)}
@@ -584,7 +584,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       {beatIndexData.length > 0 && (
         <>
           <SectionHeader>Beat Rate Comparison</SectionHeader>
-          <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
+          <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
               <p className="dashboard-label">% of runs beating market index (Sharpe)</p>
               <FigureExportControls
@@ -644,7 +644,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         </>
       )}
 
-      <div className="dashboard-panel-strong rounded-[20px] border border-[#ececec] bg-[#fafafa] p-4 md:p-5">
+      <div className="dashboard-panel-strong rounded-none border border-[#ececec] bg-[#fafafa] p-4 md:p-5">
         <p className="text-[12px] leading-5 text-[#737373]">
           Use <strong>Performance</strong> for full strategy ranking and run distributions, <strong>Factor Style</strong>
           for return explanations, <strong>Paths</strong> for time-series drill-down, and <strong>Diagnostics</strong> for
@@ -684,7 +684,7 @@ export function SharpeGapDiagnostic({
   if (!allRows.length) return null;
 
   return (
-    <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa]">
+    <div className="rounded-none border border-[#ececec] bg-[#fafafa]">
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-4 py-3 text-left"
@@ -692,7 +692,7 @@ export function SharpeGapDiagnostic({
         <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#a3a3a3]">
           Sharpe gap diagnostics
           {gaps.length > 0 && (
-            <span className="ml-2 rounded-full bg-[rgba(212,151,144,0.25)] px-2 py-0.5 text-[10px] text-[#c17070]">
+            <span className="ml-2 rounded-none bg-[rgba(212,151,144,0.25)] px-2 py-0.5 text-[10px] text-[#c17070]">
               {gaps.length} missing
             </span>
           )}

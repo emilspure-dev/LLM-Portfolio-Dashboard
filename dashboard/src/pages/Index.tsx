@@ -35,9 +35,9 @@ const TAB_NAMES = [
 function LoadingPanel() {
   return (
     <div className="py-8">
-      <div className="dashboard-panel-strong flex min-h-[360px] items-center justify-center rounded-[10px] p-8">
+      <div className="dashboard-panel-strong flex min-h-[360px] items-center justify-center rounded-none p-8">
         <div className="animate-fade-in space-y-4 text-center">
-          <div className="dashboard-glass-inset mx-auto inline-flex h-14 w-14 items-center justify-center rounded-[10px]">
+          <div className="dashboard-glass-inset mx-auto inline-flex h-14 w-14 items-center justify-center rounded-none">
             <Loader2 className="h-6 w-6 animate-spin text-[#525252]" />
           </div>
           <div>
@@ -62,9 +62,9 @@ interface ErrorPanelProps {
 function ErrorPanel({ message, onRetry }: ErrorPanelProps) {
   return (
     <div className="py-8">
-      <div className="dashboard-panel-strong flex min-h-[360px] items-center justify-center rounded-[10px] p-8">
+      <div className="dashboard-panel-strong flex min-h-[360px] items-center justify-center rounded-none p-8">
         <div className="animate-fade-in space-y-4 text-center">
-          <div className="dashboard-glass-inset mx-auto inline-flex h-14 w-14 items-center justify-center rounded-[10px]">
+          <div className="dashboard-glass-inset mx-auto inline-flex h-14 w-14 items-center justify-center rounded-none">
             <WifiOff className="h-6 w-6 text-[#525252]" />
           </div>
           <div>
@@ -78,7 +78,7 @@ function ErrorPanel({ message, onRetry }: ErrorPanelProps) {
           <div className="flex justify-center">
             <Button
               variant="outline"
-              className="rounded-md px-4 text-[12px] font-medium"
+              className="rounded-none px-4 text-[12px] font-medium"
               onClick={onRetry}
             >
               <RefreshCw className="mr-1 h-3 w-3" />
