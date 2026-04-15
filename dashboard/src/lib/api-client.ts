@@ -1,7 +1,7 @@
 import type {
   BehaviorHoldingsSummaryResponse,
-  DailySharpeSummaryRow,
   BehaviorSummaryRow,
+  ExpandingSharpeSummaryRow,
   FactorExposureRow,
   FactorSelectionSummaryResponse,
   FactorStyleSummaryRow,
@@ -213,8 +213,8 @@ export function getOverviewSummary(query?: Record<string, QueryValue>) {
   return requestJson<OverviewSummaryResponse>("/summary/overview", query);
 }
 
-export function getDailySharpeSummary(query?: Record<string, QueryValue>) {
-  return requestJson<DailySharpeSummaryRow[]>("/summary/daily-sharpe", query);
+export function getExpandingSharpeSummary(query?: Record<string, QueryValue>) {
+  return requestJson<ExpandingSharpeSummaryRow[]>("/summary/daily-sharpe", query);
 }
 
 export function getFactorStyleSummary(query?: Record<string, QueryValue>) {

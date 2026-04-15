@@ -78,15 +78,11 @@ export interface StrategySummaryApiRow {
   pct_runs_beating_sixty_forty_sharpe: number | null;
 }
 
-export interface DailySharpeSummaryRow {
+export interface ExpandingSharpeSummaryRow {
   date: string;
   strategy_key: string;
-  strategy: string;
-  prompt_type: string | null;
   mean_expanding_sharpe: number | null;
   path_count: number;
-  min_path_observations: number | null;
-  max_path_observations: number | null;
 }
 
 export interface OverviewSummaryResponse {

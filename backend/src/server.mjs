@@ -1,4 +1,5 @@
 import http from "node:http";
+import { execFileSync } from "node:child_process";
 import { URL } from "node:url";
 import {
   DASHBOARD_ALLOWED_ORIGINS,
@@ -132,6 +133,75 @@ function gptPromptTypeFilterSql(columnExpression) {
 
 function gptStrategyKeyFilterSql(columnExpression) {
   return `${normalizedStrategyKeySql(columnExpression)} IN ('gpt_simple', 'gpt_advanced')`;
+}
+
+const EXPANDING_SHARPE_CACHE_TTL_MS = 10 * 60 * 1000;
+const expandingSharpeCache = new Map();
+
+function toSqliteLiteral(value) {
+  if (value == null) {
+    return "NULL";
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error(`Cannot inline non-finite SQLite numeric value: ${value}`);
+    }
+    return String(value);
+  }
+
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function inlineSqlParams(sql, params) {
+  return sql.replace(/:([A-Za-z0-9_]+)/g, (_match, key) => {
+    if (!Object.prototype.hasOwnProperty.call(params, key)) {
+      throw new Error(`Missing SQLite parameter: ${key}`);
+    }
+    return toSqliteLiteral(params[key]);
+  });
+}
+
+function queryExpandingSharpeRows(sql, params) {
+  try {
+    const output = execFileSync(
+      process.env.SQLITE3_BIN?.trim() || "/usr/bin/sqlite3",
+      ["-separator", "\t", SQLITE_DB_PATH, inlineSqlParams(sql, params)],
+      {
+        encoding: "utf8",
+        timeout: 60_000,
+        maxBuffer: 32 * 1024 * 1024,
+      }
+    );
+
+    const trimmed = output.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    return trimmed.split("\n").map((line) => {
+      const [date, strategy_key, meanExpandingSharpeRaw, pathCountRaw] = line.split("\t");
+      const meanExpandingSharpe =
+        meanExpandingSharpeRaw == null || meanExpandingSharpeRaw === ""
+          ? null
+          : Number(meanExpandingSharpeRaw);
+      const pathCount = pathCountRaw == null || pathCountRaw === ""
+        ? 0
+        : Number(pathCountRaw);
+
+      return {
+        date,
+        strategy_key,
+        mean_expanding_sharpe:
+          meanExpandingSharpe != null && Number.isFinite(meanExpandingSharpe)
+            ? meanExpandingSharpe
+            : null,
+        path_count: Number.isFinite(pathCount) ? pathCount : 0,
+      };
+    });
+  } catch {
+    return queryAll(sql, params);
+  }
 }
 
 async function handlePostFactorStyleAnalysis(request, response) {
@@ -743,6 +813,15 @@ function handleFactorStyleSummary(url) {
 }
 
 function handleDailySharpeSummary(url) {
+  const cacheKey = url.toString();
+  const cached = expandingSharpeCache.get(cacheKey);
+  if (
+    cached &&
+    Date.now() - cached.createdAt <= EXPANDING_SHARPE_CACHE_TTL_MS
+  ) {
+    return cached.rows;
+  }
+
   const clauses = ["vsd.experiment_id = :experiment_id"];
   const params = {
     experiment_id: resolveExperimentId(url),
@@ -787,115 +866,69 @@ function handleDailySharpeSummary(url) {
 
   const whereClause = buildWhereClause(clauses);
 
-  return queryAll(`
-    WITH daily_base AS (
-      SELECT
-        vsd.experiment_id,
-        vsd.path_id,
-        vsd.source_type,
-        ${normalizedStrategyKeySql("vsd.strategy_key")} AS strategy_key,
-        vsd.strategy,
-        vsd.market,
-        ${normalizedPromptTypeSql("vsd.prompt_type")} AS prompt_type,
-        vsd.period,
-        vsd.date,
-        CAST(
-          COALESCE(
-            vsd.daily_return,
-            vsd.portfolio_value / NULLIF(
-              LAG(vsd.portfolio_value) OVER (
-                PARTITION BY vsd.experiment_id, vsd.path_id
-                ORDER BY vsd.date
-              ),
-              0.0
-            ) - 1.0
-          ) AS REAL
-        ) AS daily_return,
-        CAST(COALESCE(ppm.risk_free_rate, 0.0) AS REAL) AS risk_free_rate
-      FROM vw_strategy_daily vsd
-      LEFT JOIN path_period_metrics ppm
-        ON ppm.experiment_id = vsd.experiment_id
-       AND ppm.path_id = vsd.path_id
-       AND ppm.period = vsd.period
-      ${whereClause}
-    ),
-    daily_excess AS (
-      SELECT
-        *,
-        (POWER(1.0 + risk_free_rate, 1.0 / 252.0) - 1.0) AS daily_risk_free_rate,
-        (
-          daily_return
-          - (POWER(1.0 + risk_free_rate, 1.0 / 252.0) - 1.0)
-        ) AS excess_daily_return
-      FROM daily_base
-      WHERE daily_return IS NOT NULL
-    ),
-    path_running_stats AS (
-      SELECT
-        *,
-        ROW_NUMBER() OVER (
-          PARTITION BY experiment_id, path_id
-          ORDER BY date
-        ) AS observations,
-        SUM(excess_daily_return) OVER (
-          PARTITION BY experiment_id, path_id
-          ORDER BY date
-          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) AS expanding_excess_sum,
-        SUM(excess_daily_return * excess_daily_return) OVER (
-          PARTITION BY experiment_id, path_id
-          ORDER BY date
-          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) AS expanding_excess_sumsq
-      FROM daily_excess
-    ),
-    path_sharpes AS (
-      SELECT
-        experiment_id,
-        path_id,
-        source_type,
-        strategy_key,
-        strategy,
-        market,
-        prompt_type,
-        period,
-        date,
-        observations,
-        CASE
-          WHEN observations >= 20
-            THEN expanding_excess_sum * 1.0 / observations
-          ELSE NULL
-        END AS expanding_excess_mean,
-        CASE
-          WHEN observations >= 20 AND observations > 1
-            THEN (
-              expanding_excess_sumsq
-              - (expanding_excess_sum * expanding_excess_sum) / observations
-            ) / (observations - 1)
-          ELSE NULL
-        END AS expanding_excess_variance
-      FROM path_running_stats
-    )
+  const sql = `
     SELECT
-      date,
-      strategy_key,
-      MIN(strategy) AS strategy,
-      prompt_type,
-      COUNT(DISTINCT path_id) AS path_count,
-      AVG(
-        CASE
-          WHEN expanding_excess_variance > 0
-            THEN expanding_excess_mean / SQRT(expanding_excess_variance) * SQRT(252.0)
-          ELSE NULL
-        END
-      ) AS mean_expanding_sharpe,
-      MIN(observations) AS min_path_observations,
-      MAX(observations) AS max_path_observations
-    FROM path_sharpes
-    WHERE expanding_excess_mean IS NOT NULL
-    GROUP BY date, strategy_key, prompt_type
-    ORDER BY date, strategy_key, prompt_type
-  `, params);
+      vsd.date,
+      NULLIF(LOWER(TRIM(COALESCE(vsd.strategy_key, ''))), '') AS strategy_key,
+      SUM(vsd.mean_expanding_sharpe * COALESCE(vsd.path_count, 0)) * 1.0
+        / NULLIF(SUM(COALESCE(vsd.path_count, 0)), 0) AS mean_expanding_sharpe,
+      SUM(COALESCE(vsd.path_count, 0)) AS path_count
+    FROM vw_strategy_sharpe_daily vsd
+    ${whereClause}
+    GROUP BY
+      vsd.date,
+      vsd.strategy_key
+  `;
+
+  const rows = queryExpandingSharpeRows(sql, params);
+
+  const grouped = new Map();
+  for (const row of rows) {
+    const strategyKey = normalizeStrategyKeyValue(row.strategy_key) ?? row.strategy_key;
+    const pathCount = Number(row.path_count ?? 0);
+    const sharpe =
+      typeof row.mean_expanding_sharpe === "number" &&
+      Number.isFinite(row.mean_expanding_sharpe)
+        ? row.mean_expanding_sharpe
+        : null;
+
+    const bucketKey = `${row.date}::${strategyKey}`;
+    const bucket = grouped.get(bucketKey) ?? {
+      date: row.date,
+      strategy_key: strategyKey,
+      weightedSharpeSum: 0,
+      path_count: 0,
+    };
+
+    if (sharpe != null && Number.isFinite(pathCount) && pathCount > 0) {
+      bucket.weightedSharpeSum += sharpe * pathCount;
+      bucket.path_count += pathCount;
+    }
+
+    grouped.set(bucketKey, bucket);
+  }
+
+  const result = Array.from(grouped.values())
+    .map((row) => ({
+      date: row.date,
+      strategy_key: row.strategy_key,
+      mean_expanding_sharpe:
+        row.path_count > 0 ? row.weightedSharpeSum / row.path_count : null,
+      path_count: row.path_count,
+    }))
+    .sort((left, right) => {
+      if (left.date === right.date) {
+        return String(left.strategy_key).localeCompare(String(right.strategy_key));
+      }
+      return String(left.date).localeCompare(String(right.date));
+    });
+
+  expandingSharpeCache.set(cacheKey, {
+    createdAt: Date.now(),
+    rows: result,
+  });
+
+  return result;
 }
 
 function handleRunQuality(url) {

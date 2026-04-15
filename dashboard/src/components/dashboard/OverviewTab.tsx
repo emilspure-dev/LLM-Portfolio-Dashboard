@@ -8,7 +8,7 @@ import { KpiCard } from "./KpiCard";
 import { InsightCard } from "./InsightCard";
 import { FigureExportControls } from "./FigureExportControls";
 import { SectionHeader, SoftHr } from "./SectionHeader";
-import { getDailySharpeSummary } from "@/lib/api-client";
+import { getExpandingSharpeSummary } from "@/lib/api-client";
 import {
   MARKET_LABELS,
   getMarketShortLabel,
@@ -51,13 +51,13 @@ interface OverviewTabProps {
 
 export function OverviewTab({ data, runs }: OverviewTabProps) {
   const { summary } = data;
-  const overviewDailySharpeRef = useRef<HTMLDivElement>(null);
+  const overviewExpandingSharpeRef = useRef<HTMLDivElement>(null);
   const overviewBeatIndexRef = useRef<HTMLDivElement>(null);
-  const dailySharpeQuery = useQuery({
-    queryKey: ["overview-daily-sharpe", data.active_experiment_id],
+  const expandingSharpeQuery = useQuery({
+    queryKey: ["overview-expanding-sharpe", data.active_experiment_id],
     queryFn: async () => {
       try {
-        return await getDailySharpeSummary({
+        return await getExpandingSharpeSummary({
           experiment_id: data.active_experiment_id,
         });
       } catch (error) {
@@ -219,8 +219,8 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     });
   }, [data.summary_rows]);
 
-  const dailySharpeChart = useMemo(() => {
-    const rows = dailySharpeQuery.data ?? [];
+  const expandingSharpeChart = useMemo(() => {
+    const rows = expandingSharpeQuery.data ?? [];
     if (rows.length === 0) {
       return {
         chartRows: [] as Array<Record<string, string | number | null>>,
@@ -246,9 +246,10 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     >();
 
     for (const row of rows) {
+      const summaryRow = summary.find((item) => item.strategy_key === row.strategy_key);
       const bucket = grouped.get(row.strategy_key) ?? {
         key: row.strategy_key,
-        label: getStrategyDisplayName(row.strategy, row.strategy_key),
+        label: getStrategyDisplayName(summaryRow?.Strategy ?? null, row.strategy_key),
         color: getStrategyColor(row.strategy_key),
         rows: [],
       };
@@ -281,7 +282,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       ),
       series: series.map(({ key, label, color }) => ({ key, label, color })),
     };
-  }, [dailySharpeQuery.data, summary]);
+  }, [expandingSharpeQuery.data, summary]);
 
   const tooltipStyle = {
     contentStyle: {
@@ -301,29 +302,29 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="dashboard-label">Daily Sharpe by strategy</p>
+            <p className="dashboard-label">Expanding Sharpe by Strategy</p>
             <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
-              Expanding Sharpe over time from <span className="font-mono">vw_strategy_sharpe_daily</span>,
-              averaged across all markets and periods.
+              Expanding Sharpe computed from daily excess returns and annualized to
+              252 trading days, using all observations up to each date.
             </p>
           </div>
           <FigureExportControls
-            captureRef={overviewDailySharpeRef}
-            slug="overview-daily-sharpe-by-strategy"
-            caption="Overview — daily Sharpe by strategy across all periods"
+            captureRef={overviewExpandingSharpeRef}
+            slug="overview-expanding-sharpe-by-strategy"
+            caption="Overview — expanding Sharpe by strategy across all periods"
             experimentId={data.active_experiment_id}
           />
         </div>
 
-        {dailySharpeQuery.isLoading ? (
+        {expandingSharpeQuery.isLoading ? (
           <p className="py-20 text-center text-[12px] text-[#737373]">
-            Loading daily Sharpe overview…
+            Loading expanding Sharpe overview…
           </p>
-        ) : dailySharpeChart.chartRows.length > 0 ? (
-          <div ref={overviewDailySharpeRef} className="min-w-0">
+        ) : expandingSharpeChart.chartRows.length > 0 ? (
+          <div ref={overviewExpandingSharpeRef} className="min-w-0">
             <ResponsiveContainer width="100%" height={340}>
               <LineChart
-                data={dailySharpeChart.chartRows}
+                data={expandingSharpeChart.chartRows}
                 margin={{ top: 8, right: 16, left: 6, bottom: 8 }}
               >
                 <CartesianGrid
@@ -358,7 +359,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   stroke="rgba(192, 180, 170, 0.9)"
                   strokeDasharray="3 6"
                 />
-                {dailySharpeChart.series.map((series) => (
+                {expandingSharpeChart.series.map((series) => (
                   <Line
                     key={series.key}
                     type="monotone"
@@ -373,13 +374,13 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
               </LineChart>
             </ResponsiveContainer>
           </div>
-        ) : dailySharpeQuery.data === null ? (
+        ) : expandingSharpeQuery.data === null ? (
           <p className="py-20 text-center text-[12px] text-[#737373]">
-            Daily Sharpe history is not available on this backend yet.
+            Expanding Sharpe history is not available on this backend yet.
           </p>
         ) : (
           <p className="py-20 text-center text-[12px] text-[#737373]">
-            No Sharpe series are available for this experiment.
+            No expanding Sharpe series are available for this experiment.
           </p>
         )}
       </div>
