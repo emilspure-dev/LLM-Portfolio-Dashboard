@@ -1,11 +1,10 @@
 import type { InsightType } from "@/lib/types";
-import { COLORS } from "@/lib/constants";
 
-const config: Record<InsightType, { color: string; bg: string; icon: string }> = {
-  pos: { color: COLORS.green, bg: "rgba(156, 199, 164, 0.14)", icon: "↗" },
-  neg: { color: COLORS.red, bg: "rgba(212, 151, 144, 0.14)", icon: "↘" },
-  warn: { color: COLORS.amber, bg: "rgba(216, 182, 146, 0.16)", icon: "•" },
-  info: { color: COLORS.accent, bg: "rgba(201, 141, 134, 0.14)", icon: "◦" },
+const config: Record<InsightType, { color: string; bg: string; border: string; icon: string }> = {
+  pos: { color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0", icon: "↗" },
+  neg: { color: "#b91c1c", bg: "#fef2f2", border: "#fecaca", icon: "↘" },
+  warn: { color: "#b45309", bg: "#fffbeb", border: "#fde68a", icon: "•" },
+  info: { color: "#1d4ed8", bg: "#eff6ff", border: "#bfdbfe", icon: "◦" },
 };
 
 interface InsightCardProps {
@@ -18,13 +17,13 @@ export function InsightCard({ type, title, body }: InsightCardProps) {
   const c = config[type];
   return (
     <div
-      className="dashboard-panel rounded-[16px] p-4 animate-fade-in"
-      style={{ backgroundColor: c.bg, borderColor: `${c.color}66` }}
+      className="rounded-[8px] border p-4 animate-fade-in"
+      style={{ backgroundColor: c.bg, borderColor: c.border }}
     >
-      <p className="text-[12px] font-semibold tracking-[-0.02em]" style={{ color: c.color }}>
+      <p className="text-[12px] font-medium tracking-[-0.01em]" style={{ color: c.color }}>
         {c.icon} {title}
       </p>
-      <p className="mt-2 text-[11px] leading-5 text-[#938b84]">
+      <p className="mt-2 text-[12px] leading-5 text-[#404040]">
         {body}
       </p>
     </div>

@@ -47,7 +47,7 @@ export function FigureExportControls({
         type="button"
         variant="ghost"
         size="sm"
-        className="h-8 shrink-0 gap-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9b938b] hover:bg-[rgba(0,0,0,0.04)] hover:text-[#5f5955]"
+        className="h-8 shrink-0 gap-1.5 px-2 text-[11px] font-medium text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]"
         onClick={() => void handlePng()}
         aria-label="Download figure as PNG"
         title="Downloads a high-resolution PNG of the chart below. Save it under figures/ using the same base name as in the LaTeX snippet."

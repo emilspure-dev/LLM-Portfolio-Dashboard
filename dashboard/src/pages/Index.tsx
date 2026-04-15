@@ -35,16 +35,16 @@ const TAB_NAMES = [
 function LoadingPanel() {
   return (
     <div className="py-8">
-      <div className="dashboard-panel-strong flex min-h-[360px] items-center justify-center rounded-[28px] p-8">
+      <div className="dashboard-panel-strong flex min-h-[360px] items-center justify-center rounded-[10px] p-8">
         <div className="animate-fade-in space-y-4 text-center">
-          <div className="dashboard-glass-inset mx-auto inline-flex h-16 w-16 items-center justify-center rounded-[20px]">
-            <Loader2 className="h-6 w-6 animate-spin text-[#b39a91]" />
+          <div className="dashboard-glass-inset mx-auto inline-flex h-14 w-14 items-center justify-center rounded-[10px]">
+            <Loader2 className="h-6 w-6 animate-spin text-[#525252]" />
           </div>
           <div>
-            <p className="text-[15px] font-semibold tracking-[-0.03em] text-[#625c58]">
+            <p className="text-[15px] font-medium tracking-[-0.01em] text-[#0a0a0a]">
               Loading dashboard data
             </p>
-            <p className="mt-1 text-[12px] leading-5 text-[#a39b93]">
+            <p className="mt-1 text-[13px] leading-5 text-[#737373]">
               Pulling the latest experiment from the read-only API.
             </p>
           </div>
@@ -62,23 +62,23 @@ interface ErrorPanelProps {
 function ErrorPanel({ message, onRetry }: ErrorPanelProps) {
   return (
     <div className="py-8">
-      <div className="dashboard-panel-strong flex min-h-[360px] items-center justify-center rounded-[28px] p-8">
+      <div className="dashboard-panel-strong flex min-h-[360px] items-center justify-center rounded-[10px] p-8">
         <div className="animate-fade-in space-y-4 text-center">
-          <div className="dashboard-glass-inset mx-auto inline-flex h-16 w-16 items-center justify-center rounded-[20px]">
-            <WifiOff className="h-6 w-6 text-[#b39a91]" />
+          <div className="dashboard-glass-inset mx-auto inline-flex h-14 w-14 items-center justify-center rounded-[10px]">
+            <WifiOff className="h-6 w-6 text-[#525252]" />
           </div>
           <div>
-            <p className="text-[15px] font-semibold tracking-[-0.03em] text-[#625c58]">
+            <p className="text-[15px] font-medium tracking-[-0.01em] text-[#0a0a0a]">
               Unable to load dashboard data
             </p>
-            <p className="mt-1 max-w-xl text-[12px] leading-5 text-[#a39b93]">
+            <p className="mt-1 max-w-xl text-[13px] leading-5 text-[#737373]">
               {message}
             </p>
           </div>
           <div className="flex justify-center">
             <Button
               variant="outline"
-              className="rounded-full px-4 text-[11px] font-semibold"
+              className="rounded-md px-4 text-[12px] font-medium"
               onClick={onRetry}
             >
               <RefreshCw className="mr-1 h-3 w-3" />
@@ -254,18 +254,18 @@ export default function Index() {
   return (
     <div className="min-h-screen">
       <main className="dashboard-board mx-auto max-w-[1520px] px-4 py-5 md:px-8 md:py-8">
-        <header className="border-b border-[rgba(214,208,198,0.9)] pb-6">
+        <header className="border-b border-[#ececec] pb-6">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 flex-1">
               <p className="dashboard-topline">
                 Empirical Research
-                <span className="px-1.5 text-[#c7c0b6]">·</span>
+                <span className="px-1.5 text-[#a3a3a3]">·</span>
                 Experiment {resolvedExperimentId ?? "Loading"}
               </p>
-              <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.05em] text-[#2f2a25] md:text-[36px]">
+              <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.03em] text-[#0a0a0a] md:text-[36px]">
                 LLM Portfolio Evaluation Dashboard
               </h1>
-              <p className="mt-2 max-w-3xl text-[13px] leading-6 text-[#847b71] md:text-[14px]">
+              <p className="mt-2 max-w-3xl text-[14px] leading-6 text-[#525252]">
                 Empirical study of AI-based portfolio construction and rebalancing
                 for retail investors.
               </p>
@@ -308,7 +308,7 @@ export default function Index() {
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
-                  className="h-11 rounded-full px-4 text-[12px] font-semibold"
+                  className="h-10 rounded-md px-3.5 text-[13px] font-medium"
                   onClick={handleRefresh}
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -316,7 +316,7 @@ export default function Index() {
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-11 rounded-full px-4 text-[12px] font-semibold"
+                  className="h-10 rounded-md px-3.5 text-[13px] font-medium"
                   onClick={handleReset}
                 >
                   Reset view
@@ -336,9 +336,9 @@ export default function Index() {
             !(
               (data?.factor_style_rows?.length ?? 0) > 0 && !data?.factor_style_error
             ) && (
-            <p className="mt-4 text-[12px] leading-5 text-[#9a6a3b]">
+            <p className="mt-4 text-[12px] leading-5 text-[#b45309]">
               Factor Style needs the backend route{" "}
-              <code className="rounded bg-[rgba(60,50,38,0.06)] px-1.5 py-0.5">
+              <code className="rounded bg-[#f5f5f5] px-1.5 py-0.5 font-mono text-[11px]">
                 GET /api/summary/factor-style
               </code>{" "}
               on the active API process.

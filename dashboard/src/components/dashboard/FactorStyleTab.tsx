@@ -44,15 +44,15 @@ const STRATEGY_COLORS = {
 
 const tooltipStyle = {
   contentStyle: {
-    backgroundColor: "rgba(255, 255, 252, 0.95)",
-    border: "1px solid rgba(232, 224, 217, 0.96)",
+    backgroundColor: "#fafafa",
+    border: "1px solid #ececec",
     borderRadius: 14,
     boxShadow: "0 12px 24px rgba(121, 101, 79, 0.08)",
     fontSize: 11,
     color: "#6f6762",
   },
   labelStyle: {
-    color: "#9b938b",
+    color: "#737373",
     fontSize: 10,
     letterSpacing: "0.08em",
     textTransform: "uppercase" as const,
@@ -567,7 +567,7 @@ function FactorStyleAiSection({
   return (
     <div className="dashboard-panel-strong mt-4 rounded-[20px] p-4 md:p-5">
       <p className="dashboard-label mb-2">Optional AI narrative</p>
-      <p className="mb-3 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
+      <p className="mb-3 max-w-3xl text-[12px] leading-5 text-[#737373]">
         Use this after reviewing the count-based charts if you want an extra natural-language interpretation.
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -575,7 +575,7 @@ function FactorStyleAiSection({
           type="button"
           size="sm"
           variant="outline"
-          className="rounded-full border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] text-[12px] font-semibold"
+          className="rounded-full border-[#ececec] bg-[#fafafa] text-[12px] font-semibold"
           disabled={loading || factorStyleFiltered.length === 0}
           onClick={() => void runAnalysis()}
         >
@@ -590,15 +590,15 @@ function FactorStyleAiSection({
       {error && (
         <p className="mt-3 text-[12px] leading-5 text-[#a85a52]">
           {error}{" "}
-          <span className="text-[#9d958d]">
+          <span className="text-[#737373]">
             (If you see “openai_not_configured”, set <span className="font-mono">OPENAI_API_KEY</span> on the Node API
             and restart.)
           </span>
         </p>
       )}
       {analysis && (
-        <div className="mt-4 max-h-[min(70vh,520px)] overflow-y-auto rounded-[14px] border border-[rgba(232,224,217,0.85)] bg-[rgba(255,255,252,0.65)] px-4 py-3">
-          <div className="whitespace-pre-wrap text-[12px] leading-6 text-[#5e5955] [word-break:break-word]">
+        <div className="mt-4 max-h-[min(70vh,520px)] overflow-y-auto rounded-[14px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+          <div className="whitespace-pre-wrap text-[12px] leading-6 text-[#404040] [word-break:break-word]">
             {analysis}
           </div>
         </div>
@@ -736,7 +736,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
       <div className="dashboard-panel rounded-[18px] px-4 py-3">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label className="flex flex-col gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#8f8780]">Market</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#737373]">Market</span>
             <select
               value={marketFilter}
               onChange={(e) => setMarketFilter(e.target.value)}
@@ -752,7 +752,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
           </label>
 
           <label className="flex flex-col gap-2">
-            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#8f8780]">Factor bucket</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#737373]">Factor bucket</span>
             <select
               value={factorFilter}
               onChange={(e) => setFactorFilter(e.target.value as SelectionFactorKey)}
@@ -770,11 +770,11 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
 
       <div>
         <SectionHeader>Prompt selection counts</SectionHeader>
-        <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#7b736e]">
+        <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#525252]">
           The main question here is what each prompt actually selects over the full backtest. Each run is first collapsed
           into one whole-run profile, so the charts below reflect full-run behavior rather than repeated half-year slices.
         </p>
-        <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#8f8780]">
+        <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#737373]">
           {FACTOR_CONFIG[factorFilter].label}: {FACTOR_CONFIG[factorFilter].definition}
         </p>
         {data.factor_style_error && (
@@ -822,18 +822,18 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                 <div key={strategyKey} className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
                   <p className="dashboard-label mb-2">{formatPromptLabel(strategyKey)}</p>
                   <p className="text-[18px] font-semibold text-[#534b45]">{summary?.dominant_label ?? "—"}</p>
-                  <p className="mt-2 text-[12px] leading-5 text-[#7b736e]">
+                  <p className="mt-2 text-[12px] leading-5 text-[#525252]">
                     Most common dominant full-run {FACTOR_CONFIG[factorFilter].label.toLowerCase()} bucket, leading in{" "}
                     {dominantCount} of {runCount} runs ({formatPct(dominantShare, 0)}).
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#9d958d]">
-                    <span className="rounded-full border border-[rgba(232,224,217,0.9)] px-2.5 py-1">
+                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#737373]">
+                    <span className="rounded-full border border-[#ececec] px-2.5 py-1">
                       Runs: {runCount}
                     </span>
-                    <span className="rounded-full border border-[rgba(232,224,217,0.9)] px-2.5 py-1">
+                    <span className="rounded-full border border-[#ececec] px-2.5 py-1">
                       Dates: {summary?.date_count ?? 0}
                     </span>
-                    <span className="rounded-full border border-[rgba(232,224,217,0.9)] px-2.5 py-1">
+                    <span className="rounded-full border border-[#ececec] px-2.5 py-1">
                       Periods: {summary?.period_count ?? 0}
                     </span>
                   </div>
@@ -846,7 +846,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="dashboard-label">What each prompt selects</p>
-                <p className="mt-1 text-[12px] leading-5 text-[#8f8780]">
+                <p className="mt-1 text-[12px] leading-5 text-[#737373]">
                   Count of full runs by dominant bucket. Each run contributes once, based on the bucket that dominates its
                   full backtest selection profile.
                 </p>
@@ -870,26 +870,26 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                     interval={0}
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 11, fill: "#8f8780" }}
+                    tick={{ fontSize: 11, fill: "#737373" }}
                   />
                   <Tooltip
                     {...tooltipStyle}
                     formatter={(value: number) => `${Number(value).toFixed(0)} runs`}
                   />
-                  <Legend wrapperStyle={{ fontSize: 10, color: "#9b938b", paddingTop: 10 }} iconType="circle" iconSize={8} />
+                  <Legend wrapperStyle={{ fontSize: 10, color: "#737373", paddingTop: 10 }} iconType="circle" iconSize={8} />
                   <Bar dataKey="simple" name="GPT (Simple)" fill={STRATEGY_COLORS.gpt_simple} radius={[0, 4, 4, 0]} barSize={14} />
                   <Bar dataKey="advanced" name="GPT (Advanced)" fill={STRATEGY_COLORS.gpt_advanced} radius={[0, 4, 4, 0]} barSize={14} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <p className="mt-3 text-[12px] leading-5 text-[#7b736e]">{overallAnalysis}</p>
+            <p className="mt-3 text-[12px] leading-5 text-[#525252]">{overallAnalysis}</p>
           </div>
 
           <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="dashboard-label">Average full-run mix</p>
-                <p className="mt-1 text-[12px] leading-5 text-[#8f8780]">
+                <p className="mt-1 text-[12px] leading-5 text-[#737373]">
                   Average bucket share inside the full-run profile. This shows how much of the total run each prompt spends
                   in each bucket, after collapsing each run to one whole-run mix.
                 </p>
@@ -920,23 +920,23 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                     interval={0}
                     axisLine={false}
                     tickLine={false}
-                    tick={{ fontSize: 11, fill: "#8f8780" }}
+                    tick={{ fontSize: 11, fill: "#737373" }}
                   />
                   <Tooltip {...tooltipStyle} formatter={(value: number) => formatPct(Number(value), 1)} />
-                  <Legend wrapperStyle={{ fontSize: 10, color: "#9b938b", paddingTop: 10 }} iconType="circle" iconSize={8} />
+                  <Legend wrapperStyle={{ fontSize: 10, color: "#737373", paddingTop: 10 }} iconType="circle" iconSize={8} />
                   <Bar dataKey="simple" name="GPT (Simple)" fill={STRATEGY_COLORS.gpt_simple} radius={[0, 4, 4, 0]} barSize={14} />
                   <Bar dataKey="advanced" name="GPT (Advanced)" fill={STRATEGY_COLORS.gpt_advanced} radius={[0, 4, 4, 0]} barSize={14} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            <p className="mt-3 text-[12px] leading-5 text-[#7b736e]">{runMixAnalysis}</p>
+            <p className="mt-3 text-[12px] leading-5 text-[#525252]">{runMixAnalysis}</p>
           </div>
 
           {outcomeLinkageRows.length > 0 && (
             <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
               <div className="mb-3">
                 <p className="dashboard-label">Outcome linkage by dominant full-run bucket</p>
-                <p className="mt-1 text-[12px] leading-5 text-[#8f8780]">
+                <p className="mt-1 text-[12px] leading-5 text-[#737373]">
                   This links each run&apos;s dominant full-run bucket to realized outcomes, so you can see whether certain
                   selection styles tend to coincide with stronger Sharpe or return profiles.
                 </p>
@@ -944,7 +944,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[820px] text-[11px]">
                   <thead>
-                    <tr className="border-b border-[rgba(227,220,214,0.8)] text-left text-[#b4aca5]">
+                    <tr className="border-b border-[#ececec] text-left text-[#a3a3a3]">
                       <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Dominant bucket</th>
                       <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Model</th>
                       <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Prompt</th>
@@ -955,13 +955,13 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                   </thead>
                   <tbody>
                   {outcomeLinkageRows.slice(0, 18).map((row) => (
-                      <tr key={`${row.dominant_label}-${row.model}-${row.prompt_type}`} className="border-b border-[rgba(227,220,214,0.55)] last:border-0">
-                        <td className="py-2 pr-3 text-[#5e5955]">{row.dominant_label}</td>
-                        <td className="py-2 pr-3 text-[#8d857f]">{row.model}</td>
-                        <td className="py-2 pr-3 text-[#8d857f]">{row.prompt_type}</td>
-                        <td className="py-2 pr-3 text-right text-[#8d857f]">{row.count}</td>
-                        <td className="py-2 pr-3 text-right text-[#8d857f]">{row.mean_sharpe != null ? row.mean_sharpe.toFixed(2) : "—"}</td>
-                        <td className="py-2 text-right text-[#8d857f]">{formatPct(row.mean_return, 1)}</td>
+                      <tr key={`${row.dominant_label}-${row.model}-${row.prompt_type}`} className="border-b border-[#ececec] last:border-0">
+                        <td className="py-2 pr-3 text-[#404040]">{row.dominant_label}</td>
+                        <td className="py-2 pr-3 text-[#737373]">{row.model}</td>
+                        <td className="py-2 pr-3 text-[#737373]">{row.prompt_type}</td>
+                        <td className="py-2 pr-3 text-right text-[#737373]">{row.count}</td>
+                        <td className="py-2 pr-3 text-right text-[#737373]">{row.mean_sharpe != null ? row.mean_sharpe.toFixed(2) : "—"}</td>
+                        <td className="py-2 text-right text-[#737373]">{formatPct(row.mean_return, 1)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -974,7 +974,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
               <div className="mb-3">
                 <p className="dashboard-label">Regime context</p>
-                <p className="mt-1 text-[12px] leading-5 text-[#8f8780]">
+                <p className="mt-1 text-[12px] leading-5 text-[#737373]">
                   Period-level `Mkt / Vol / Rate` labels for the counts above, so you can read prompt selection shifts
                   against the regime backdrop.
                 </p>
@@ -982,7 +982,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[680px] text-[11px]">
                   <thead>
-                    <tr className="border-b border-[rgba(227,220,214,0.8)] text-left text-[#b4aca5]">
+                    <tr className="border-b border-[#ececec] text-left text-[#a3a3a3]">
                       <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Market</th>
                       <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Period</th>
                       <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Window</th>
@@ -993,15 +993,15 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
                   </thead>
                   <tbody>
                     {regimeContextRows.map((row) => (
-                      <tr key={`${row.market}-${row.period}`} className="border-b border-[rgba(227,220,214,0.55)] last:border-0">
-                        <td className="py-2 pr-3 text-[#5e5955]">{MARKET_LABELS[row.market] ?? row.market}</td>
-                        <td className="py-2 pr-3 text-[#5e5955]">{row.period}</td>
-                        <td className="py-2 pr-3 text-[#8d857f]">
+                      <tr key={`${row.market}-${row.period}`} className="border-b border-[#ececec] last:border-0">
+                        <td className="py-2 pr-3 text-[#404040]">{MARKET_LABELS[row.market] ?? row.market}</td>
+                        <td className="py-2 pr-3 text-[#404040]">{row.period}</td>
+                        <td className="py-2 pr-3 text-[#737373]">
                           {formatPeriodWindow(row.periodStartDate, row.periodEndDate)}
                         </td>
-                        <td className="py-2 pr-3 text-[#8d857f]">{row.marketRegimeLabel ?? "—"}</td>
-                        <td className="py-2 pr-3 text-[#8d857f]">{row.volRegimeLabel ?? "—"}</td>
-                        <td className="py-2 pr-3 text-[#8d857f]">{row.rateRegimeLabel ?? "—"}</td>
+                        <td className="py-2 pr-3 text-[#737373]">{row.marketRegimeLabel ?? "—"}</td>
+                        <td className="py-2 pr-3 text-[#737373]">{row.volRegimeLabel ?? "—"}</td>
+                        <td className="py-2 pr-3 text-[#737373]">{row.rateRegimeLabel ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1020,21 +1020,21 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
 
           <div className="mt-4 space-y-3">
             <SectionHeader>Method notes</SectionHeader>
-            <p className="max-w-3xl text-[12px] leading-5 text-[#9d958d]">
+            <p className="max-w-3xl text-[12px] leading-5 text-[#737373]">
               {FACTOR_DEFINITIONS_BLURB} Each run is collapsed into one full-run selection profile before charting, so the
               main view reflects whole-backtest behavior instead of repeated half-year windows.
             </p>
-            <Accordion type="multiple" className="dashboard-panel rounded-[16px] border border-[rgba(232,224,217,0.9)] px-3">
+            <Accordion type="multiple" className="dashboard-panel rounded-[16px] border border-[#ececec] px-3">
               {GPT_STRATEGY_KEYS.map((key) => {
                 const g = STRATEGY_GLOSSARY[key];
                 const title = g?.title ?? key;
                 const summary = g?.summary ?? "Use the count panels above to see what this prompt selects over time.";
                 return (
-                  <AccordionItem key={key} value={key} className="border-[rgba(227,220,214,0.75)]">
-                    <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+                  <AccordionItem key={key} value={key} className="border-[#ececec]">
+                    <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#404040] hover:no-underline">
                       {title}
                     </AccordionTrigger>
-                    <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">{summary}</AccordionContent>
+                    <AccordionContent className="text-[12px] leading-5 text-[#525252]">{summary}</AccordionContent>
                   </AccordionItem>
                 );
               })}

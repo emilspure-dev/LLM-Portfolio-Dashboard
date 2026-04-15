@@ -80,6 +80,18 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      fontFamily: {
+        sans: [
+          "Inter",
+          "SF Pro Display",
+          "SF Pro Text",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Helvetica Neue",
+          "sans-serif",
+        ],
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },

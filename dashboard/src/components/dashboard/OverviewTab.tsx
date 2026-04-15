@@ -250,14 +250,14 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
 
   const tooltipStyle = {
     contentStyle: {
-      backgroundColor: "rgba(255, 255, 252, 0.95)",
-      border: "1px solid rgba(232, 224, 217, 0.96)",
+      backgroundColor: "#fafafa",
+      border: "1px solid #ececec",
       borderRadius: 14,
       boxShadow: "0 12px 24px rgba(121, 101, 79, 0.08)",
       fontSize: 11,
       color: "#6f6762",
     },
-    labelStyle: { color: "#9b938b", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" },
+    labelStyle: { color: "#737373", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" },
     itemStyle: { color: "#6f6762" },
   };
 
@@ -309,20 +309,20 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                         ret · n={group.totalObs}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-[8px] bg-[rgba(0,0,0,0.04)] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#b4aca5]">
+                    <span className="shrink-0 rounded-[8px] bg-[rgba(0,0,0,0.04)] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#a3a3a3]">
                       All Markets
                     </span>
                   </div>
 
                   {/* Per-market chips */}
                   {group.byMarket.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2 border-t border-[rgba(227,220,214,0.6)] pt-3">
+                    <div className="mt-3 flex flex-wrap gap-2 border-t border-[#ececec] pt-3">
                       {group.byMarket.map((m) => (
                         <div
                           key={m.market}
                           className="min-w-[90px] flex-1 rounded-[10px] bg-[rgba(0,0,0,0.03)] px-3 py-2"
                         >
-                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                          <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">
                             {getMarketShortLabel(m.market)}
                           </p>
                           <p
@@ -397,7 +397,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   type="category"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 10, fill: "#8f8780" }}
+                  tick={{ fontSize: 10, fill: "#737373" }}
                   width={100}
                 />
                 <Tooltip {...tooltipStyle} formatter={(v: number) => `${v}%`} />
@@ -406,7 +406,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   dataKey="value"
                   radius={[999, 999, 999, 999]}
                   barSize={12}
-                  label={{ position: "right", fontSize: 10, fill: "#9b938b", formatter: (v: number) => `${v}%` }}
+                  label={{ position: "right", fontSize: 10, fill: "#737373", formatter: (v: number) => `${v}%` }}
                 >
                   {beatIndexData.map((d, i) => (
                     <Cell key={i} fill={d.color} />
@@ -431,8 +431,8 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         </>
       )}
 
-      <div className="dashboard-panel-strong rounded-[20px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)] p-4 md:p-5">
-        <p className="text-[12px] leading-5 text-[#8f8780]">
+      <div className="dashboard-panel-strong rounded-[20px] border border-[#ececec] bg-[#fafafa] p-4 md:p-5">
+        <p className="text-[12px] leading-5 text-[#737373]">
           Use <strong>Performance</strong> for full strategy ranking and run distributions, <strong>Factor Style</strong>
           for return explanations, <strong>Paths</strong> for time-series drill-down, and <strong>Diagnostics</strong> for
           missing-data and confidence checks.
@@ -471,12 +471,12 @@ export function SharpeGapDiagnostic({
   if (!allRows.length) return null;
 
   return (
-    <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.55)]">
+    <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa]">
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-4 py-3 text-left"
       >
-        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#b4aca5]">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#a3a3a3]">
           Sharpe gap diagnostics
           {gaps.length > 0 && (
             <span className="ml-2 rounded-full bg-[rgba(212,151,144,0.25)] px-2 py-0.5 text-[10px] text-[#c17070]">
@@ -484,16 +484,16 @@ export function SharpeGapDiagnostic({
             </span>
           )}
         </span>
-        <span className="text-[11px] text-[#b4aca5]">{open ? "▲ hide" : "▼ show"}</span>
+        <span className="text-[11px] text-[#a3a3a3]">{open ? "▲ hide" : "▼ show"}</span>
       </button>
 
       {open && (
-        <div className="border-t border-[rgba(227,220,214,0.7)] px-4 pb-4 pt-3">
+        <div className="border-t border-[#ececec] px-4 pb-4 pt-3">
           {gaps.length === 0 ? (
             <p className="text-[12px] text-[#7a9e7a]">All rows have a valid Sharpe ratio.</p>
           ) : (
             <>
-              <p className="mb-3 text-[11px] leading-5 text-[#8f8780]">
+              <p className="mb-3 text-[11px] leading-5 text-[#737373]">
                 These rows have <code className="rounded bg-[rgba(0,0,0,0.06)] px-1">mean_sharpe = null</code> in the
                 raw API data. The cause is usually missing volatility (Sharpe = return / vol — if vol is null,
                 Sharpe cannot be computed) or the backend view not covering this strategy/market combination.
@@ -501,9 +501,9 @@ export function SharpeGapDiagnostic({
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-[11px]">
                   <thead>
-                    <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
+                    <tr className="border-b border-[#ececec] bg-[#fafafa]">
                       {["Strategy", "Market", "Sharpe", "Annualized Return", "Volatility", "Observations", "Likely cause"].map((h) => (
-                        <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-[#b4aca5]">
+                        <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-[#a3a3a3]">
                           {h}
                         </th>
                       ))}
@@ -516,17 +516,17 @@ export function SharpeGapDiagnostic({
                       else if (!row.hasReturn && !row.hasVol) cause = "Return + volatility both missing";
                       else if (row.hasReturn && row.hasVol) cause = "Backend did not compute Sharpe despite having inputs";
                       return (
-                        <tr key={i} className="border-b border-[rgba(227,220,214,0.6)] last:border-0">
-                          <td className="px-3 py-2 font-medium text-[#5e5955]">{row.strategy}</td>
-                          <td className="px-3 py-2 text-[#8d857f]">{row.market}</td>
+                        <tr key={i} className="border-b border-[#ececec] last:border-0">
+                          <td className="px-3 py-2 font-medium text-[#404040]">{row.strategy}</td>
+                          <td className="px-3 py-2 text-[#737373]">{row.market}</td>
                           <td className="px-3 py-2 font-mono text-[#c17070]">null</td>
-                          <td className="px-3 py-2 tabular-nums text-[#8d857f]">
+                          <td className="px-3 py-2 tabular-nums text-[#737373]">
                             {row.mean_annualized_return != null ? `${(row.mean_annualized_return * 100).toFixed(1)}%` : "null"}
                           </td>
-                          <td className="px-3 py-2 tabular-nums text-[#8d857f]">
+                          <td className="px-3 py-2 tabular-nums text-[#737373]">
                             {row.mean_volatility != null ? `${(row.mean_volatility * 100).toFixed(1)}%` : "null"}
                           </td>
-                          <td className="px-3 py-2 tabular-nums text-[#8d857f]">{row.observations}</td>
+                          <td className="px-3 py-2 tabular-nums text-[#737373]">{row.observations}</td>
                           <td className="px-3 py-2 text-[#a07c5a]">{cause}</td>
                         </tr>
                       );
@@ -534,7 +534,7 @@ export function SharpeGapDiagnostic({
                   </tbody>
                 </table>
               </div>
-              <p className="mt-3 text-[10px] text-[#b4aca5]">
+              <p className="mt-3 text-[10px] text-[#a3a3a3]">
                 Total raw rows: {allRows.length} · Missing Sharpe: {gaps.length} ({((gaps.length / allRows.length) * 100).toFixed(0)}%)
               </p>
             </>

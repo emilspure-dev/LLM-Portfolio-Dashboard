@@ -123,15 +123,15 @@ const DEFAULT_PAGE_SIZE = 15;
 
 const tooltipStyle = {
   contentStyle: {
-    backgroundColor: "rgba(255, 255, 252, 0.96)",
-    border: "1px solid rgba(232, 224, 217, 0.96)",
+    backgroundColor: "#fafafa",
+    border: "1px solid #ececec",
     borderRadius: 14,
     boxShadow: "0 12px 24px rgba(121, 101, 79, 0.08)",
     fontSize: 11,
     color: "#6f6762",
   },
   labelStyle: {
-    color: "#9b938b",
+    color: "#737373",
     fontSize: 10,
     letterSpacing: "0.08em",
     textTransform: "uppercase" as const,
@@ -139,11 +139,11 @@ const tooltipStyle = {
   itemStyle: { color: "#6f6762" },
 };
 
-const CHART_X_TICK = { fontSize: 11, fill: "#8f8780" };
+const CHART_X_TICK = { fontSize: 11, fill: "#737373" };
 const CHART_Y_TICK = { fontSize: 11, fill: "#aca49d" };
 const CHART_LEGEND_WRAPPER = {
   fontSize: 11,
-  color: "#6f6863",
+  color: "#404040",
   paddingTop: 8,
 };
 
@@ -199,13 +199,13 @@ function EmptyState({
   return (
     <Panel className="flex min-h-[260px] items-center justify-center">
       <div className="max-w-lg text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.7)]">
-          <AlertCircle className="h-5 w-5 text-[#b39a91]" />
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-[#ececec] bg-[#fafafa]">
+          <AlertCircle className="h-5 w-5 text-[#a3a3a3]" />
         </div>
-        <p className="mt-4 text-[14px] font-semibold tracking-[-0.03em] text-[#625c58]">
+        <p className="mt-4 text-[14px] font-semibold tracking-[-0.03em] text-[#404040]">
           {title}
         </p>
-        <p className="mt-2 text-[12px] leading-5 text-[#9c948c]">{body}</p>
+        <p className="mt-2 text-[12px] leading-5 text-[#737373]">{body}</p>
       </div>
     </Panel>
   );
@@ -219,13 +219,13 @@ function LoadingState({
   return (
     <Panel className="flex min-h-[260px] items-center justify-center">
       <div className="text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.7)]">
-          <Database className="h-5 w-5 text-[#b39a91]" />
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-[18px] border border-[#ececec] bg-[#fafafa]">
+          <Database className="h-5 w-5 text-[#a3a3a3]" />
         </div>
-        <p className="mt-4 text-[14px] font-semibold tracking-[-0.03em] text-[#625c58]">
+        <p className="mt-4 text-[14px] font-semibold tracking-[-0.03em] text-[#404040]">
           {title}
         </p>
-        <p className="mt-2 text-[12px] leading-5 text-[#9c948c]">
+        <p className="mt-2 text-[12px] leading-5 text-[#737373]">
           Fetching live data from the read-only API.
         </p>
       </div>
@@ -1757,15 +1757,15 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
               experimentId={data.active_experiment_id}
             />
           </div>
-          <p className="mb-3 text-[11px] leading-5 text-[#8a827a]">
+          <p className="mb-3 text-[11px] leading-5 text-[#737373]">
             Overlapping run-level Sharpe counts for GPT portfolios (current market filter).{" "}
-            <span className="font-medium text-[#6f6863]">Dashed</span> lines: mean Sharpe for GPT
+            <span className="font-medium text-[#404040]">Dashed</span> lines: mean Sharpe for GPT
             portfolios.{" "}
-            <span className="font-medium text-[#6f6863]">Dotted</span>: benchmark strategy means
+            <span className="font-medium text-[#404040]">Dotted</span>: benchmark strategy means
             (Equal Weight, Mean-Variance, 60/40, Fama-French, Market Index).
           </p>
           {sharpeMeanMarkers.length > 0 && (
-            <div className="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 border-b border-[rgba(232,224,217,0.65)] pb-3 text-[10px] sm:grid-cols-3 lg:grid-cols-4">
+            <div className="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 border-b border-[#ececec] pb-3 text-[10px] sm:grid-cols-3 lg:grid-cols-4">
               {[...sharpeMeanMarkers]
                 .sort((a, b) => a.value - b.value)
                 .map((m) => (
@@ -1812,7 +1812,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
                   />
                   <YAxis
                     allowDecimals={false}
-                    tick={{ fontSize: 10, fill: "#8f8780" }}
+                    tick={{ fontSize: 10, fill: "#737373" }}
                     axisLine={false}
                     tickLine={false}
                     width={36}
@@ -1821,7 +1821,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
                       angle: -90,
                       position: "insideLeft",
                       offset: 4,
-                      style: { fill: "#9b938b", fontSize: 10, fontWeight: 600 },
+                      style: { fill: "#737373", fontSize: 10, fontWeight: 600 },
                     }}
                   />
                   <Tooltip
@@ -1837,7 +1837,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
                   <Legend
                     verticalAlign="top"
                     align="right"
-                    wrapperStyle={{ fontSize: 11, color: "#5d5754", paddingBottom: 4 }}
+                    wrapperStyle={{ fontSize: 11, color: "#404040", paddingBottom: 4 }}
                   />
                   <Area
                     name="GPT (Simple)"
@@ -1876,12 +1876,12 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
               </div>
             );
           })()}
-          <p className="mt-2 text-[10px] text-[#a39b93]">
+          <p className="mt-2 text-[10px] text-[#a3a3a3]">
             X-axis: Sharpe ratio (numerical). Y-axis: number of runs in each bin.
           </p>
           {/* Diagnostic: shows which mean markers were resolved vs null */}
           <details className="mt-1 text-[9px] text-[#b0a8a0]">
-            <summary className="cursor-pointer hover:text-[#8a827a]">
+            <summary className="cursor-pointer hover:text-[#737373]">
               Marker diagnostics ({sharpeMeanMarkers.length}/{_allMeanCandidates.length} active)
             </summary>
             <ul className="mt-1 ml-3 list-disc space-y-0.5">
@@ -1896,7 +1896,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
         </Panel>
       ) : (
         <Panel>
-          <p className="text-[12px] leading-5 text-[#8a827a]">
+          <p className="text-[12px] leading-5 text-[#737373]">
             No GPT run-level Sharpe observations for this market filter. The histogram uses runs with{" "}
             <span className="font-mono text-[11px]">strategy_key</span>{" "}
             <span className="font-mono">gpt_simple</span> or <span className="font-mono">gpt_advanced</span> and a
@@ -1927,7 +1927,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
                 textAnchor="end"
                 interval={0}
                 height={60}
-                tick={{ fontSize: 10, fill: "#8f8780" }}
+                tick={{ fontSize: 10, fill: "#737373" }}
                 axisLine={false}
                 tickLine={false}
               />
@@ -1999,7 +1999,7 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
               </Scatter>
             </ScatterChart>
             </ResponsiveContainer>
-            <div className="mt-3 space-y-1 text-[11px] text-[#9a928b]">
+            <div className="mt-3 space-y-1 text-[11px] text-[#737373]">
               {scatterData.map((row) => (
                 <div key={row.strategyKey} className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
@@ -2023,20 +2023,20 @@ export function SharpeReturnsTab({ data, runs }: BaseTabProps) {
       <Panel className="overflow-x-auto p-0">
         <table className="w-full min-w-[820px] text-[11px]">
           <thead>
-            <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Strategy</th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Sharpe</th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Annualized return</th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Volatility</th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Beat index</th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Turnover</th>
-              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Observations</th>
+            <tr className="border-b border-[#ececec] bg-[#fafafa]">
+              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Strategy</th>
+              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Sharpe</th>
+              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Annualized return</th>
+              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Volatility</th>
+              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Beat index</th>
+              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Turnover</th>
+              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Observations</th>
             </tr>
           </thead>
           <tbody>
             {summary.map((row) => (
-              <tr key={row.strategy_key} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                <td className="px-3 py-2.5 font-medium text-[#5e5955]">{row.Strategy}</td>
+              <tr key={row.strategy_key} className="border-b border-[#ececec] last:border-0">
+                <td className="px-3 py-2.5 font-medium text-[#404040]">{row.Strategy}</td>
                 <td className="px-3 py-2.5 text-right font-medium tabular-nums" style={{ color: sharpeColor(row.mean_sharpe) }}>
                   {row.mean_sharpe != null && Number.isFinite(row.mean_sharpe)
                     ? row.mean_sharpe.toFixed(2)
@@ -2289,21 +2289,21 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
               label: formatStrategyLabel(option.strategy, option.strategy_key),
             }))}
           />
-          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Series source</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">
+            <p className="mt-2 text-[13px] font-semibold text-[#404040]">
               {selectedStrategy ? `${getSourceDisplayName(selectedStrategy.source_type)} path metrics` : "Path metrics"}
             </p>
-            <p className="mt-1 text-[11px] text-[#9b938b]">
+            <p className="mt-1 text-[11px] text-[#737373]">
               The chart is loaded from raw daily path metrics through the backend.
             </p>
           </div>
-          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Loaded rows</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">
+            <p className="mt-2 text-[13px] font-semibold text-[#404040]">
               {equityQuery.data?.length ?? 0}
             </p>
-            <p className="mt-1 text-[11px] text-[#9b938b]">
+            <p className="mt-1 text-[11px] text-[#737373]">
               {pathCount > 0 ? `${pathCount} path${pathCount === 1 ? "" : "s"} in series` : "Awaiting data"}
             </p>
           </div>
@@ -2422,19 +2422,19 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
                 {curveRows.slice(-6).reverse().map((row) => (
                   <div
                     key={row.date}
-                    className="flex items-center justify-between rounded-[14px] border border-[rgba(232,224,217,0.9)] bg-[rgba(255,255,252,0.56)] px-4 py-3"
+                    className="flex items-center justify-between rounded-[14px] border border-[#ececec] bg-[#fafafa] px-4 py-3"
                   >
                     <div>
                       <p className="text-[11px] font-semibold text-[#67615d]">{formatDateLabel(row.date)}</p>
-                      <p className="mt-1 text-[10px] text-[#9b938b]">
+                      <p className="mt-1 text-[10px] text-[#737373]">
                         Drawdown {formatPctFromRatio(row.drawdown, 1)}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[13px] font-semibold text-[#5f5955]">
+                      <p className="text-[13px] font-semibold text-[#404040]">
                         {row.portfolioValue?.toFixed(3) ?? "—"}
                       </p>
-                      <p className="mt-1 text-[10px] text-[#9b938b]">
+                      <p className="mt-1 text-[10px] text-[#737373]">
                         {row.activeHoldings != null ? `${row.activeHoldings.toFixed(1)} holdings` : "—"}
                       </p>
                     </div>
@@ -2503,7 +2503,7 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
                     ))}
                     </LineChart>
                   </ResponsiveContainer>
-                  <p className="mt-2 text-[11px] leading-4 text-[#9d958d]">
+                  <p className="mt-2 text-[11px] leading-4 text-[#737373]">
                     Vertical dashed lines mark the first day the{" "}
                     <span className="font-medium text-[#7a736d]">LLM model mix</span> changes in the underlying daily
                     rows (dark) or, when no model is recorded, a{" "}
@@ -2514,9 +2514,9 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
                       {factorChangeMarkers.map((m) => (
                         <span
                           key={`factor-marker-${m.date}-${m.kind}-${m.label}`}
-                          className="rounded-full border border-[rgba(232,224,217,0.85)] bg-[rgba(255,255,252,0.68)] px-2.5 py-1 text-[10px] leading-4 text-[#8d857f]"
+                          className="rounded-full border border-[#ececec] bg-[#fafafa] px-2.5 py-1 text-[10px] leading-4 text-[#737373]"
                         >
-                          <span className="font-medium text-[#6f6863]">
+                          <span className="font-medium text-[#404040]">
                             {m.kind === "model" ? "Model change" : "Period"}
                           </span>
                           {" · "}
@@ -2710,12 +2710,12 @@ export function PortfoliosTab({ data }: BaseTabProps) {
                 : [{ value: "", label: "Benchmark / aggregate path" }]
             }
           />
-          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Snapshot date</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">
+            <p className="mt-2 text-[13px] font-semibold text-[#404040]">
               {selectedDate || "Auto-selecting latest"}
             </p>
-            <p className="mt-1 text-[11px] text-[#9b938b]">
+            <p className="mt-1 text-[11px] text-[#737373]">
               The table pages through raw holdings plus instrument metadata.
             </p>
           </div>
@@ -2727,30 +2727,30 @@ export function PortfoliosTab({ data }: BaseTabProps) {
           <p className="dashboard-label mb-3">Run and prompt context</p>
           {selectedRun ? (
             <>
-              <div className="grid gap-2 text-[11px] leading-5 text-[#6f6863] md:grid-cols-2">
+              <div className="grid gap-2 text-[11px] leading-5 text-[#404040] md:grid-cols-2">
                 <p>
-                  <span className="text-[#b4aca5]">Prompt type</span>{" "}
-                  <span className="font-medium text-[#5e5955]">{selectedRun.prompt_type ?? "—"}</span>
+                  <span className="text-[#a3a3a3]">Prompt type</span>{" "}
+                  <span className="font-medium text-[#404040]">{selectedRun.prompt_type ?? "—"}</span>
                 </p>
                 <p>
-                  <span className="text-[#b4aca5]">Model</span>{" "}
-                  <span className="font-medium text-[#5e5955]">{selectedRun.model ?? "—"}</span>
+                  <span className="text-[#a3a3a3]">Model</span>{" "}
+                  <span className="font-medium text-[#404040]">{selectedRun.model ?? "—"}</span>
                 </p>
                 <p>
-                  <span className="text-[#b4aca5]">Period</span>{" "}
-                  <span className="font-medium text-[#5e5955]">{selectedRun.period ?? "—"}</span>
+                  <span className="text-[#a3a3a3]">Period</span>{" "}
+                  <span className="font-medium text-[#404040]">{selectedRun.period ?? "—"}</span>
                 </p>
                 <p>
-                  <span className="text-[#b4aca5]">Run ID</span>{" "}
-                  <span className="font-medium text-[#5e5955]">
+                  <span className="text-[#a3a3a3]">Run ID</span>{" "}
+                  <span className="font-medium text-[#404040]">
                     {selectedRun.run_id != null ? String(selectedRun.run_id) : "—"}
                   </span>
                 </p>
               </div>
               {promptSnippet ? (
-                <div className="mt-4 rounded-[14px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.72)] p-3">
+                <div className="mt-4 rounded-[14px] border border-[#ececec] bg-[#fafafa] p-3">
                   <p className="dashboard-label mb-2">Prompt excerpt (from run record)</p>
-                  <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-[#5e5955]">
+                  <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-relaxed text-[#404040]">
                     {promptSnippet.length > 4000 ? `${promptSnippet.slice(0, 4000)}…` : promptSnippet}
                   </pre>
                 </div>
@@ -2763,8 +2763,8 @@ export function PortfoliosTab({ data }: BaseTabProps) {
               )}
             </>
           ) : (
-            <p className="text-[11px] leading-5 text-[#9d958d]">
-              Path <span className="font-mono text-[#5e5955]">{selectedPathId}</span> — no matching run in the
+            <p className="text-[11px] leading-5 text-[#737373]">
+              Path <span className="font-mono text-[#404040]">{selectedPathId}</span> — no matching run in the
               current filtered run list; holdings still load by path_id only.
             </p>
           )}
@@ -2810,28 +2810,28 @@ export function PortfoliosTab({ data }: BaseTabProps) {
           <Panel className="overflow-x-auto p-0">
             <table className="w-full min-w-[980px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Ticker</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Name</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Sector</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Drifted wt</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Target wt</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Contribution</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Price rel.</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Factor labels</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Ticker</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Name</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Sector</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Drifted wt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Target wt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Contribution</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Price rel.</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Factor labels</th>
                 </tr>
               </thead>
               <tbody>
                 {holdings.map((holding) => (
-                  <tr key={`${holding.date}-${holding.ticker}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{holding.ticker}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{holding.name ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{holding.sector ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(holding.drifted_weight, 1)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(holding.target_weight, 1)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(holding.value_contribution_pct, 1)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{holding.price_relative?.toFixed(2) ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">
+                  <tr key={`${holding.date}-${holding.ticker}`} className="border-b border-[#ececec] last:border-0">
+                    <td className="px-3 py-2.5 font-medium text-[#404040]">{holding.ticker}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{holding.name ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{holding.sector ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(holding.drifted_weight, 1)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(holding.target_weight, 1)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(holding.value_contribution_pct, 1)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{holding.price_relative?.toFixed(2) ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">
                       {[holding.size_label, holding.value_label, holding.momentum_label, holding.low_risk_label, holding.quality_label]
                         .filter(Boolean)
                         .join(" / ") || "—"}
@@ -2842,8 +2842,8 @@ export function PortfoliosTab({ data }: BaseTabProps) {
             </table>
           </Panel>
 
-          <div className="flex items-center justify-between rounded-[18px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.54)] px-4 py-3">
-            <div className="text-[11px] text-[#9c948c]">
+          <div className="flex items-center justify-between rounded-[18px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+            <div className="text-[11px] text-[#737373]">
               Page {holdingsQuery.data?.page ?? 1} of {holdingsQuery.data?.total_pages ?? 1}
               {selectedDate && <span className="ml-2">Latest snapshot: {selectedDate}</span>}
             </div>
@@ -3212,7 +3212,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
                   <XAxis
                     dataKey="label"
-                    tick={{ fontSize: 10, fill: "#8f8780" }}
+                    tick={{ fontSize: 10, fill: "#737373" }}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -3252,7 +3252,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
                   <XAxis
                     dataKey="label"
-                    tick={{ fontSize: 10, fill: "#8f8780" }}
+                    tick={{ fontSize: 10, fill: "#737373" }}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -3341,12 +3341,12 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                           <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{d.runIdLabel}</p>
                           <p style={{ color: "#6b6560", marginBottom: 4 }}>{d.strategyLabel}</p>
                           <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{d.model}</p>
-                          <p style={{ color: "#8f8780", marginBottom: 4 }}>
+                          <p style={{ color: "#737373", marginBottom: 4 }}>
                             {d.promptLabel} · {d.marketLabel} · {d.period}
                           </p>
-                          <p style={{ color: "#8f8780" }}>Sharpe: {d.sharpe.toFixed(2)}</p>
-                          <p style={{ color: "#8f8780" }}>Return: {d.ret.toFixed(1)}%</p>
-                          <p style={{ color: "#b4aca5", fontSize: 10, marginTop: 6 }}>Click the dot to select this run below.</p>
+                          <p style={{ color: "#737373" }}>Sharpe: {d.sharpe.toFixed(2)}</p>
+                          <p style={{ color: "#737373" }}>Return: {d.ret.toFixed(1)}%</p>
+                          <p style={{ color: "#a3a3a3", fontSize: 10, marginTop: 6 }}>Click the dot to select this run below.</p>
                         </div>
                       );
                     }}
@@ -3418,7 +3418,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                   />
                 </ScatterChart>
                 </ResponsiveContainer>
-                <p className="mt-1 text-[10px] text-[#b4aca5]">
+                <p className="mt-1 text-[10px] text-[#a3a3a3]">
                   Hover for run id, market, period, and prompt; click a dot to select that run in the table and daily path below.{" "}
                   {marketIndexRef.caption}
                 </p>
@@ -3480,12 +3480,12 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                           <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{d.runIdLabel}</p>
                           <p style={{ color: "#6b6560", marginBottom: 4 }}>{d.strategyLabel}</p>
                           <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{d.model}</p>
-                          <p style={{ color: "#8f8780", marginBottom: 4 }}>
+                          <p style={{ color: "#737373", marginBottom: 4 }}>
                             {d.promptLabel} · {d.marketLabel} · {d.period}
                           </p>
-                          <p style={{ color: "#8f8780" }}>Sharpe: {d.sharpe.toFixed(2)}</p>
-                          <p style={{ color: "#8f8780" }}>HHI: {d.hhi.toFixed(3)}</p>
-                          <p style={{ color: "#b4aca5", fontSize: 10, marginTop: 6 }}>Click the dot to select this run below.</p>
+                          <p style={{ color: "#737373" }}>Sharpe: {d.sharpe.toFixed(2)}</p>
+                          <p style={{ color: "#737373" }}>HHI: {d.hhi.toFixed(3)}</p>
+                          <p style={{ color: "#a3a3a3", fontSize: 10, marginTop: 6 }}>Click the dot to select this run below.</p>
                         </div>
                       );
                     }}
@@ -3558,7 +3558,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                   <ReferenceLine y={0.15} stroke="rgba(192,120,110,0.5)" strokeDasharray="6 3" label={{ value: "Concentrated (0.15)", position: "right", fontSize: 9, fill: "#b47070" }} />
                 </ScatterChart>
                 </ResponsiveContainer>
-                <p className="mt-1 text-[10px] text-[#b4aca5]">
+                <p className="mt-1 text-[10px] text-[#a3a3a3]">
                   Lower HHI = more diversified. Runs above the dashed line (0.15) are concentrated portfolios. Hover a dot for run id,
                   market, period, and prompt; click to select it in the table and path section below.{" "}
                   {marketIndexRef.caption}
@@ -3569,15 +3569,15 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
 
           <SectionHeader>Selected run — daily path</SectionHeader>
           {selectedRun && (
-            <Panel className="rounded-[20px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.72)] p-4">
+            <Panel className="rounded-[20px] border border-[#ececec] bg-[#fafafa] p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="dashboard-label">Selected</p>
-                  <p className="mt-1 text-[13px] font-semibold text-[#5f5955]">
+                  <p className="mt-1 text-[13px] font-semibold text-[#404040]">
                     {formatStrategyLabel(selectedRun.strategy ?? selectedRun.strategy_key ?? "—", selectedRun.strategy_key)} ·{" "}
                     {MARKET_LABELS[selectedRun.market ?? ""] ?? selectedRun.market ?? "—"}
                   </p>
-                  <p className="mt-1 text-[11px] text-[#9b938b]">
+                  <p className="mt-1 text-[11px] text-[#737373]">
                     {selectedRun.period ?? "—"} · {selectedRun.prompt_type ?? "—"} · {selectedRun.model ?? "—"}
                     {selectedRun.run_id != null && <span className="ml-1">· run {selectedRun.run_id}</span>}
                     {pathIdForCharts && <span className="ml-1 font-mono text-[10px]">· path {pathIdForCharts}</span>}
@@ -3818,7 +3818,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                         ))}
                       </LineChart>
                       </ResponsiveContainer>
-                      <p className="mt-2 text-[11px] leading-4 text-[#9d958d]">
+                      <p className="mt-2 text-[11px] leading-4 text-[#737373]">
                         Dashed vertical lines: model change (dark) or period boundary when model is unset (tan).
                       </p>
                       {runFactorChangeMarkers.length > 0 && (
@@ -3826,9 +3826,9 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                           {runFactorChangeMarkers.map((m) => (
                             <span
                               key={`run-factor-marker-${m.date}-${m.kind}-${m.label}`}
-                              className="rounded-full border border-[rgba(232,224,217,0.85)] bg-[rgba(255,255,252,0.68)] px-2.5 py-1 text-[10px] leading-4 text-[#8d857f]"
+                              className="rounded-full border border-[#ececec] bg-[#fafafa] px-2.5 py-1 text-[10px] leading-4 text-[#737373]"
                             >
-                              <span className="font-medium text-[#6f6863]">
+                              <span className="font-medium text-[#404040]">
                                 {m.kind === "model" ? "Model change" : "Period"}
                               </span>
                               {" · "}
@@ -3850,15 +3850,15 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
           <Panel className="overflow-x-auto p-0">
             <table className="w-full min-w-[1120px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Strategy</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market / period</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt / model</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Sharpe</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Return</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Holdings</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Regime</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Summary</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Strategy</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market / period</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt / model</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Sharpe</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Holdings</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Regime</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Summary</th>
                 </tr>
               </thead>
               <tbody>
@@ -3868,7 +3868,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                   return (
                   <tr
                     key={rowKey}
-                    className={`cursor-pointer border-b border-[rgba(227,220,214,0.8)] align-top transition-colors last:border-0 hover:bg-[rgba(250,247,243,0.72)] ${
+                    className={`cursor-pointer border-b border-[#ececec] align-top transition-colors last:border-0 hover:bg-[#fafafa] ${
                       isSelected ? "bg-[rgba(244,236,228,0.92)]" : ""
                     }`}
                     onClick={() => setSelectedRunKey(rowKey)}
@@ -3881,25 +3881,25 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                     tabIndex={0}
                     role="row"
                   >
-                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{formatStrategyLabel(run.strategy ?? run.strategy_key ?? "—", run.strategy_key)}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">
+                    <td className="px-3 py-2.5 font-medium text-[#404040]">{formatStrategyLabel(run.strategy ?? run.strategy_key ?? "—", run.strategy_key)}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">
                       <div>{MARKET_LABELS[run.market ?? ""] ?? run.market ?? "—"}</div>
                       <div className="mt-1 text-[10px] text-[#aaa29a]">{run.period ?? "—"}</div>
                     </td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">
+                    <td className="px-3 py-2.5 text-[#737373]">
                       <div>{run.prompt_type ?? "benchmark"}</div>
                       <div className="mt-1 text-[10px] text-[#aaa29a]">{run.model ?? "—"}</div>
                     </td>
                     <td className="px-3 py-2.5 text-right font-medium tabular-nums" style={{ color: sharpeColor(run.sharpe_ratio) }}>
                       {run.sharpe_ratio != null ? run.sharpe_ratio.toFixed(2) : "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                    <td className="px-3 py-2.5 text-right text-[#737373]">
                       {formatPctFromRatio(run.period_return ?? run.net_return ?? run.period_return_net, 1)}
                     </td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{run.n_holdings ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{run.market_regime_label ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{run.n_holdings ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{run.market_regime_label ?? "—"}</td>
                     <td
-                      className="px-3 py-2.5 text-[#8d857f]"
+                      className="px-3 py-2.5 text-[#737373]"
                       title="Click to select this run and scroll to portfolio weight totals (Σ drifted / Σ target)."
                       onClick={(event) => {
                         event.stopPropagation();
@@ -3923,8 +3923,8 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
             </table>
           </Panel>
 
-          <div className="flex items-center justify-between rounded-[18px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.54)] px-4 py-3">
-            <div className="text-[11px] text-[#9c948c]">
+          <div className="flex items-center justify-between rounded-[18px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
+            <div className="text-[11px] text-[#737373]">
               Page {page} of {totalPages}
             </div>
             <div className="flex gap-2">
@@ -4010,8 +4010,8 @@ export function ByMarketTab({ data }: BaseTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
-      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-        <p className="text-[12px] leading-5 text-[#8f8780]">
+      <Panel className="border border-[#ececec] bg-[#fafafa]">
+        <p className="text-[12px] leading-5 text-[#737373]">
           Use this view to answer where strategy results differ. The heatmap compares strategies across markets, while the
           period-consistency matrix shows when GPT variants beat or missed each market index over time.
         </p>
@@ -4019,7 +4019,7 @@ export function ByMarketTab({ data }: BaseTabProps) {
 
       <SectionHeader>Sharpe Heatmap</SectionHeader>
       <Panel className="overflow-x-auto p-0">
-        <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
           <FigureExportControls
             captureRef={byMarketSharpeHeatmapRef}
             slug="by-market-sharpe-heatmap"
@@ -4030,10 +4030,10 @@ export function ByMarketTab({ data }: BaseTabProps) {
         <div ref={byMarketSharpeHeatmapRef} className="min-w-0">
           <table className="w-full min-w-[760px] text-[11px]">
           <thead>
-            <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Strategy</th>
+            <tr className="border-b border-[#ececec] bg-[#fafafa]">
+              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Strategy</th>
               {markets.map((market) => (
-                <th key={market} className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                <th key={market} className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">
                   {MARKET_LABELS[market] ?? market}
                 </th>
               ))}
@@ -4043,8 +4043,8 @@ export function ByMarketTab({ data }: BaseTabProps) {
             {strategyKeys.map((compoundKey) => {
               const [strategyKey, strategyLabel] = compoundKey.split("::");
               return (
-                <tr key={compoundKey} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                  <td className="px-3 py-2.5 font-medium text-[#5e5955]">{strategyLabel}</td>
+                <tr key={compoundKey} className="border-b border-[#ececec] last:border-0">
+                  <td className="px-3 py-2.5 font-medium text-[#404040]">{strategyLabel}</td>
                   {markets.map((market) => {
                     const row = perMarketSummary
                       .find((entry) => entry.market === market)
@@ -4074,7 +4074,7 @@ export function ByMarketTab({ data }: BaseTabProps) {
                           <div className="font-semibold" style={{ color: sharpeColor(sharpe) }}>
                             {sharpe != null ? sharpe.toFixed(2) : "—"}
                           </div>
-                          <div className="mt-1 text-[10px] text-[#9d958d]">
+                          <div className="mt-1 text-[10px] text-[#737373]">
                             {formatPctFromRatio(row?.net_return_mean, 1)}
                           </div>
                         </div>
@@ -4112,15 +4112,15 @@ export function ByMarketTab({ data }: BaseTabProps) {
         return (
           <>
             <SectionHeader>Period Consistency</SectionHeader>
-            <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-              <p className="text-[12px] leading-5 text-[#8f8780]">
+            <Panel className="border border-[#ececec] bg-[#fafafa]">
+              <p className="text-[12px] leading-5 text-[#737373]">
                 For each period, mean GPT Sharpe vs that market&apos;s index Sharpe.{" "}
                 <span className="font-medium text-[#5a6f7a]">Teal</span> = above index;{" "}
                 <span className="font-medium text-[#7a6a58]">warm neutral</span> = index or below. Grey = no data.
               </p>
             </Panel>
             <Panel className="overflow-x-auto p-0">
-              <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+              <div className="flex flex-wrap items-center justify-end gap-2 border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
                 <FigureExportControls
                   captureRef={byMarketPeriodConsistencyRef}
                   slug="by-market-period-consistency"
@@ -4131,12 +4131,12 @@ export function ByMarketTab({ data }: BaseTabProps) {
               <div ref={byMarketPeriodConsistencyRef} className="min-w-0">
                 <table className="w-full min-w-[640px] text-[11px]">
                 <thead>
-                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                  <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">
                       Period
                     </th>
                     {columns.map((col) => (
-                      <th key={col.colKey} className="px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                      <th key={col.colKey} className="px-2 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">
                         <div>{MARKET_LABELS[col.market]?.replace(/ \(.*\)$/, "") ?? col.market}</div>
                         <div className="mt-0.5 text-[9px] font-normal normal-case opacity-70">
                           {col.gptKey === "gpt_advanced" ? "Advanced" : "Retail"}
@@ -4147,8 +4147,8 @@ export function ByMarketTab({ data }: BaseTabProps) {
                 </thead>
                 <tbody>
                   {periods.map((period) => (
-                    <tr key={period} className="border-b border-[rgba(227,220,214,0.6)] last:border-0">
-                      <td className="whitespace-nowrap px-3 py-2 font-medium text-[#5e5955]">{period}</td>
+                    <tr key={period} className="border-b border-[#ececec] last:border-0">
+                      <td className="whitespace-nowrap px-3 py-2 font-medium text-[#404040]">{period}</td>
                       {columns.map((col) => {
                         const idxKey = `${col.market}::${period}`;
                         const idxSharpe = idxSharpeMap.get(idxKey);
@@ -4192,30 +4192,30 @@ export function ByMarketTab({ data }: BaseTabProps) {
       {regimePerformanceRows.length > 0 && (
         <>
           <SectionHeader>Regime-Conditional Performance</SectionHeader>
-          <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-            <p className="text-[12px] leading-5 text-[#8f8780]">
+          <Panel className="border border-[#ececec] bg-[#fafafa]">
+            <p className="text-[12px] leading-5 text-[#737373]">
               These tables condition GPT performance on the regime labels already stored on each run, so you can inspect
               which model/prompt combinations look strongest inside specific market states.
             </p>
           </Panel>
 
           <Panel className="overflow-x-auto p-0">
-            <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+            <div className="border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
               <p className="dashboard-label">27-cell regime view</p>
             </div>
             <table className="w-full min-w-[980px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Regime code</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mkt</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Vol</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Rate</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Return</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Regime code</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mkt</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Vol</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Rate</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Model</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Sharpe</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Runs</th>
                 </tr>
               </thead>
               <tbody>
@@ -4223,17 +4223,17 @@ export function ByMarketTab({ data }: BaseTabProps) {
                   .sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity))
                   .slice(0, 20)
                   .map((row) => (
-                    <tr key={`${row.market}-${row.regimeCode}-${row.model}-${row.promptType}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                      <td className="px-3 py-2.5 text-[#5e5955]">{MARKET_LABELS[row.market] ?? row.market}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.regimeCode}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.marketRegimeLabel ?? "—"}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.volRegimeLabel ?? "—"}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.rateRegimeLabel ?? "—"}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.model}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanReturn, 1)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.count}</td>
+                    <tr key={`${row.market}-${row.regimeCode}-${row.model}-${row.promptType}`} className="border-b border-[#ececec] last:border-0">
+                      <td className="px-3 py-2.5 text-[#404040]">{MARKET_LABELS[row.market] ?? row.market}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.regimeCode}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.marketRegimeLabel ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.volRegimeLabel ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.rateRegimeLabel ?? "—"}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.model}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.promptType}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.meanReturn, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{row.count}</td>
                     </tr>
                   ))}
               </tbody>
@@ -4241,31 +4241,31 @@ export function ByMarketTab({ data }: BaseTabProps) {
           </Panel>
 
           <Panel className="overflow-x-auto p-0">
-            <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+            <div className="border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
               <p className="dashboard-label">Market regime by model</p>
             </div>
             <table className="w-full min-w-[860px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market regime</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Return</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market regime</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Model</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Sharpe</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Runs</th>
                 </tr>
               </thead>
               <tbody>
                 {marketRegimeRows.slice(0, 24).map((row) => (
-                  <tr key={`${row.market}-${row.marketRegimeLabel}-${row.model}-${row.promptType}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                    <td className="px-3 py-2.5 text-[#5e5955]">{MARKET_LABELS[row.market] ?? row.market}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{row.marketRegimeLabel ?? "—"}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{row.model}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanReturn, 1)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.count}</td>
+                  <tr key={`${row.market}-${row.marketRegimeLabel}-${row.model}-${row.promptType}`} className="border-b border-[#ececec] last:border-0">
+                    <td className="px-3 py-2.5 text-[#404040]">{MARKET_LABELS[row.market] ?? row.market}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{row.marketRegimeLabel ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{row.model}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{row.promptType}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.meanReturn, 1)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.count}</td>
                   </tr>
                 ))}
               </tbody>
@@ -4658,8 +4658,8 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
-      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-        <p className="text-[12px] leading-5 text-[#8f8780]">
+      <Panel className="border border-[#ececec] bg-[#fafafa]">
+        <p className="text-[12px] leading-5 text-[#737373]">
           This view makes the regime system explicit in the dashboard. The first section reads the canonical
           market-period classifications from `market_periods`; the second shows which model and prompt combinations
           have performed best inside each regime state. The charts below separate regime timing, recurrence, and
@@ -4699,12 +4699,12 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
               label: prompt,
             }))}
           />
-          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Latest classified period</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">
+            <p className="mt-2 text-[13px] font-semibold text-[#404040]">
               {latestPeriodRow?.period ?? "—"}
             </p>
-            <p className="mt-1 text-[11px] text-[#9b938b]">
+            <p className="mt-1 text-[11px] text-[#737373]">
               {latestPeriodRow ? `${MARKET_LABELS[latestPeriodRow.market] ?? latestPeriodRow.market}` : "No period rows loaded"}
             </p>
           </div>
@@ -4744,14 +4744,14 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
 
       <SectionHeader>Analysis</SectionHeader>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+        <Panel className="border border-[#ececec] bg-[#fafafa]">
           <p className="dashboard-label">Dominant state</p>
-          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#5f5955]">
+          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#404040]">
             {dominantRegimeRow
               ? `${MARKET_LABELS[dominantRegimeRow.market] ?? dominantRegimeRow.market} · ${dominantRegimeRow.regimeCode}`
               : "No dominant state yet"}
           </p>
-          <p className="mt-2 text-[12px] leading-5 text-[#8f8780]">
+          <p className="mt-2 text-[12px] leading-5 text-[#737373]">
             {dominantRegimeRow
               ? `${describeRegimeState(
                   dominantRegimeRow.marketLabel,
@@ -4762,14 +4762,14 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
           </p>
         </Panel>
 
-        <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+        <Panel className="border border-[#ececec] bg-[#fafafa]">
           <p className="dashboard-label">Latest transition</p>
-          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#5f5955]">
+          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#404040]">
             {latestTransitionRow
               ? `${MARKET_LABELS[latestTransitionRow.market] ?? latestTransitionRow.market} · ${latestTransitionRow.period}`
               : "No transition detected"}
           </p>
-          <p className="mt-2 text-[12px] leading-5 text-[#8f8780]">
+          <p className="mt-2 text-[12px] leading-5 text-[#737373]">
             {latestTransitionRow
               ? `The latest regime change in the current filter set moves into ${describeRegimeState(
                   latestTransitionRow.market_regime_label,
@@ -4780,14 +4780,14 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
           </p>
         </Panel>
 
-        <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+        <Panel className="border border-[#ececec] bg-[#fafafa]">
           <p className="dashboard-label">Performance read</p>
-          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#5f5955]">
+          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#404040]">
             {topRegimeRow
               ? `${topRegimeRow.model} · ${topRegimeRow.promptType}`
               : "No conditional result"}
           </p>
-          <p className="mt-2 text-[12px] leading-5 text-[#8f8780]">
+          <p className="mt-2 text-[12px] leading-5 text-[#737373]">
             {topRegimeRow
               ? `Best conditional Sharpe is ${formatSignedNumber(topRegimeRow.meanSharpe, 2)} in ${
                   MARKET_LABELS[topRegimeRow.market] ?? topRegimeRow.market
@@ -4805,18 +4805,18 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
         </Panel>
       </div>
 
-      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+      <Panel className="border border-[#ececec] bg-[#fafafa]">
         <p className="dashboard-label">How to read this</p>
         <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-3">
-          <p className="text-[12px] leading-5 text-[#8f8780]">
+          <p className="text-[12px] leading-5 text-[#737373]">
             <span className="font-semibold text-[#655f5b]">Timeline:</span> shows when the selected market and strategy
             moved through regime changes and what the path looked like around those shifts.
           </p>
-          <p className="text-[12px] leading-5 text-[#8f8780]">
+          <p className="text-[12px] leading-5 text-[#737373]">
             <span className="font-semibold text-[#655f5b]">Recurrence:</span> counts how often each classified regime
             appeared in the `market_periods` source of truth and how often it was entered via a flagged transition.
           </p>
-          <p className="text-[12px] leading-5 text-[#8f8780]">
+          <p className="text-[12px] leading-5 text-[#737373]">
             <span className="font-semibold text-[#655f5b]">Conditional performance:</span> summarizes which regime states
             were most and least favorable after applying the current market, model, and prompt filters.
           </p>
@@ -4845,17 +4845,17 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
               label: formatStrategyLabel(option.strategy, option.strategy_key),
             }))}
           />
-          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Timeline source</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">{timelineSourceLabel}</p>
-            <p className="mt-1 text-[11px] text-[#9b938b]">
+            <p className="mt-2 text-[13px] font-semibold text-[#404040]">{timelineSourceLabel}</p>
+            <p className="mt-1 text-[11px] text-[#737373]">
               Regime metrics when present; otherwise the chart falls back to path metrics with regime labels.
             </p>
           </div>
-          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Timeline rows</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">{timelineRawRowCount}</p>
-            <p className="mt-1 text-[11px] text-[#9b938b]">
+            <p className="mt-2 text-[13px] font-semibold text-[#404040]">{timelineRawRowCount}</p>
+            <p className="mt-1 text-[11px] text-[#737373]">
               {timelineDominantRegime
                 ? `Dominant daily market regime: ${timelineDominantRegime[0]}`
                 : "No daily regime data loaded"}
@@ -4933,7 +4933,7 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
                   ))}
                 </AreaChart>
               </ResponsiveContainer>
-              <p className="mt-2 text-[11px] leading-5 text-[#9d958d]">
+              <p className="mt-2 text-[11px] leading-5 text-[#737373]">
                 Vertical dashed lines mark the first trading day of each changed regime period for the selected
                 market. The filled area is the average strategy drawdown, so this chart is meant to show whether
                 drawdowns cluster around regime shifts rather than to plot the regime labels themselves.
@@ -4943,9 +4943,9 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
                   {timelineTransitionMarkers.slice(0, 8).map((marker) => (
                     <span
                       key={`timeline-marker-${marker.date}-${marker.regime}`}
-                      className="rounded-full border border-[rgba(232,224,217,0.85)] bg-[rgba(255,255,252,0.68)] px-2.5 py-1 text-[10px] leading-4 text-[#8d857f]"
+                      className="rounded-full border border-[#ececec] bg-[#fafafa] px-2.5 py-1 text-[10px] leading-4 text-[#737373]"
                     >
-                      <span className="font-medium text-[#6f6863]">{formatDateLabel(marker.date)}</span>
+                      <span className="font-medium text-[#404040]">{formatDateLabel(marker.date)}</span>
                       {" · "}
                       {marker.period}
                       {" · "}
@@ -5013,7 +5013,7 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
         <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="dashboard-label">Conditional Sharpe by regime</p>
-            <p className="mt-1 text-[11px] leading-5 text-[#9d958d]">
+            <p className="mt-1 text-[11px] leading-5 text-[#737373]">
               Aggregates the current market, model, and prompt filters back to regime-state rows so you can compare which
               states were most supportive. {sparseConditionalRows > 0 ? `${sparseConditionalRows} filtered rows have fewer than 3 runs.` : "All visible rows have at least 3 runs."}
             </p>
@@ -5077,49 +5077,49 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
 
       <div className="space-y-3">
         <SectionHeader>Methodology</SectionHeader>
-        <p className="max-w-3xl text-[12px] leading-5 text-[#9d958d]">
+        <p className="max-w-3xl text-[12px] leading-5 text-[#737373]">
           The charts above separate the regime source of truth from the performance aggregation layer so you can see both
           what the market state was and how strategies behaved inside those states.
         </p>
         <Accordion
           type="multiple"
-          className="dashboard-panel rounded-[16px] border border-[rgba(232,224,217,0.9)] px-3"
+          className="dashboard-panel rounded-[16px] border border-[#ececec] px-3"
         >
-          <AccordionItem value="regime-labels" className="border-[rgba(227,220,214,0.75)]">
-            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+          <AccordionItem value="regime-labels" className="border-[#ececec]">
+            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#404040] hover:no-underline">
               Regime labels and regime codes
             </AccordionTrigger>
-            <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">
+            <AccordionContent className="text-[12px] leading-5 text-[#525252]">
               `Bear`, `Flat`, and `Bull` describe the market leg; `Low`, `Elevated`, and `High` describe the volatility
               environment; `Easing`, `Stable`, and `Tightening` describe the rate leg. `regime_code` combines those three
               labels into one compact identifier for the full state.
             </AccordionContent>
           </AccordionItem>
-          <AccordionItem value="source-of-truth" className="border-[rgba(227,220,214,0.75)]">
-            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+          <AccordionItem value="source-of-truth" className="border-[#ececec]">
+            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#404040] hover:no-underline">
               Source-of-truth periods vs run-level performance
             </AccordionTrigger>
-            <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">
+            <AccordionContent className="text-[12px] leading-5 text-[#525252]">
               The period tables and recurrence chart come directly from `market_periods`, which is the canonical market
               classification layer. The conditional performance chart uses run rows that inherit those regime labels and then
               aggregates realized outcomes by regime, market, model, and prompt combination.
             </AccordionContent>
           </AccordionItem>
-          <AccordionItem value="timeline-method" className="border-[rgba(227,220,214,0.75)]">
-            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+          <AccordionItem value="timeline-method" className="border-[#ececec]">
+            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#404040] hover:no-underline">
               Daily timeline construction
             </AccordionTrigger>
-            <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">
+            <AccordionContent className="text-[12px] leading-5 text-[#525252]">
               The timeline prefers `/charts/regimes` so it can use daily regime metrics directly. When those rows are not
               available, it falls back to daily path metrics and infers the consensus market regime from the attached daily
               labels. Dashed lines mark dates where any regime field changed.
             </AccordionContent>
           </AccordionItem>
-          <AccordionItem value="sample-caveats" className="border-[rgba(227,220,214,0.75)]">
-            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#6f6863] hover:no-underline">
+          <AccordionItem value="sample-caveats" className="border-[#ececec]">
+            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#404040] hover:no-underline">
               Sample-size caveats
             </AccordionTrigger>
-            <AccordionContent className="text-[12px] leading-5 text-[#7b736e]">
+            <AccordionContent className="text-[12px] leading-5 text-[#525252]">
               Conditional regime rows with low run counts can move sharply when filters change. Use the run counts in the
               table below to judge whether a regime advantage looks broad-based or driven by only a few observations.
             </AccordionContent>
@@ -5138,7 +5138,7 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
       ) : (
         <>
           <Panel className="overflow-x-auto p-0">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
               <p className="dashboard-label">Market-period regime table</p>
               <FigureExportControls
                 captureRef={regimePeriodsRef}
@@ -5150,28 +5150,28 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
             <div ref={regimePeriodsRef} className="min-w-0">
               <table className="w-full min-w-[980px] text-[11px]">
                 <thead>
-                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Period</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Window</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Vol</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Rates</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Regime code</th>
-                    <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Changed</th>
+                  <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Period</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Window</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Vol</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Rates</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Regime code</th>
+                    <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Changed</th>
                   </tr>
                 </thead>
                 <tbody>
                   {periodRows.map((row) => (
                     <tr
                       key={`${row.market}-${row.period}`}
-                      className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
+                      className="border-b border-[#ececec] last:border-0"
                     >
-                      <td className="px-3 py-2.5 font-medium text-[#5e5955]">
+                      <td className="px-3 py-2.5 font-medium text-[#404040]">
                         {MARKET_LABELS[row.market] ?? row.market}
                       </td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.period}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">
+                      <td className="px-3 py-2.5 text-[#737373]">{row.period}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">
                         {row.period_start_date && row.period_end_date
                           ? `${formatDateLabel(row.period_start_date)} - ${formatDateLabel(row.period_end_date)}`
                           : "—"}
@@ -5185,7 +5185,7 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
                       <td className="px-3 py-2.5">
                         <RegimeBadge kind="rate" label={row.rate_regime_label} />
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] text-[#8d857f]">
+                      <td className="px-3 py-2.5 font-mono text-[10px] text-[#737373]">
                         {row.regime_code ?? "—"}
                       </td>
                       <td className="px-3 py-2.5 text-center">
@@ -5208,40 +5208,40 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
           </Panel>
 
           <Panel className="overflow-x-auto p-0">
-            <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+            <div className="border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
               <p className="dashboard-label">Regime code recurrence</p>
             </div>
             <table className="w-full min-w-[760px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Regime code</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">State</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Periods</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Transitions</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Regime code</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">State</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Periods</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Transitions</th>
                 </tr>
               </thead>
               <tbody>
                 {regimeSummaryRows.map((row) => (
                   <tr
                     key={`${row.market}-${row.regimeCode}`}
-                    className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
+                    className="border-b border-[#ececec] last:border-0"
                   >
-                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">
+                    <td className="px-3 py-2.5 font-medium text-[#404040]">
                       {MARKET_LABELS[row.market] ?? row.market}
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-[10px] text-[#8d857f]">
+                    <td className="px-3 py-2.5 font-mono text-[10px] text-[#737373]">
                       {row.regimeCode}
                     </td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">
+                    <td className="px-3 py-2.5 text-[#737373]">
                       <div className="flex flex-wrap gap-1.5">
                         <RegimeBadge kind="market" label={row.marketLabel} />
                         <RegimeBadge kind="vol" label={row.volLabel} />
                         <RegimeBadge kind="rate" label={row.rateLabel} />
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.periodCount}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.transitionCount}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.periodCount}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.transitionCount}</td>
                   </tr>
                 ))}
               </tbody>
@@ -5258,7 +5258,7 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
         />
       ) : (
         <Panel className="overflow-x-auto p-0">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
             <p className="dashboard-label">Model and prompt performance by regime</p>
             <FigureExportControls
               captureRef={regimePerformanceRef}
@@ -5270,15 +5270,15 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
           <div ref={regimePerformanceRef} className="min-w-0">
             <table className="w-full min-w-[980px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Regime code</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">State</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Return</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Regime code</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">State</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Model</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Sharpe</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Runs</th>
                 </tr>
               </thead>
               <tbody>
@@ -5292,33 +5292,33 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
                   .map((row) => (
                     <tr
                       key={`${row.market}-${row.regimeCode}-${row.model}-${row.promptType}`}
-                      className="border-b border-[rgba(227,220,214,0.8)] last:border-0"
+                      className="border-b border-[#ececec] last:border-0"
                     >
-                      <td className="px-3 py-2.5 font-medium text-[#5e5955]">
+                      <td className="px-3 py-2.5 font-medium text-[#404040]">
                         {MARKET_LABELS[row.market] ?? row.market}
                       </td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] text-[#8d857f]">
+                      <td className="px-3 py-2.5 font-mono text-[10px] text-[#737373]">
                         {row.regimeCode}
                       </td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">
+                      <td className="px-3 py-2.5 text-[#737373]">
                         <div className="flex flex-wrap gap-1.5">
                           <RegimeBadge kind="market" label={row.marketRegimeLabel} />
                           <RegimeBadge kind="vol" label={row.volRegimeLabel} />
                           <RegimeBadge kind="rate" label={row.rateRegimeLabel} />
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.model}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.model}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.promptType}</td>
                       <td
                         className="px-3 py-2.5 text-right font-medium"
                         style={{ color: sharpeColor(row.meanSharpe) }}
                       >
                         {row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}
                       </td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                      <td className="px-3 py-2.5 text-right text-[#737373]">
                         {formatPctFromRatio(row.meanReturn, 1)}
                       </td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.count}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{row.count}</td>
                     </tr>
                   ))}
               </tbody>
@@ -5346,8 +5346,8 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
-      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-        <p className="text-[12px] leading-5 text-[#8f8780]">
+      <Panel className="border border-[#ececec] bg-[#fafafa]">
+        <p className="text-[12px] leading-5 text-[#737373]">
           These statistics are derived from run-level dispersion in the current filter set.
           The confidence intervals are approximate 95% intervals around the mean, not formal paired hypothesis tests.
         </p>
@@ -5405,7 +5405,7 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
                   textAnchor="end"
                   interval={0}
                   height={60}
-                  tick={{ fontSize: 10, fill: "#8f8780" }}
+                  tick={{ fontSize: 10, fill: "#737373" }}
                   axisLine={false}
                   tickLine={false}
                 />
@@ -5442,32 +5442,32 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
           <Panel className="overflow-x-auto p-0">
             <table className="w-full min-w-[880px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Strategy</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">N</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">95% CI</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Period Return</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Delta vs Index</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Effect Size</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Strategy</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">N</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Sharpe</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">95% CI</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Period Return</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Delta vs Index</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Effect Size</th>
                 </tr>
               </thead>
               <tbody>
                 {statsRows.map((row) => (
-                  <tr key={row.strategyKey} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{formatStrategyLabel(row.strategy, row.strategyKey)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.n}</td>
+                  <tr key={row.strategyKey} className="border-b border-[#ececec] last:border-0">
+                    <td className="px-3 py-2.5 font-medium text-[#404040]">{formatStrategyLabel(row.strategy, row.strategyKey)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.n}</td>
                     <td className="px-3 py-2.5 text-right" style={{ color: sharpeColor(row.meanSharpe) }}>
                       {row.meanSharpe?.toFixed(2) ?? "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                    <td className="px-3 py-2.5 text-right text-[#737373]">
                       {row.sharpeCi95 != null ? `±${row.sharpeCi95.toFixed(2)}` : "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanReturn, 1)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.meanReturn, 1)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">
                       {row.deltaVsIndex != null ? row.deltaVsIndex.toFixed(2) : "—"}
                     </td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                    <td className="px-3 py-2.5 text-right text-[#737373]">
                       {row.effectSizeVsIndex != null ? row.effectSizeVsIndex.toFixed(2) : "—"}
                     </td>
                   </tr>
@@ -5478,35 +5478,35 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
 
           {benchmarkRows.length > 0 && (
             <Panel className="overflow-x-auto p-0">
-              <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+              <div className="border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
                 <p className="dashboard-label">Prompt/model benchmark significance layer</p>
               </div>
               <table className="w-full min-w-[940px] text-[11px]">
                 <thead>
-                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Benchmark</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Win rate</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">95% CI</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean Sharpe delta</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Pairs</th>
+                  <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Model</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Benchmark</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Win rate</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">95% CI</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Sharpe delta</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Pairs</th>
                   </tr>
                 </thead>
                 <tbody>
                   {benchmarkRows.map((row) => (
-                    <tr key={`${row.model}-${row.promptType}-${row.benchmarkKey}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                      <td className="px-3 py-2.5 text-[#5e5955]">{row.model}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{formatStrategyLabel(row.benchmarkKey, row.benchmarkKey)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.winRate, 0)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                    <tr key={`${row.model}-${row.promptType}-${row.benchmarkKey}`} className="border-b border-[#ececec] last:border-0">
+                      <td className="px-3 py-2.5 text-[#404040]">{row.model}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.promptType}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{formatStrategyLabel(row.benchmarkKey, row.benchmarkKey)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.winRate, 0)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">
                         {row.ciLow != null && row.ciHigh != null
                           ? `${formatPctFromRatio(row.ciLow, 0)} - ${formatPctFromRatio(row.ciHigh, 0)}`
                           : "—"}
                       </td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanDelta != null ? row.meanDelta.toFixed(2) : "—"}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.total}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{row.meanDelta != null ? row.meanDelta.toFixed(2) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{row.total}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -5519,26 +5519,26 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
               <Panel key={title} className="overflow-x-auto">
                 <p className="dashboard-label">{title}</p>
                 {!result ? (
-                  <p className="mt-3 text-[12px] leading-5 text-[#8f8780]">
+                  <p className="mt-3 text-[12px] leading-5 text-[#737373]">
                     Not enough complete run rows with holdings, HHI, expected return, and turnover to estimate this regression.
                   </p>
                 ) : (
                   <>
-                    <p className="mt-2 text-[11px] text-[#8f8780]">
+                    <p className="mt-2 text-[11px] text-[#737373]">
                       Sample size {result.sampleSize} · R² {result.rSquared != null ? result.rSquared.toFixed(2) : "—"}
                     </p>
                     <table className="mt-3 w-full min-w-[320px] text-[11px]">
                       <thead>
-                        <tr className="border-b border-[rgba(227,220,214,0.8)] text-left text-[#b4aca5]">
+                        <tr className="border-b border-[#ececec] text-left text-[#a3a3a3]">
                           <th className="py-2 pr-3 font-semibold uppercase tracking-[0.12em]">Feature</th>
                           <th className="py-2 text-right font-semibold uppercase tracking-[0.12em]">Coefficient</th>
                         </tr>
                       </thead>
                       <tbody>
                         {result.coefficients.map((row) => (
-                          <tr key={row.feature} className="border-b border-[rgba(227,220,214,0.55)] last:border-0">
-                            <td className="py-2 pr-3 text-[#5e5955]">{row.feature}</td>
-                            <td className="py-2 text-right text-[#8d857f]">{row.coefficient.toFixed(4)}</td>
+                          <tr key={row.feature} className="border-b border-[#ececec] last:border-0">
+                            <td className="py-2 pr-3 text-[#404040]">{row.feature}</td>
+                            <td className="py-2 text-right text-[#737373]">{row.coefficient.toFixed(4)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -6156,10 +6156,10 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
           {filteredModelComparisonData && (
             <>
               <SectionHeader>LLM model comparison</SectionHeader>
-              <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+              <Panel className="border border-[#ececec] bg-[#fafafa]">
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="min-w-[220px] flex-1">
-                    <p className="text-[12px] leading-5 text-[#8f8780]">
+                    <p className="text-[12px] leading-5 text-[#737373]">
                       GPT runs only. Filter by market and compare each model against the selected market's
                       benchmark Sharpe line.
                     </p>
@@ -6230,11 +6230,11 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                                   <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.runLabel}</p>
                                   <p style={{ color: "#6b6560", marginBottom: 4 }}>{point.strategyLabel}</p>
                                   <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.model}</p>
-                                  <p style={{ color: "#8f8780", marginBottom: 4 }}>
+                                  <p style={{ color: "#737373", marginBottom: 4 }}>
                                     {point.promptLabel} · {point.marketLabel} · {point.periodLabel}
                                   </p>
-                                  <p style={{ color: "#8f8780" }}>Sharpe: {point.sharpe.toFixed(2)}</p>
-                                  <p style={{ color: "#8f8780" }}>Return: {point.returnPct.toFixed(1)}%</p>
+                                  <p style={{ color: "#737373" }}>Sharpe: {point.sharpe.toFixed(2)}</p>
+                                  <p style={{ color: "#737373" }}>Return: {point.returnPct.toFixed(1)}%</p>
                                 </div>
                               );
                             }}
@@ -6279,7 +6279,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                           />
                         </ScatterChart>
                       </ResponsiveContainer>
-                      <p className="mt-2 text-[10px] text-[#b4aca5]">{modelMarketReference.caption}</p>
+                      <p className="mt-2 text-[10px] text-[#a3a3a3]">{modelMarketReference.caption}</p>
                     </div>
                   </Panel>
                 )}
@@ -6338,11 +6338,11 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                                   <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.runLabel}</p>
                                   <p style={{ color: "#6b6560", marginBottom: 4 }}>{point.strategyLabel}</p>
                                   <p style={{ fontWeight: 600, marginBottom: 2, color: "#5c534c" }}>{point.model}</p>
-                                  <p style={{ color: "#8f8780", marginBottom: 4 }}>
+                                  <p style={{ color: "#737373", marginBottom: 4 }}>
                                     {point.promptLabel} · {point.marketLabel} · {point.periodLabel}
                                   </p>
-                                  <p style={{ color: "#8f8780" }}>Sharpe: {point.sharpe.toFixed(2)}</p>
-                                  <p style={{ color: "#8f8780" }}>HHI: {point.hhi.toFixed(3)}</p>
+                                  <p style={{ color: "#737373" }}>Sharpe: {point.sharpe.toFixed(2)}</p>
+                                  <p style={{ color: "#737373" }}>HHI: {point.hhi.toFixed(3)}</p>
                                 </div>
                               );
                             }}
@@ -6399,7 +6399,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                           />
                         </ScatterChart>
                       </ResponsiveContainer>
-                      <p className="mt-1 text-[10px] text-[#b4aca5]">
+                      <p className="mt-1 text-[10px] text-[#a3a3a3]">
                         Lower HHI means more diversified. Runs above the dashed line are concentrated portfolios. {modelMarketReference.caption}
                       </p>
                     </div>
@@ -6424,7 +6424,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={chartData} margin={{ top: 8, right: 48, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                  <XAxis dataKey="prompt" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="prompt" tick={{ fontSize: 10, fill: "#737373" }} axisLine={false} tickLine={false} />
                   <YAxis
                     yAxisId="left"
                     tick={{ fontSize: 10, fill: "#aca49d" }}
@@ -6464,7 +6464,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                  <XAxis dataKey="prompt" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="prompt" tick={{ fontSize: 10, fill: "#737373" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
                   <Tooltip {...tooltipStyle} formatter={(value: number) => `${value.toFixed(1)}%`} />
                   <Legend />
@@ -6479,7 +6479,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
 
           {structuralRows.length > 0 && (
             <Panel className="overflow-x-auto p-0">
-              <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+              <div className="border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="min-w-[220px] flex-1">
                     <p className="dashboard-label">Structural comparison by model and prompt</p>
@@ -6496,28 +6496,28 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
               </div>
               <table className="w-full min-w-[940px] text-[11px]">
                 <thead>
-                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Avg holdings</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean HHI</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Equal-weight-like %</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Forecast abs err</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean rationale chars</th>
+                  <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Model</th>
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Runs</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Avg holdings</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean HHI</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Equal-weight-like %</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Forecast abs err</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean rationale chars</th>
                   </tr>
                 </thead>
                 <tbody>
                   {structuralRows.map((row) => (
-                    <tr key={`${row.model}-${row.promptType}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                      <td className="px-3 py-2.5 text-[#5e5955]">{row.model}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.runCount}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanHoldings != null ? row.meanHoldings.toFixed(1) : "—"}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanHhi != null ? row.meanHhi.toFixed(3) : "—"}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.equalWeightRate, 0)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanForecastAbs, 1)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.meanRationaleLength != null ? row.meanRationaleLength.toFixed(0) : "—"}</td>
+                    <tr key={`${row.model}-${row.promptType}`} className="border-b border-[#ececec] last:border-0">
+                      <td className="px-3 py-2.5 text-[#404040]">{row.model}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.promptType}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{row.runCount}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{row.meanHoldings != null ? row.meanHoldings.toFixed(1) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{row.meanHhi != null ? row.meanHhi.toFixed(3) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.equalWeightRate, 0)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.meanForecastAbs, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{row.meanRationaleLength != null ? row.meanRationaleLength.toFixed(0) : "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -6584,24 +6584,24 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
           <Panel className="overflow-x-auto p-0">
             <table className="w-full min-w-[760px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean HHI</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Effective holdings</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Mean turnover</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Forecast abs. error</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Realized return</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean HHI</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Effective holdings</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean turnover</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Forecast abs. error</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Realized return</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row: BehaviorRow) => (
-                  <tr key={row.prompt_type} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{row.prompt_type}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.mean_hhi.toFixed(3)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.mean_effective_n_holdings.toFixed(1)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.mean_turnover, 1)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.mean_forecast_abs_error, 1)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.mean_realized_net_return, 1)}</td>
+                  <tr key={row.prompt_type} className="border-b border-[#ececec] last:border-0">
+                    <td className="px-3 py-2.5 font-medium text-[#404040]">{row.prompt_type}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.mean_hhi.toFixed(3)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.mean_effective_n_holdings.toFixed(1)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.mean_turnover, 1)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.mean_forecast_abs_error, 1)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.mean_realized_net_return, 1)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -6609,8 +6609,8 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
           </Panel>
 
           <SectionHeader>Loss reaction & recovery</SectionHeader>
-          <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-            <p className="text-[12px] leading-5 text-[#8f8780]">
+          <Panel className="border border-[#ececec] bg-[#fafafa]">
+            <p className="text-[12px] leading-5 text-[#737373]">
               These metrics compare each GPT run with the immediately prior run in the same
               strategy-market-model sequence after that prior period lost money. This shows whether
               the prompt becomes more active, more concentrated, or more diversified after a loss,
@@ -6620,7 +6620,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
 
           {lossReactionOverall == null ? (
             <Panel>
-              <p className="py-8 text-center text-[12px] text-[#9b938b]">
+              <p className="py-8 text-center text-[12px] text-[#737373]">
                 No post-loss sequences were found for the current experiment, so there is no loss-reaction sample to summarize.
               </p>
             </Panel>
@@ -6662,28 +6662,28 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
               <Panel className="overflow-x-auto p-0">
                 <table className="w-full min-w-[860px] text-[11px]">
                   <thead>
-                    <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Samples</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Avg prior loss</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Recovery rate</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Avg next return</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Turnover delta</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">HHI delta</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Effective holdings delta</th>
+                    <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Samples</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Avg prior loss</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Recovery rate</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Avg next return</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Turnover delta</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">HHI delta</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Effective holdings delta</th>
                     </tr>
                   </thead>
                   <tbody>
                     {lossReactionRows.map((row) => (
-                      <tr key={row.promptType} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                        <td className="px-3 py-2.5 font-medium text-[#5e5955]">{row.label}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.sampleCount}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanPriorLoss, 1)}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.recoveryRate, 1)}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.meanNextReturn, 1)}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatSignedPctFromRatio(row.meanTurnoverDelta, 1)}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatSignedNumber(row.meanHhiDelta, 3)}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatSignedNumber(row.meanHoldingsDelta, 1)}</td>
+                      <tr key={row.promptType} className="border-b border-[#ececec] last:border-0">
+                        <td className="px-3 py-2.5 font-medium text-[#404040]">{row.label}</td>
+                        <td className="px-3 py-2.5 text-right text-[#737373]">{row.sampleCount}</td>
+                        <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.meanPriorLoss, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.recoveryRate, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.meanNextReturn, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#737373]">{formatSignedPctFromRatio(row.meanTurnoverDelta, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#737373]">{formatSignedNumber(row.meanHhiDelta, 3)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#737373]">{formatSignedNumber(row.meanHoldingsDelta, 1)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -6694,27 +6694,27 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
 
           {postGainComparisonRows.length > 0 && (
             <Panel className="overflow-x-auto p-0">
-              <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+              <div className="border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
                 <p className="dashboard-label">Post-loss vs post-gain baseline</p>
               </div>
               <table className="w-full min-w-[680px] text-[11px]">
                 <thead>
-                  <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Post-loss return</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Post-gain return</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Post-loss turnover</th>
-                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Post-gain turnover</th>
+                  <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Post-loss return</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Post-gain return</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Post-loss turnover</th>
+                    <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Post-gain turnover</th>
                   </tr>
                 </thead>
                 <tbody>
                   {postGainComparisonRows.map((row) => (
-                    <tr key={row.label} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                      <td className="px-3 py-2.5 text-[#5e5955]">{row.label}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.postLossReturn, 1)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.postGainReturn, 1)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.postLossTurnover, 1)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.postGainTurnover, 1)}</td>
+                    <tr key={row.label} className="border-b border-[#ececec] last:border-0">
+                      <td className="px-3 py-2.5 text-[#404040]">{row.label}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.postLossReturn, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.postGainReturn, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.postLossTurnover, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.postGainTurnover, 1)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -6736,7 +6736,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                     />
                   </div>
                   <div ref={behaviorSelectionRef} className="space-y-3">
-                    <p className="text-[12px] leading-5 text-[#8f8780]">
+                    <p className="text-[12px] leading-5 text-[#737373]">
                       Each cell shows the share of GPT run-period portfolios in that market that selected the stock at
                       least once. Selections are deduplicated to one `ticker x path x period` observation, so this is a
                       portfolio-choice view rather than a daily holdings-count view.
@@ -6748,26 +6748,26 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                           gridTemplateColumns: `minmax(190px, 1.4fr) repeat(${Math.max(assetSelectionMatrix.marketKeys.length, 1)}, minmax(108px, 1fr)) minmax(108px, 1fr)`,
                         }}
                       >
-                        <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                        <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">
                           Stock
                         </div>
                         {assetSelectionMatrix.marketKeys.map((market) => (
                           <div
                             key={`selection-head-${market}`}
-                            className="px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]"
+                            className="px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]"
                           >
                             {MARKET_LABELS[market] ?? market}
                           </div>
                         ))}
-                        <div className="px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">
+                        <div className="px-2 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">
                           Overall
                         </div>
 
                         {assetSelectionMatrix.rows.slice(0, 12).map((row) => (
                           <div key={`selection-row-${row.ticker}`} className="contents">
-                            <div className="rounded-[14px] border border-[rgba(232,224,217,0.92)] bg-[rgba(255,255,252,0.75)] px-3 py-2">
-                              <p className="text-[12px] font-semibold text-[#5e5955]">{row.ticker}</p>
-                              <p className="mt-0.5 truncate text-[10px] text-[#8d857f]">{row.name}</p>
+                            <div className="rounded-[14px] border border-[#ececec] bg-[#fafafa] px-3 py-2">
+                              <p className="text-[12px] font-semibold text-[#404040]">{row.ticker}</p>
+                              <p className="mt-0.5 truncate text-[10px] text-[#737373]">{row.name}</p>
                               <p className="mt-1 text-[10px] text-[#a19a93]">{row.marketLabels || "Not selected"}</p>
                             </div>
                             {row.cells.map((cell) => {
@@ -6782,20 +6782,20 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                                   }}
                                   title={`${row.ticker} in ${cell.marketLabel}: ${cell.selectedRunCount} of ${cell.totalRuns} run-periods`}
                                 >
-                                  <p className="text-[11px] font-semibold text-[#5e5955]">
+                                  <p className="text-[11px] font-semibold text-[#404040]">
                                     {formatPctFromRatio(cell.selectionRate, 1)}
                                   </p>
-                                  <p className="mt-0.5 text-[10px] text-[#8d857f]">
+                                  <p className="mt-0.5 text-[10px] text-[#737373]">
                                     {cell.selectedRunCount}/{cell.totalRuns}
                                   </p>
                                 </div>
                               );
                             })}
-                            <div className="rounded-[14px] border border-[rgba(232,224,217,0.92)] bg-[rgba(255,255,252,0.75)] px-2 py-2 text-center">
-                              <p className="text-[11px] font-semibold text-[#5e5955]">
+                            <div className="rounded-[14px] border border-[#ececec] bg-[#fafafa] px-2 py-2 text-center">
+                              <p className="text-[11px] font-semibold text-[#404040]">
                                 {formatPctFromRatio(row.weightedRate, 1)}
                               </p>
-                              <p className="mt-0.5 text-[10px] text-[#8d857f]">
+                              <p className="mt-0.5 text-[10px] text-[#737373]">
                                 {row.totalSelectedRuns}/{row.totalRuns}
                               </p>
                             </div>
@@ -6809,25 +6809,25 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
 
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
                 <Panel className="overflow-x-auto p-0">
-                  <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+                  <div className="border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
                     <p className="dashboard-label">Sector concentration and cap pressure</p>
                   </div>
                   <table className="w-full min-w-[520px] text-[11px]">
                     <thead>
-                      <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                        <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                        <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Sector</th>
-                        <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Share</th>
-                        <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Cap flag</th>
+                      <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                        <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                        <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Sector</th>
+                        <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Share</th>
+                        <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Cap flag</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sectorConcentrationRows.map((row) => (
-                        <tr key={`${row.promptType}-${row.sector}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                          <td className="px-3 py-2.5 text-[#5e5955]">{row.promptType}</td>
-                          <td className="px-3 py-2.5 text-[#8d857f]">{row.sector}</td>
-                          <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.share, 1)}</td>
-                          <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.capViolation ? "Yes" : "No"}</td>
+                        <tr key={`${row.promptType}-${row.sector}`} className="border-b border-[#ececec] last:border-0">
+                          <td className="px-3 py-2.5 text-[#404040]">{row.promptType}</td>
+                          <td className="px-3 py-2.5 text-[#737373]">{row.sector}</td>
+                          <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.share, 1)}</td>
+                          <td className="px-3 py-2.5 text-right text-[#737373]">{row.capViolation ? "Yes" : "No"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -6835,29 +6835,29 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                 </Panel>
 
               <Panel className="overflow-x-auto p-0">
-                <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+                <div className="border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
                   <p className="dashboard-label">Most selected stocks</p>
                 </div>
                 <table className="w-full min-w-[620px] text-[11px]">
                   <thead>
-                    <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Ticker</th>
-                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Name</th>
-                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Markets</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs selected</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Overall share</th>
-                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Best market</th>
+                    <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Ticker</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Name</th>
+                      <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Markets</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Runs selected</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Overall share</th>
+                      <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Best market</th>
                     </tr>
                   </thead>
                   <tbody>
                     {assetFrequencyRows.map((row) => (
-                      <tr key={row.ticker} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                        <td className="px-3 py-2.5 text-[#5e5955]">{row.ticker}</td>
-                        <td className="px-3 py-2.5 text-[#8d857f]">{row.name}</td>
-                        <td className="px-3 py-2.5 text-[#8d857f]">{row.marketLabels}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.totalSelectedRuns}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.weightedRate, 1)}</td>
-                        <td className="px-3 py-2.5 text-right text-[#8d857f]">
+                      <tr key={row.ticker} className="border-b border-[#ececec] last:border-0">
+                        <td className="px-3 py-2.5 text-[#404040]">{row.ticker}</td>
+                        <td className="px-3 py-2.5 text-[#737373]">{row.name}</td>
+                        <td className="px-3 py-2.5 text-[#737373]">{row.marketLabels}</td>
+                        <td className="px-3 py-2.5 text-right text-[#737373]">{row.totalSelectedRuns}</td>
+                        <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.weightedRate, 1)}</td>
+                        <td className="px-3 py-2.5 text-right text-[#737373]">
                           {row.bestMarketLabel} {row.bestMarketRate != null ? `(${formatPctFromRatio(row.bestMarketRate, 1)})` : ""}
                         </td>
                       </tr>
@@ -6908,8 +6908,8 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
             return (
               <>
                 <SectionHeader>Reasoning themes</SectionHeader>
-                <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-                  <p className="text-[12px] leading-5 text-[#8f8780]">
+                <Panel className="border border-[#ececec] bg-[#fafafa]">
+                  <p className="text-[12px] leading-5 text-[#737373]">
                     Most frequent words in all reasoning summaries (stop words removed). Helps identify
                     whether the model consistently invokes certain themes across runs.
                   </p>
@@ -6918,7 +6918,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                   <div className="grid grid-cols-2 gap-x-6 gap-y-1 md:grid-cols-3">
                     {sorted.map(([word, count]) => (
                       <div key={word} className="flex items-center gap-2 py-1">
-                        <span className="w-[80px] truncate text-[11px] font-medium text-[#5e5955]">{word}</span>
+                        <span className="w-[80px] truncate text-[11px] font-medium text-[#404040]">{word}</span>
                         <div className="flex-1">
                           <div
                             className="h-[6px] rounded-full"
@@ -6928,7 +6928,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                             }}
                           />
                         </div>
-                        <span className="w-[28px] text-right text-[10px] tabular-nums text-[#9b938b]">{count}</span>
+                        <span className="w-[28px] text-right text-[10px] tabular-nums text-[#737373]">{count}</span>
                       </div>
                     ))}
                   </div>
@@ -6939,8 +6939,8 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
 
           {/* ── Post-loss reasoning analysis ── */}
           <SectionHeader>Post-loss reasoning</SectionHeader>
-          <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-            <p className="text-[12px] leading-5 text-[#8f8780]">
+          <Panel className="border border-[#ececec] bg-[#fafafa]">
+            <p className="text-[12px] leading-5 text-[#737373]">
               Reasoning summaries captured for runs that immediately followed a period with a negative return.
               Use these to understand what arguments the model invokes when recovering from a drawdown.
             </p>
@@ -6948,7 +6948,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
 
           {postLossRuns.length === 0 ? (
             <Panel>
-              <p className="py-8 text-center text-[12px] text-[#9b938b]">
+              <p className="py-8 text-center text-[12px] text-[#737373]">
                 No post-loss runs found — either no consecutive losing periods in the data or no reasoning summaries are stored for these runs.
               </p>
             </Panel>
@@ -6956,7 +6956,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
             <>
               {/* Controls */}
               <div className="flex flex-wrap items-center gap-3">
-                <div className="flex gap-1 rounded-[12px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] p-1">
+                <div className="flex gap-1 rounded-[12px] border border-[#ececec] bg-[#fafafa] p-1">
                   {(["all", "simple", "advanced"] as const).map((opt) => (
                     <button
                       key={opt}
@@ -6964,7 +6964,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                       className={`rounded-[9px] px-3 py-1 text-[11px] font-medium transition-colors ${
                         reasoningPromptFilter === opt
                           ? "bg-[rgba(188,160,130,0.28)] text-[#5c534c]"
-                          : "text-[#9b938b] hover:text-[#5c534c]"
+                          : "text-[#737373] hover:text-[#5c534c]"
                       }`}
                     >
                       {opt === "all" ? `All (${postLossRuns.length})` : opt.charAt(0).toUpperCase() + opt.slice(1)}
@@ -6976,14 +6976,14 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                   placeholder="Search reasoning…"
                   value={reasoningSearch}
                   onChange={(e) => setReasoningSearch(e.target.value)}
-                  className="flex-1 rounded-[12px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-3 py-1.5 text-[11px] text-[#5c534c] placeholder-[#b4aca5] outline-none focus:border-[rgba(188,160,130,0.6)]"
+                  className="flex-1 rounded-[12px] border border-[#ececec] bg-[#fafafa] px-3 py-1.5 text-[11px] text-[#5c534c] placeholder-[#a3a3a3] outline-none focus:border-[rgba(188,160,130,0.6)]"
                 />
-                <span className="text-[11px] text-[#b4aca5]">{filteredPostLoss.length} shown</span>
+                <span className="text-[11px] text-[#a3a3a3]">{filteredPostLoss.length} shown</span>
               </div>
 
               {filteredPostLoss.length === 0 ? (
                 <Panel>
-                  <p className="py-4 text-center text-[12px] text-[#9b938b]">No results match the current filter.</p>
+                  <p className="py-4 text-center text-[12px] text-[#737373]">No results match the current filter.</p>
                 </Panel>
               ) : (
                 <div className="space-y-2">
@@ -6996,7 +6996,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                     return (
                       <div
                         key={key}
-                        className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3"
+                        className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3"
                       >
                         {/* Header row */}
                         <div className="flex flex-wrap items-start justify-between gap-2">
@@ -7010,24 +7010,24 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                             <span className="text-[#5c534c]">
                               {MARKET_LABELS[run.market ?? ""] ?? run.market ?? "—"}
                             </span>
-                            <span className="text-[#b4aca5]">·</span>
-                            <span className="text-[#8d857f]">{run.period ?? "—"}</span>
+                            <span className="text-[#a3a3a3]">·</span>
+                            <span className="text-[#737373]">{run.period ?? "—"}</span>
                             {run.model && (
                               <>
-                                <span className="text-[#b4aca5]">·</span>
+                                <span className="text-[#a3a3a3]">·</span>
                                 <span className="font-mono text-[10px] text-[#a39a92]">{String(run.model)}</span>
                               </>
                             )}
                           </div>
                           <div className="flex items-center gap-3">
-                            <span className="text-[11px] text-[#9b938b]">
+                            <span className="text-[11px] text-[#737373]">
                               Prior return:{" "}
                               <span className="font-semibold text-[#c17070]">
                                 {(priorReturn * 100).toFixed(1)}%
                               </span>
                             </span>
                             {run.sharpe_ratio != null && (
-                              <span className="text-[11px] text-[#9b938b]">
+                              <span className="text-[11px] text-[#737373]">
                                 This-period Sharpe:{" "}
                                 <span className="font-semibold" style={{ color: sharpeColor(run.sharpe_ratio as number) }}>
                                   {(run.sharpe_ratio as number).toFixed(2)}
@@ -7053,7 +7053,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                             )}
                           </div>
                         ) : (
-                          <p className="mt-2 text-[11px] italic text-[#b4aca5]">No reasoning summary stored for this run.</p>
+                          <p className="mt-2 text-[11px] italic text-[#a3a3a3]">No reasoning summary stored for this run.</p>
                         )}
                       </div>
                     );
@@ -7168,17 +7168,17 @@ export function DrawdownsTab({ data }: BaseTabProps) {
               label: formatStrategyLabel(option.strategy, option.strategy_key),
             }))}
           />
-          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Source</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">{dataSourceLabel}</p>
-            <p className="mt-1 text-[11px] text-[#9b938b]">
+            <p className="mt-2 text-[13px] font-semibold text-[#404040]">{dataSourceLabel}</p>
+            <p className="mt-1 text-[11px] text-[#737373]">
               Regime metrics when present; otherwise the drawdown chart falls back to daily path metrics, averaged across paths.
             </p>
           </div>
-          <div className="rounded-[16px] border border-[rgba(232,224,217,0.95)] bg-[rgba(255,255,252,0.62)] px-4 py-3">
+          <div className="rounded-[16px] border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Rows</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#5f5955]">{rawRowCount}</p>
-            <p className="mt-1 text-[11px] text-[#9b938b]">Loaded from the live backend</p>
+            <p className="mt-2 text-[13px] font-semibold text-[#404040]">{rawRowCount}</p>
+            <p className="mt-1 text-[11px] text-[#737373]">Loaded from the live backend</p>
           </div>
         </div>
       </Panel>
@@ -7262,7 +7262,7 @@ export function DrawdownsTab({ data }: BaseTabProps) {
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={regimeCounts}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                  <XAxis dataKey="regime" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="regime" tick={{ fontSize: 10, fill: "#737373" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
                   <Tooltip {...tooltipStyle} />
                   <Bar dataKey="count" fill={COLORS.cyan} radius={[10, 10, 0, 0]} />
@@ -7275,11 +7275,11 @@ export function DrawdownsTab({ data }: BaseTabProps) {
           <Panel className="overflow-x-auto p-0">
             <table className="w-full min-w-[620px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Date</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Drawdown</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Daily return</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Regime</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Date</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Drawdown</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Daily return</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Regime</th>
                 </tr>
               </thead>
               <tbody>
@@ -7287,11 +7287,11 @@ export function DrawdownsTab({ data }: BaseTabProps) {
                   .sort((left, right) => (right.drawdown ?? -Infinity) - (left.drawdown ?? -Infinity))
                   .slice(0, 8)
                   .map((row) => (
-                    <tr key={row.date} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                      <td className="px-3 py-2.5 font-medium text-[#5e5955]">{formatDateLabel(row.date)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.drawdown, 1)}</td>
-                      <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromRatio(row.dailyReturn, 1)}</td>
-                      <td className="px-3 py-2.5 text-[#8d857f]">{row.marketRegimeLabel ?? "—"}</td>
+                    <tr key={row.date} className="border-b border-[#ececec] last:border-0">
+                      <td className="px-3 py-2.5 font-medium text-[#404040]">{formatDateLabel(row.date)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.drawdown, 1)}</td>
+                      <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(row.dailyReturn, 1)}</td>
+                      <td className="px-3 py-2.5 text-[#737373]">{row.marketRegimeLabel ?? "—"}</td>
                     </tr>
                   ))}
               </tbody>
@@ -7432,7 +7432,7 @@ export function RollingRiskTab({ data, runs }: BaseTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
-      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
+      <Panel className="border border-[#ececec] bg-[#fafafa]">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <FilterSelect
             label="Market"
@@ -7453,7 +7453,7 @@ export function RollingRiskTab({ data, runs }: BaseTabProps) {
             options={promptOptions}
           />
         </div>
-        <p className="mt-3 text-[11px] leading-5 text-[#8f8780]">
+        <p className="mt-3 text-[11px] leading-5 text-[#737373]">
           Daily rows are relabeled from run-level model metadata before the rolling metrics are built, so model names can change across the timeline instead of staying fixed to one path label.
         </p>
       </Panel>
@@ -7547,20 +7547,20 @@ export function RollingRiskTab({ data, runs }: BaseTabProps) {
           <Panel className="overflow-x-auto p-0">
             <table className="w-full min-w-[520px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Series</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Obs</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">ACF(1)</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Ljung-Box (5)</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Series</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Obs</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">ACF(1)</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Ljung-Box (5)</th>
                 </tr>
               </thead>
               <tbody>
                 {autocorrelationSummary.map((row) => (
-                  <tr key={row.label} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{row.label}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.n}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.acf1 != null ? row.acf1.toFixed(3) : "—"}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.ljungBox5 != null ? row.ljungBox5.toFixed(2) : "—"}</td>
+                  <tr key={row.label} className="border-b border-[#ececec] last:border-0">
+                    <td className="px-3 py-2.5 font-medium text-[#404040]">{row.label}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.n}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.acf1 != null ? row.acf1.toFixed(3) : "—"}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.ljungBox5 != null ? row.ljungBox5.toFixed(2) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -7667,7 +7667,7 @@ export function DataQualityTab({ data }: BaseTabProps) {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={byPrompt} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
                   <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                  <XAxis dataKey="prompt" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="prompt" tick={{ fontSize: 10, fill: "#737373" }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
                   <Tooltip {...tooltipStyle} />
                   <Legend />
@@ -7689,7 +7689,7 @@ export function DataQualityTab({ data }: BaseTabProps) {
                 />
               </div>
               {byFailureType.length === 0 ? (
-                <div className="flex h-[300px] items-center justify-center text-center text-[12px] text-[#9b938b]">
+                <div className="flex h-[300px] items-center justify-center text-center text-[12px] text-[#737373]">
                   No explicit failure types recorded for the current slice.
                 </div>
               ) : (
@@ -7697,7 +7697,7 @@ export function DataQualityTab({ data }: BaseTabProps) {
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={byFailureType}>
                     <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                    <XAxis dataKey="failureType" tick={{ fontSize: 10, fill: "#8f8780" }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="failureType" tick={{ fontSize: 10, fill: "#737373" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: "#aca49d" }} axisLine={false} tickLine={false} />
                     <Tooltip {...tooltipStyle} />
                     <Bar dataKey="count" fill={COLORS.red} radius={[10, 10, 0, 0]} />
@@ -7711,28 +7711,28 @@ export function DataQualityTab({ data }: BaseTabProps) {
           <Panel className="overflow-x-auto p-0">
             <table className="w-full min-w-[940px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Period</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Failure type</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Valid %</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Repaired %</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Avg attempts</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Period</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Model</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Failure type</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Valid %</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Repaired %</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Avg attempts</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr key={`${row.market}-${row.period}-${row.prompt_type}-${row.model}-${row.failure_type ?? "ok"}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                    <td className="px-3 py-2.5 font-medium text-[#5e5955]">{MARKET_LABELS[row.market] ?? row.market}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{row.period}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{row.prompt_type}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{row.model}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{row.failure_type ?? "none"}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromNumber((row.valid_rows / row.row_count) * 100, 0)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{formatPctFromNumber((row.repaired_rows / row.row_count) * 100, 0)}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.avg_repair_attempts != null ? row.avg_repair_attempts.toFixed(2) : "—"}</td>
+                  <tr key={`${row.market}-${row.period}-${row.prompt_type}-${row.model}-${row.failure_type ?? "ok"}`} className="border-b border-[#ececec] last:border-0">
+                    <td className="px-3 py-2.5 font-medium text-[#404040]">{MARKET_LABELS[row.market] ?? row.market}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{row.period}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{row.prompt_type}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{row.model}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{row.failure_type ?? "none"}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromNumber((row.valid_rows / row.row_count) * 100, 0)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromNumber((row.repaired_rows / row.row_count) * 100, 0)}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.avg_repair_attempts != null ? row.avg_repair_attempts.toFixed(2) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -7740,29 +7740,29 @@ export function DataQualityTab({ data }: BaseTabProps) {
           </Panel>
 
           <Panel className="overflow-x-auto p-0">
-            <div className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.72)] px-3 py-2">
+            <div className="border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
               <p className="dashboard-label">Coverage table</p>
             </div>
             <table className="w-full min-w-[940px] text-[11px]">
               <thead>
-                <tr className="border-b border-[rgba(227,220,214,0.9)] bg-[rgba(250,247,243,0.84)]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Model</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Market</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Period</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Prompt</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Runs</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#b4aca5]">Valid runs</th>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Model</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Period</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Runs</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Valid runs</th>
                 </tr>
               </thead>
               <tbody>
                 {coverageRows.map((row) => (
-                  <tr key={`${row.model}-${row.market}-${row.period}-${row.promptType}`} className="border-b border-[rgba(227,220,214,0.8)] last:border-0">
-                    <td className="px-3 py-2.5 text-[#5e5955]">{row.model}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{MARKET_LABELS[row.market] ?? row.market}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{row.period}</td>
-                    <td className="px-3 py-2.5 text-[#8d857f]">{row.promptType}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.runCount}</td>
-                    <td className="px-3 py-2.5 text-right text-[#8d857f]">{row.validCount}</td>
+                  <tr key={`${row.model}-${row.market}-${row.period}-${row.promptType}`} className="border-b border-[#ececec] last:border-0">
+                    <td className="px-3 py-2.5 text-[#404040]">{row.model}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{MARKET_LABELS[row.market] ?? row.market}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{row.period}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">{row.promptType}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.runCount}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.validCount}</td>
                   </tr>
                 ))}
               </tbody>
@@ -7777,17 +7777,17 @@ export function DataQualityTab({ data }: BaseTabProps) {
 const SUBTAB_BUTTON_BASE =
   "rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors";
 const SUBTAB_BUTTON_ACTIVE =
-  "border-[#27211b] bg-[#27211b] text-[#faf7f2] shadow-[0_8px_20px_rgba(39,33,27,0.14)]";
+  "border-[#0a0a0a] bg-[#0a0a0a] text-[#faf7f2] shadow-[0_8px_20px_rgba(39,33,27,0.14)]";
 const SUBTAB_BUTTON_INACTIVE =
-  "border-[rgba(220,213,202,0.92)] bg-[rgba(250,246,239,0.96)] text-[#6d655c] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] hover:bg-[rgba(244,239,231,0.98)] hover:text-[#453f39]";
+  "border-[#ececec] bg-[#fafafa] text-[#6d655c] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] hover:bg-[rgba(244,239,231,0.98)] hover:text-[#453f39]";
 
 export function PathsTab({ data, runs }: BaseTabProps) {
   const [activeSection, setActiveSection] = useState<"equity" | "robustness" | "drawdowns" | "holdings" | "runs">("equity");
 
   return (
     <div className="space-y-4 pb-1">
-      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-        <p className="text-[12px] leading-5 text-[#8f8780]">
+      <Panel className="border border-[#ececec] bg-[#fafafa]">
+        <p className="text-[12px] leading-5 text-[#737373]">
           This path-analysis lane starts with the typical strategy path, then lets you drill into drawdowns, holdings,
           and individual runs without leaving the same top-level view.
         </p>
@@ -7830,8 +7830,8 @@ export function DiagnosticsTab({ data, runs }: BaseTabProps) {
 
   return (
     <div className="space-y-4 pb-1">
-      <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-        <p className="text-[12px] leading-5 text-[#8f8780]">
+      <Panel className="border border-[#ececec] bg-[#fafafa]">
+        <p className="text-[12px] leading-5 text-[#737373]">
           Diagnostics sit behind the main story. Use them to validate statistical confidence, inspect run-quality issues,
           and understand where backend summary fields are still incomplete.
         </p>
@@ -7862,8 +7862,8 @@ export function DiagnosticsTab({ data, runs }: BaseTabProps) {
       {activeSection === "quality" && <DataQualityTab data={data} runs={runs} />}
       {activeSection === "missing" && (
         <div className="space-y-4">
-          <Panel className="border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.62)]">
-            <p className="text-[12px] leading-5 text-[#8f8780]">
+          <Panel className="border border-[#ececec] bg-[#fafafa]">
+            <p className="text-[12px] leading-5 text-[#737373]">
               These checks focus on gaps in the summary layer, especially rows where annualized return or volatility exists
               but `mean_sharpe` is still missing in the API response.
             </p>

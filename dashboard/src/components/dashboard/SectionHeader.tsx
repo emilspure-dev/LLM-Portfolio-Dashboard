@@ -4,12 +4,12 @@ interface SectionHeaderProps {
 
 export function SectionHeader({ children }: SectionHeaderProps) {
   return (
-    <h3 className="mb-3 mt-6 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#aca396]">
+    <h3 className="mb-3 mt-6 text-[12px] font-medium tracking-[-0.01em] text-[#525252]">
       {children}
     </h3>
   );
 }
 
 export function SoftHr() {
-  return <div className="my-4 h-px bg-[rgba(216,209,198,0.9)]" />;
+  return <div className="my-4 h-px bg-[#ececec]" />;
 }
