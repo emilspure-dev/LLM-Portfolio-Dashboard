@@ -235,11 +235,13 @@ export default function Index() {
     data?.filters.markets.length ?? metaQuery.data?.available_markets.length ?? 0;
   const modelCount =
     data?.filters.models.length ?? metaQuery.data?.available_models.length ?? 0;
-  const headlineStats = [
-    { label: "Portfolios", value: runCount.toLocaleString() },
-    { label: "Years", value: formatYears(yearCount) },
-    { label: "Markets", value: marketCount.toLocaleString() },
-    { label: "Models", value: modelCount.toLocaleString() },
+  const promptTypeCount = 2;
+  const scopeItems = [
+    { value: runCount.toLocaleString(), label: "portfolios", emphasis: true },
+    { value: formatYears(yearCount), label: "years" },
+    { value: marketCount.toLocaleString(), label: "markets" },
+    { value: modelCount.toLocaleString(), label: "models" },
+    { value: promptTypeCount.toLocaleString(), label: "prompt types" },
   ];
 
   const handleRefresh = () => {
@@ -255,30 +257,49 @@ export default function Index() {
     <div className="min-h-screen">
       <main className="dashboard-board mx-auto max-w-[1520px] px-4 py-5 md:px-8 md:py-8">
         <header className="border-b border-[#111111] pb-6">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="dashboard-topline">Empirical Research</p>
-              <h1 className="mt-3 text-[34px] font-semibold leading-[1.15] text-[#111111] md:text-[44px]">
-                LLMs in Portfolio Construction
-              </h1>
-              <p className="mt-3 max-w-3xl text-[15px] leading-[1.6] text-[#333333]">
-                An empirical study of AI-based portfolio construction and
-                rebalancing for retail investors.
-              </p>
-              <p className="mt-2 max-w-3xl text-[14px] leading-[1.6] text-[#444444]">
-                <span className="italic">Authors:</span> Jonathan K. Mogensen and Emil S. Olsen
-              </p>
-            </div>
+          <div className="min-w-0">
+            <p className="dashboard-topline">Empirical Research</p>
+            <h1 className="mt-3 text-[34px] font-semibold leading-[1.15] text-[#111111] md:text-[44px]">
+              LLMs in Portfolio Construction
+            </h1>
+            <p className="mt-3 max-w-3xl text-[15px] leading-[1.6] text-[#333333]">
+              An empirical study of AI-based portfolio construction and
+              rebalancing for retail investors.
+            </p>
+            <p className="mt-2 max-w-3xl text-[14px] leading-[1.6] text-[#444444]">
+              <span className="italic">Authors:</span> Jonathan K. Mogensen and Emil S. Olsen
+            </p>
+          </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:mt-10 xl:min-w-[420px] xl:self-end">
-              {headlineStats.map((stat) => (
-                <div key={stat.label} className="dashboard-stat">
-                  <p className="dashboard-stat-value">{stat.value}</p>
-                  <p className="dashboard-stat-label">{stat.label}</p>
+          <figure className="mt-8 border-y border-[#dcd5ce] py-6">
+            <figcaption className="mb-4 text-center text-[10px] font-semibold uppercase tracking-[0.22em] text-[#9f978f]">
+              Scope of the study
+            </figcaption>
+            <div className="flex flex-wrap items-baseline justify-center gap-x-5 gap-y-3 text-[#111111]">
+              {scopeItems.map((item, idx) => (
+                <div key={item.label} className="flex items-baseline gap-2">
+                  {idx > 0 && (
+                    <span className="mr-3 text-[14px] italic text-[#b8afa7]">
+                      {idx === 1 ? "across" : "·"}
+                    </span>
+                  )}
+                  <span
+                    className={`tabular-nums leading-none ${
+                      item.emphasis
+                        ? "text-[40px] md:text-[48px]"
+                        : "text-[26px] md:text-[30px]"
+                    }`}
+                    style={{ fontVariantNumeric: "oldstyle-nums tabular-nums" }}
+                  >
+                    {item.value}
+                  </span>
+                  <span className="text-[13px] italic text-[#666666]">
+                    {item.label}
+                  </span>
                 </div>
               ))}
             </div>
-          </div>
+          </figure>
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <span className="dashboard-pill">Completed {completedAtLabel}</span>
