@@ -222,7 +222,7 @@ export default function Index() {
             <div className="min-w-0 flex-1">
               <p className="dashboard-topline">Empirical Research</p>
               <h1 className="mt-3 text-[34px] font-semibold leading-[1.15] text-[#111111] md:text-[44px]">
-                LLM Portfolio Evaluation Dashboard
+                LLMs in Portfolio Construction
               </h1>
               <p className="mt-3 max-w-3xl text-[15px] leading-[1.6] text-[#333333]">
                 An empirical study of AI-based portfolio construction and

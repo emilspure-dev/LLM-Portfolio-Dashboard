@@ -303,12 +303,10 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       };
     });
 
-    return result.sort((a, b) => {
-      const aGpt = a.strategyKey.startsWith("gpt_");
-      const bGpt = b.strategyKey.startsWith("gpt_");
-      if (aGpt !== bGpt) return aGpt ? -1 : 1;
-      return (b.overallSharpe ?? -Infinity) - (a.overallSharpe ?? -Infinity);
-    });
+    return result.sort(
+      (a, b) =>
+        (b.overallSharpe ?? -Infinity) - (a.overallSharpe ?? -Infinity)
+    );
   }, [data.summary_rows]);
 
   const cumulativeReturnChart = useMemo(() => {
@@ -502,12 +500,29 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
           <SectionHeader>Strategy Performance</SectionHeader>
           {strategyGroups ? (
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {strategyGroups.map((group) => (
-                <div key={group.key} className="dashboard-panel-strong rounded-none p-4 md:p-5">
+              {strategyGroups.map((group) => {
+                const isGpt = group.strategyKey.startsWith("gpt_");
+                return (
+                <div
+                  key={group.key}
+                  className="dashboard-panel-strong rounded-none p-4 md:p-5"
+                  style={
+                    isGpt
+                      ? { borderColor: "#111111", borderLeftWidth: 3 }
+                      : undefined
+                  }
+                >
                   {/* Overall row */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="dashboard-label truncate">{group.label}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="dashboard-label truncate">{group.label}</p>
+                        {isGpt && (
+                          <span className="shrink-0 border border-[#111111] bg-[#111111] px-1.5 py-[1px] text-[9px] font-semibold not-italic tracking-[0.08em] text-white">
+                            LLM
+                          </span>
+                        )}
+                      </div>
                       <p
                         className="mt-2 text-[26px] font-semibold leading-none tracking-[-0.05em]"
                         style={{ color: sharpeColor(group.overallSharpe) }}
