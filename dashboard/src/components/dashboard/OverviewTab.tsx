@@ -569,7 +569,8 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             /* Fallback: flat grid when summary_rows is unavailable */
