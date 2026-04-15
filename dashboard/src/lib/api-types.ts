@@ -81,6 +81,7 @@ export interface StrategySummaryApiRow {
 export interface CumulativeReturnSummaryRow {
   date: string;
   strategy_key: string;
+  strategy: string | null;
   mean_cumulative_return: number | null;
   path_count: number;
 }

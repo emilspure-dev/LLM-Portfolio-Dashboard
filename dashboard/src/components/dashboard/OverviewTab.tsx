@@ -258,7 +258,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
       const summaryRow = summary.find((item) => item.strategy_key === row.strategy_key);
       const bucket = grouped.get(row.strategy_key) ?? {
         key: row.strategy_key,
-        label: getStrategyDisplayName(summaryRow?.Strategy ?? null, row.strategy_key),
+        label: getStrategyDisplayName(row.strategy ?? summaryRow?.Strategy ?? null, row.strategy_key),
         color: getStrategyColor(row.strategy_key),
         rows: [],
       };

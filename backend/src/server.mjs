@@ -180,7 +180,7 @@ function queryTimeSeriesRows(sql, params, valueField) {
     }
 
     return trimmed.split("\n").map((line) => {
-      const [date, strategy_key, valueRaw, pathCountRaw] = line.split("\t");
+      const [date, strategy_key, strategyRaw, valueRaw, pathCountRaw] = line.split("\t");
       const value =
         valueRaw == null || valueRaw === ""
           ? null
@@ -192,6 +192,7 @@ function queryTimeSeriesRows(sql, params, valueField) {
       return {
         date,
         strategy_key,
+        strategy: strategyRaw == null || strategyRaw === "" ? null : strategyRaw,
         [valueField]:
           value != null && Number.isFinite(value)
             ? value
@@ -862,7 +863,8 @@ function handleCumulativeReturnSummary(url) {
   const sql = `
     SELECT
       vcr.date,
-      NULLIF(LOWER(TRIM(COALESCE(vcr.strategy_key, ''))), '') AS strategy_key,
+      ${normalizedStrategyKeySql("vcr.strategy_key")} AS strategy_key,
+      MIN(NULLIF(TRIM(COALESCE(vcr.strategy, '')), '')) AS strategy,
       SUM(vcr.mean_cumulative_return * COALESCE(vcr.path_count, 0)) * 1.0
         / NULLIF(SUM(COALESCE(vcr.path_count, 0)), 0) AS mean_cumulative_return,
       SUM(COALESCE(vcr.path_count, 0)) AS path_count
@@ -870,51 +872,27 @@ function handleCumulativeReturnSummary(url) {
     ${whereClause}
     GROUP BY
       vcr.date,
-      vcr.strategy_key
+      ${normalizedStrategyKeySql("vcr.strategy_key")}
+    ORDER BY
+      vcr.date,
+      strategy_key
   `;
 
   const rows = queryTimeSeriesRows(sql, params, "mean_cumulative_return");
-
-  const grouped = new Map();
-  for (const row of rows) {
-    const strategyKey = normalizeStrategyKeyValue(row.strategy_key) ?? row.strategy_key;
-    const pathCount = Number(row.path_count ?? 0);
-    const cumulativeReturn =
+  const result = rows.map((row) => ({
+    date: row.date,
+    strategy_key: normalizeStrategyKeyValue(row.strategy_key) ?? row.strategy_key,
+    strategy: row.strategy ?? null,
+    mean_cumulative_return:
       typeof row.mean_cumulative_return === "number" &&
       Number.isFinite(row.mean_cumulative_return)
         ? row.mean_cumulative_return
-        : null;
-
-    const bucketKey = `${row.date}::${strategyKey}`;
-    const bucket = grouped.get(bucketKey) ?? {
-      date: row.date,
-      strategy_key: strategyKey,
-      weightedReturnSum: 0,
-      path_count: 0,
-    };
-
-    if (cumulativeReturn != null && Number.isFinite(pathCount) && pathCount > 0) {
-      bucket.weightedReturnSum += cumulativeReturn * pathCount;
-      bucket.path_count += pathCount;
-    }
-
-    grouped.set(bucketKey, bucket);
-  }
-
-  const result = Array.from(grouped.values())
-    .map((row) => ({
-      date: row.date,
-      strategy_key: row.strategy_key,
-      mean_cumulative_return:
-        row.path_count > 0 ? row.weightedReturnSum / row.path_count : null,
-      path_count: row.path_count,
-    }))
-    .sort((left, right) => {
-      if (left.date === right.date) {
-        return String(left.strategy_key).localeCompare(String(right.strategy_key));
-      }
-      return String(left.date).localeCompare(String(right.date));
-    });
+        : null,
+    path_count:
+      typeof row.path_count === "number" && Number.isFinite(row.path_count)
+        ? row.path_count
+        : 0,
+  }));
 
   timeSeriesCache.set(cacheKey, {
     createdAt: Date.now(),
