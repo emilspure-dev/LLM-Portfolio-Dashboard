@@ -53,6 +53,89 @@ function formatReturnPercent(value: number | string | null | undefined, decimals
   return `${(numericValue * 100).toFixed(decimals)}%`;
 }
 
+interface ChartTooltipItem {
+  color?: string;
+  name?: string;
+  value?: number | string | null;
+}
+
+function AccumulatedReturnTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: ChartTooltipItem[];
+  label?: string | number;
+}) {
+  if (!active || !payload?.length) {
+    return null;
+  }
+
+  const sortedPayload = [...payload]
+    .filter((item) => item.name)
+    .sort((left, right) => {
+      const leftValue =
+        typeof left.value === "number" ? left.value : Number(left.value ?? Number.NaN);
+      const rightValue =
+        typeof right.value === "number" ? right.value : Number(right.value ?? Number.NaN);
+
+      const leftFinite = Number.isFinite(leftValue);
+      const rightFinite = Number.isFinite(rightValue);
+      if (!leftFinite && !rightFinite) return 0;
+      if (!leftFinite) return 1;
+      if (!rightFinite) return -1;
+      return rightValue - leftValue;
+    });
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fafafa",
+        border: "1px solid #ececec",
+        borderRadius: 20,
+        boxShadow: "0 12px 24px rgba(121, 101, 79, 0.08)",
+        color: "#6f6762",
+        fontSize: 11,
+        padding: "14px 18px",
+      }}
+    >
+      <div
+        style={{
+          color: "#737373",
+          fontSize: 10,
+          letterSpacing: "0.08em",
+          marginBottom: 10,
+          textTransform: "uppercase",
+        }}
+      >
+        {formatChartTooltipDate(String(label ?? ""))}
+      </div>
+      <div style={{ display: "grid", gap: 6 }}>
+        {sortedPayload.map((item) => (
+          <div
+            key={String(item.name)}
+            style={{ alignItems: "center", display: "flex", gap: 8 }}
+          >
+            <span
+              style={{
+                backgroundColor: item.color ?? "#b4aca4",
+                borderRadius: 999,
+                display: "inline-block",
+                height: 8,
+                width: 8,
+              }}
+            />
+            <span>
+              {item.name}: {formatReturnPercent(item.value, 1)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 interface OverviewTabProps {
   data: EvaluationData;
   runs: RunRow[];
@@ -306,6 +389,25 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     itemStyle: { color: "#6f6762" },
   };
 
+  const cumulativeReturnAxisDomain = useMemo<[number, number] | undefined>(() => {
+    const values = cumulativeReturnChart.chartRows.flatMap((row) =>
+      cumulativeReturnChart.series
+        .map((series) => row[series.key])
+        .filter((value): value is number => typeof value === "number" && Number.isFinite(value))
+    );
+
+    if (!values.length) {
+      return undefined;
+    }
+
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    const span = Math.max(maxValue - minValue, 0.05);
+    const padding = Math.max(span * 0.035, 0.01);
+
+    return [minValue - padding, maxValue + padding];
+  }, [cumulativeReturnChart]);
+
   return (
     <div className="space-y-4 pb-1">
       <div className="dashboard-panel-strong rounded-[20px] p-4 md:p-5">
@@ -350,6 +452,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   tickLine={false}
                 />
                 <YAxis
+                  domain={cumulativeReturnAxisDomain}
                   tickFormatter={(value) => formatReturnPercent(value, 0)}
                   tick={{ fontSize: 10, fill: "#aca49d" }}
                   axisLine={false}
@@ -357,11 +460,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                 />
                 <Tooltip
                   {...tooltipStyle}
-                  labelFormatter={(value) => formatChartTooltipDate(String(value))}
-                  formatter={(value: number | null, _name, item) => [
-                    formatReturnPercent(value, 1),
-                    item?.name ?? "",
-                  ]}
+                  content={<AccumulatedReturnTooltip />}
                 />
                 <Legend wrapperStyle={{ fontSize: 11, color: "#737373", paddingTop: 12 }} />
                 <ReferenceLine
