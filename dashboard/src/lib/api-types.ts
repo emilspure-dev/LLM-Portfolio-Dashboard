@@ -82,10 +82,11 @@ export interface DailySharpeSummaryRow {
   date: string;
   strategy_key: string;
   strategy: string;
-  source_type: string;
   prompt_type: string | null;
-  mean_daily_return: number | null;
-  observations: number;
+  mean_expanding_sharpe: number | null;
+  path_count: number;
+  min_path_observations: number | null;
+  max_path_observations: number | null;
 }
 
 export interface OverviewSummaryResponse {

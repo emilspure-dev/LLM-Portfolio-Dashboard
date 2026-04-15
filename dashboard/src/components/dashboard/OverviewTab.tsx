@@ -18,38 +18,8 @@ import {
   fmt,
   fmtp,
 } from "@/lib/constants";
-import { apiRouteLikelyMissing, asFiniteNumber, mean, stdDev } from "@/lib/data-loader";
+import { apiRouteLikelyMissing } from "@/lib/data-loader";
 import type { EvaluationData, Insight, RunRow } from "@/lib/types";
-
-function rollingSharpeFromAggregatedReturns(
-  rows: Array<{ date: string; mean_daily_return: number | null }>,
-  windowSize = 21
-) {
-  const ordered = [...rows]
-    .filter((row) => asFiniteNumber(row.mean_daily_return) != null)
-    .sort((left, right) => left.date.localeCompare(right.date));
-
-  return ordered.map((row, index) => {
-    const window = ordered
-      .slice(Math.max(0, index - windowSize + 1), index + 1)
-      .map((entry) => entry.mean_daily_return)
-      .filter((value): value is number => asFiniteNumber(value) != null);
-
-    if (window.length < Math.max(5, Math.floor(windowSize / 2))) {
-      return { date: row.date, rollingSharpe: null as number | null };
-    }
-
-    const avg = mean(window);
-    const vol = stdDev(window);
-    return {
-      date: row.date,
-      rollingSharpe:
-        avg != null && vol != null && vol > 0
-          ? (avg / vol) * Math.sqrt(252)
-          : null,
-    };
-  });
-}
 
 function formatChartDate(value: string) {
   const parsed = new Date(value);
@@ -271,7 +241,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         key: string;
         label: string;
         color: string;
-        rows: Array<{ date: string; mean_daily_return: number | null }>;
+        rows: typeof rows;
       }
     >();
 
@@ -282,10 +252,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
         color: getStrategyColor(row.strategy_key),
         rows: [],
       };
-      bucket.rows.push({
-        date: row.date,
-        mean_daily_return: row.mean_daily_return,
-      });
+      bucket.rows.push(row);
       grouped.set(row.strategy_key, bucket);
     }
 
@@ -301,10 +268,9 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
 
     const chartMap = new Map<string, Record<string, string | number | null>>();
     for (const item of series) {
-      const rollingSeries = rollingSharpeFromAggregatedReturns(item.rows);
-      for (const point of rollingSeries) {
+      for (const point of item.rows) {
         const bucket = chartMap.get(point.date) ?? { date: point.date };
-        bucket[item.key] = point.rollingSharpe;
+        bucket[item.key] = point.mean_expanding_sharpe;
         chartMap.set(point.date, bucket);
       }
     }
@@ -337,8 +303,8 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
           <div>
             <p className="dashboard-label">Daily Sharpe by strategy</p>
             <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
-              21-day rolling Sharpe from pooled daily returns across all markets and
-              periods.
+              Expanding Sharpe over time from <span className="font-mono">vw_strategy_sharpe_daily</span>,
+              averaged across all markets and periods.
             </p>
           </div>
           <FigureExportControls

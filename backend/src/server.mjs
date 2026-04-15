@@ -743,45 +743,82 @@ function handleFactorStyleSummary(url) {
 }
 
 function handleDailySharpeSummary(url) {
-  const { clauses, params } = withExperimentFilters(url, {
-    experimentId: "dpm.experiment_id",
-    strategy_key: normalizedStrategyKeySql("p.strategy_key"),
-    market: "p.market",
-    prompt_type: normalizedPromptTypeSql("p.prompt_type"),
-    model: "p.model",
-  });
+  const clauses = ["vsd.experiment_id = :experiment_id"];
+  const params = {
+    experiment_id: resolveExperimentId(url),
+  };
 
-  clauses.push("dpm.daily_return IS NOT NULL");
+  addEqualsFilter(
+    clauses,
+    params,
+    normalizedStrategyKeySql("vsd.strategy_key"),
+    normalizeStrategyKeyValue(url.searchParams.get("strategy_key")),
+    "strategy_key"
+  );
+  addEqualsFilter(
+    clauses,
+    params,
+    "vsd.market",
+    cleanString(url.searchParams.get("market")),
+    "market"
+  );
+  addEqualsFilter(
+    clauses,
+    params,
+    "vsd.period",
+    cleanString(url.searchParams.get("period")),
+    "period"
+  );
+  addEqualsFilter(
+    clauses,
+    params,
+    normalizedPromptTypeSql("vsd.prompt_type"),
+    normalizePromptTypeValue(url.searchParams.get("prompt_type")),
+    "prompt_type"
+  );
 
   addDateRangeFilter(
     clauses,
     params,
-    "dpm.date",
+    "vsd.date",
     cleanString(url.searchParams.get("date_from")),
     cleanString(url.searchParams.get("date_to"))
   );
 
   return queryAll(`
     SELECT
-      dpm.date,
-      ${normalizedStrategyKeySql("p.strategy_key")} AS strategy_key,
-      p.strategy,
-      p.source_type,
-      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
-      AVG(dpm.daily_return) AS mean_daily_return,
-      COUNT(*) AS observations
-    FROM daily_path_metrics dpm
-    JOIN paths p
-      ON p.experiment_id = dpm.experiment_id
-     AND p.path_id = dpm.path_id
+      vsd.date,
+      ${normalizedStrategyKeySql("vsd.strategy_key")} AS strategy_key,
+      MIN(vsd.strategy) AS strategy,
+      ${normalizedPromptTypeSql("vsd.prompt_type")} AS prompt_type,
+      CASE
+        WHEN SUM(
+          CASE
+            WHEN vsd.mean_expanding_sharpe IS NOT NULL
+              THEN COALESCE(vsd.path_count, 0)
+            ELSE 0
+          END
+        ) > 0
+          THEN SUM(vsd.mean_expanding_sharpe * COALESCE(vsd.path_count, 0)) * 1.0
+            / SUM(
+              CASE
+                WHEN vsd.mean_expanding_sharpe IS NOT NULL
+                  THEN COALESCE(vsd.path_count, 0)
+                ELSE 0
+              END
+            )
+        ELSE NULL
+      END AS mean_expanding_sharpe,
+      SUM(COALESCE(vsd.path_count, 0)) AS path_count,
+      MIN(vsd.min_path_observations) AS min_path_observations,
+      MAX(vsd.max_path_observations) AS max_path_observations
+    FROM vw_strategy_sharpe_daily vsd
     ${buildWhereClause(clauses)}
     GROUP BY
-      dpm.date,
-      ${normalizedStrategyKeySql("p.strategy_key")},
-      p.strategy,
-      p.source_type,
-      ${normalizedPromptTypeSql("p.prompt_type")}
-    ORDER BY dpm.date, p.source_type, strategy_key, prompt_type
+      vsd.date,
+      ${normalizedStrategyKeySql("vsd.strategy_key")},
+      ${normalizedPromptTypeSql("vsd.prompt_type")}
+    ORDER BY vsd.date, strategy_key, prompt_type
   `, params);
 }
 
