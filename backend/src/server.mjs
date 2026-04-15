@@ -31,12 +31,21 @@ import {
 } from "./summary-builders.mjs";
 
 function json(response, statusCode, payload, extraHeaders = {}) {
+  if (response.writableEnded || response.destroyed) {
+    return;
+  }
+
+  const body = JSON.stringify(payload);
+  if (response.writableEnded || response.destroyed) {
+    return;
+  }
+
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     ...extraHeaders,
   });
-  response.end(JSON.stringify(payload));
+  response.end(body);
 }
 
 function applyCors(request, response) {
@@ -1461,35 +1470,12 @@ function handlePrices(url) {
 }
 
 function buildRunResultsSelectList() {
-  const ppmColumns = getTableColumns("path_period_metrics");
   const rrColumns = getTableColumns("llm_run_results");
   const rrColumnSet = new Set(rrColumns);
-  const ppmColumnSet = new Set(ppmColumns);
   const excluded = new Set([
     "experiment_id",
     "path_id",
     "period",
-    "period_return",
-    "annualized_return",
-    "volatility",
-    "historical_var_95",
-    "sharpe_ratio",
-    "turnover",
-    "expected_portfolio_return_6m",
-    "forecast_bias",
-    "forecast_abs_error",
-    "prior_period_return",
-    "is_rebalance",
-    "post_loss_rebalance",
-    "vs_index",
-    "vs_sixty_forty",
-    "vs_equal_weight",
-    "vs_mean_variance",
-    "vs_fama_french",
-    "risk_free_rate",
-    "uses_only_empirical_data",
-    "quantitative_flags",
-    "volatility_method",
     "market",
     "prompt_type",
     "model",
@@ -1507,52 +1493,60 @@ function buildRunResultsSelectList() {
     "effective_n_holdings",
   ]);
 
-  const selectParts = buildAliasedSelectList("ppm", ppmColumns);
+  const selectParts = buildAliasedSelectList("rr", rrColumns, excluded);
+  const textColumn = (column, fallbackSql) =>
+    rrColumnSet.has(column)
+      ? `COALESCE(NULLIF(rr.${column}, ''), ${fallbackSql}) AS ${column}`
+      : `${fallbackSql} AS ${column}`;
+  const scalarColumn = (column, fallbackSql) =>
+    rrColumnSet.has(column)
+      ? `COALESCE(rr.${column}, ${fallbackSql}) AS ${column}`
+      : `${fallbackSql} AS ${column}`;
+
   selectParts.push(
-    ...buildAliasedSelectList(
-      "rr",
-      rrColumns,
-      new Set([...excluded, ...ppmColumns.filter((column) => ppmColumnSet.has(column))])
-    )
-  );
-  selectParts.push(
+    "rr.experiment_id AS experiment_id",
+    "rr.path_id AS path_id",
+    "rr.period AS period",
     "p.source_type AS source_type",
     "p.strategy_key AS strategy_key",
     "p.strategy AS strategy",
-    "p.market AS market",
-    "NULLIF(p.prompt_type, '') AS prompt_type",
-    "NULLIF(p.model, '') AS model",
-    "NULLIF(p.trajectory_id, '') AS trajectory_id",
-    "p.run_id AS run_id",
-    "mp.market_regime_label AS market_regime_label",
-    "mp.vol_regime_label AS vol_regime_label",
-    "mp.rate_regime_label AS rate_regime_label",
-    "mp.regime_code AS regime_code",
-    rrColumnSet.has("n_holdings")
-      ? "COALESCE(rr.n_holdings, holdings.n_holdings) AS n_holdings"
-      : "holdings.n_holdings AS n_holdings",
-    rrColumnSet.has("hhi")
-      ? "COALESCE(rr.hhi, holdings.hhi) AS hhi"
-      : "holdings.hhi AS hhi",
-    rrColumnSet.has("effective_n_holdings")
-      ? "COALESCE(rr.effective_n_holdings, holdings.effective_n_holdings) AS effective_n_holdings"
-      : "holdings.effective_n_holdings AS effective_n_holdings"
+    textColumn("market", "p.market"),
+    textColumn("prompt_type", "NULLIF(p.prompt_type, '')"),
+    textColumn("model", "NULLIF(p.model, '')"),
+    textColumn("trajectory_id", "NULLIF(p.trajectory_id, '')"),
+    rrColumnSet.has("run_id")
+      ? "COALESCE(rr.run_id, p.run_id) AS run_id"
+      : "p.run_id AS run_id",
+    textColumn("market_regime_label", "mp.market_regime_label"),
+    textColumn("vol_regime_label", "mp.vol_regime_label"),
+    textColumn("rate_regime_label", "mp.rate_regime_label"),
+    textColumn("regime_code", "mp.regime_code"),
+    scalarColumn("n_holdings", "NULL"),
+    scalarColumn("hhi", "NULL"),
+    scalarColumn("effective_n_holdings", "NULL")
   );
 
   return selectParts.join(",\n      ");
 }
 
 function handleRunResults(url) {
+  const rrColumnSet = new Set(getTableColumns("llm_run_results"));
   const { page, pageSize, limit, offset } = parsePagination(url.searchParams);
-  const clauses = ["ppm.experiment_id = :experiment_id"];
+  const clauses = ["rr.experiment_id = :experiment_id"];
   const params = {
     experiment_id: resolveExperimentId(url),
   };
 
-  addEqualsFilter(clauses, params, "p.market", cleanString(url.searchParams.get("market")), "market");
-  addEqualsFilter(clauses, params, "ppm.period", cleanString(url.searchParams.get("period")), "period");
-  addEqualsFilter(clauses, params, "p.prompt_type", cleanString(url.searchParams.get("prompt_type")), "prompt_type");
-  addEqualsFilter(clauses, params, "p.model", cleanString(url.searchParams.get("model")), "model");
+  const marketColumn = rrColumnSet.has("market") ? "rr.market" : "p.market";
+  const promptTypeColumn = rrColumnSet.has("prompt_type")
+    ? "rr.prompt_type"
+    : "p.prompt_type";
+  const modelColumn = rrColumnSet.has("model") ? "rr.model" : "p.model";
+
+  addEqualsFilter(clauses, params, marketColumn, cleanString(url.searchParams.get("market")), "market");
+  addEqualsFilter(clauses, params, "rr.period", cleanString(url.searchParams.get("period")), "period");
+  addEqualsFilter(clauses, params, promptTypeColumn, cleanString(url.searchParams.get("prompt_type")), "prompt_type");
+  addEqualsFilter(clauses, params, modelColumn, cleanString(url.searchParams.get("model")), "model");
   addEqualsFilter(clauses, params, "p.strategy_key", cleanString(url.searchParams.get("strategy_key")), "strategy_key");
   addEqualsFilter(clauses, params, "rr.failure_type", cleanString(url.searchParams.get("failure_type")), "failure_type");
   addEqualsFilter(clauses, params, "rr.execution_mode", cleanString(url.searchParams.get("execution_mode")), "execution_mode");
@@ -1561,45 +1555,16 @@ function handleRunResults(url) {
   addEqualsFilter(clauses, params, "rr.valid", validFlag, "valid");
 
   const fromClause = `
-    FROM path_period_metrics ppm
+    FROM llm_run_results rr
     JOIN paths p
-      ON p.experiment_id = ppm.experiment_id
-     AND p.path_id = ppm.path_id
+      ON p.experiment_id = rr.experiment_id
+     AND p.path_id = rr.path_id
     JOIN experiments e
-      ON e.experiment_id = ppm.experiment_id
+      ON e.experiment_id = rr.experiment_id
     LEFT JOIN market_periods mp
       ON mp.data_snapshot_id = e.data_snapshot_id
      AND mp.market = p.market
-     AND mp.period = ppm.period
-    LEFT JOIN llm_run_results rr
-      ON rr.experiment_id = ppm.experiment_id
-     AND rr.path_id = ppm.path_id
-     AND rr.period = ppm.period
-    LEFT JOIN (
-      SELECT
-        base.experiment_id,
-        base.path_id,
-        base.period,
-        COUNT(*) AS n_holdings,
-        SUM(base.weight_basis * base.weight_basis) AS hhi,
-        CASE
-          WHEN SUM(base.weight_basis * base.weight_basis) > 0
-            THEN 1.0 / SUM(base.weight_basis * base.weight_basis)
-          ELSE NULL
-        END AS effective_n_holdings
-      FROM (
-        SELECT
-          experiment_id,
-          path_id,
-          period,
-          COALESCE(target_weight, effective_weight_period_start, 0.0) AS weight_basis
-        FROM decision_holdings
-      ) base
-      GROUP BY base.experiment_id, base.path_id, base.period
-    ) holdings
-      ON holdings.experiment_id = ppm.experiment_id
-     AND holdings.path_id = ppm.path_id
-     AND holdings.period = ppm.period
+     AND mp.period = rr.period
   `;
   const whereClause = buildWhereClause(clauses);
   const paginationParams = {
@@ -1618,7 +1583,7 @@ function handleRunResults(url) {
       ${buildRunResultsSelectList()}
     ${fromClause}
     ${whereClause}
-    ORDER BY market, ppm.period, prompt_type, model, run_id
+    ORDER BY market, rr.period, prompt_type, model, run_id
     LIMIT :limit OFFSET :offset
   `, paginationParams);
 
@@ -1741,6 +1706,13 @@ const server = http.createServer((request, response) => {
       }
       json(response, 200, payload);
     } catch (error) {
+      if (response.headersSent || response.writableEnded || response.destroyed) {
+        if (!response.writableEnded && !response.destroyed) {
+          response.end();
+        }
+        return;
+      }
+
       const statusCode = error.statusCode ?? 500;
       json(response, statusCode, {
         error: statusCode >= 500 ? "internal_error" : "bad_request",

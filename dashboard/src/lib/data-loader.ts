@@ -957,7 +957,7 @@ export async function fetchAllRunResults(experimentId: string): Promise<RunRow[]
   const firstPage = await getRunResults({
     experiment_id: experimentId,
     page: 1,
-    page_size: 500,
+    page_size: 2000,
   });
 
   const remainingPageNumbers = Array.from(

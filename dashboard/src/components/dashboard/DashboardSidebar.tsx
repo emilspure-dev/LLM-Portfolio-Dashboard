@@ -43,6 +43,10 @@ export function DashboardSidebar({
   onReset,
 }: DashboardSidebarProps) {
   const runs = data?.runs ?? [];
+  const runCount =
+    runs.length > 0
+      ? runs.length
+      : data?.overview_summary?.total_runs ?? 0;
   const markets = data?.filters.markets ?? [];
   const periods = data?.filters.periods ?? [];
   const nPromptTypes = data?.filters.prompt_types.length ?? 0;
@@ -151,7 +155,10 @@ export function DashboardSidebar({
           <p className="dashboard-label mb-3">Dataset snapshot</p>
           <div className="space-y-2 text-[12px] text-[#9b938b]">
             <p>
-              <span className="font-semibold text-[#645e5a]">{runs.length}</span> runs
+              <span className="font-semibold text-[#645e5a]">{runCount}</span> runs
+              {data.run_details_loading && runs.length === 0 && (
+                <span className="ml-1 text-[#b39a91]">(loading details)</span>
+              )}
             </p>
             <p>
               <span className="font-semibold text-[#645e5a]">{markets.length}</span> markets

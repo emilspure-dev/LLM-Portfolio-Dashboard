@@ -25,7 +25,7 @@ export const DEFAULT_PAGE_SIZE = clamp(
   500
 );
 export const MAX_PAGE_SIZE = clamp(
-  parseInteger(process.env.API_MAX_PAGE_SIZE, 500),
+  parseInteger(process.env.API_MAX_PAGE_SIZE, 2000),
   1,
   5000
 );
