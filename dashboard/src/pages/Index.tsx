@@ -107,6 +107,19 @@ function formatCompletedAt(value: string | null | undefined) {
   });
 }
 
+function countDistinctYears(periods: string[]) {
+  const years = new Set(
+    periods
+      .map((period) => {
+        const match = String(period).match(/\b(20\d{2})\b/);
+        return match ? match[1] : null;
+      })
+      .filter((year): year is string => Boolean(year))
+  );
+
+  return years.size;
+}
+
 export default function Index() {
   const [activeTab, setActiveTab] = useState(0);
 
@@ -194,13 +207,18 @@ export default function Index() {
       : data?.overview_summary?.valid_runs ?? 0;
   const periodCount =
     data?.filters.periods.length ?? metaQuery.data?.available_periods.length ?? 0;
+  const yearCount = useMemo(() => {
+    const periods = data?.filters.periods ?? metaQuery.data?.available_periods ?? [];
+    const distinctYears = countDistinctYears(periods);
+    return distinctYears > 0 ? distinctYears : periodCount;
+  }, [data?.filters.periods, metaQuery.data?.available_periods, periodCount]);
   const marketCount =
     data?.filters.markets.length ?? metaQuery.data?.available_markets.length ?? 0;
   const modelCount =
     data?.filters.models.length ?? metaQuery.data?.available_models.length ?? 0;
   const headlineStats = [
     { label: "Runs", value: runCount.toLocaleString() },
-    { label: "Periods", value: periodCount.toLocaleString() },
+    { label: "Years", value: yearCount.toLocaleString() },
     { label: "Markets", value: marketCount.toLocaleString() },
     { label: "Models", value: modelCount.toLocaleString() },
   ];
