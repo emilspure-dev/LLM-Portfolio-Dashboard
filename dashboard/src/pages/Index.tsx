@@ -236,7 +236,7 @@ export default function Index() {
   const modelCount =
     data?.filters.models.length ?? metaQuery.data?.available_models.length ?? 0;
   const headlineStats = [
-    { label: "Runs", value: runCount.toLocaleString() },
+    { label: "Portfolios", value: runCount.toLocaleString() },
     { label: "Years", value: formatYears(yearCount) },
     { label: "Markets", value: marketCount.toLocaleString() },
     { label: "Models", value: modelCount.toLocaleString() },
