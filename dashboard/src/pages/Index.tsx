@@ -198,25 +198,6 @@ export default function Index() {
     data?.filters.markets.length ?? metaQuery.data?.available_markets.length ?? 0;
   const modelCount =
     data?.filters.models.length ?? metaQuery.data?.available_models.length ?? 0;
-  const apiStatusLabel =
-    healthQuery.isPending && !healthQuery.data
-      ? "Checking read-only API"
-      : healthQuery.data?.db_available
-        ? "Read-only API online"
-        : healthQuery.data
-          ? "API degraded"
-          : "API unavailable";
-  const datasetStatusLabel = data
-    ? allRuns.length > 0
-      ? `${allRuns.length.toLocaleString()} run details loaded`
-      : data.overview_summary
-        ? `${data.overview_summary.valid_runs.toLocaleString()} run rows available`
-        : runsQuery.isLoading
-          ? "Loading run details"
-          : "Summary ready"
-    : isLoading
-      ? "Loading from API"
-      : "Awaiting API";
   const headlineStats = [
     { label: "Runs", value: runCount.toLocaleString() },
     { label: "Periods", value: periodCount.toLocaleString() },
@@ -226,15 +207,6 @@ export default function Index() {
 
   const handleRefresh = () => {
     void healthQuery.refetch();
-    void metaQuery.refetch();
-    void dashboardQuery.refetch();
-    if (resolvedExperimentId) {
-      void runsQuery.refetch();
-    }
-  };
-
-  const handleReset = () => {
-    setActiveTab(0);
     void metaQuery.refetch();
     void dashboardQuery.refetch();
     if (resolvedExperimentId) {
@@ -258,7 +230,7 @@ export default function Index() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:min-w-[420px]">
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:mt-10 xl:min-w-[420px] xl:self-end">
               {headlineStats.map((stat) => (
                 <div key={stat.label} className="dashboard-stat">
                   <p className="dashboard-stat-value">{stat.value}</p>
@@ -268,32 +240,8 @@ export default function Index() {
             </div>
           </div>
 
-          <div className="mt-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:flex-wrap">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  className="h-10 rounded-md px-3.5 text-[13px] font-medium"
-                  onClick={handleRefresh}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Refresh data
-                </Button>
-                <Button
-                  variant="outline"
-                  className="h-10 rounded-md px-3.5 text-[13px] font-medium"
-                  onClick={handleReset}
-                >
-                  Reset view
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="dashboard-pill">{apiStatusLabel}</span>
-              <span className="dashboard-pill">{datasetStatusLabel}</span>
-              <span className="dashboard-pill">Completed {completedAtLabel}</span>
-            </div>
+          <div className="mt-6 flex flex-wrap items-center gap-2">
+            <span className="dashboard-pill">Completed {completedAtLabel}</span>
           </div>
 
           {healthQuery.data &&
