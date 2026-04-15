@@ -785,40 +785,116 @@ function handleDailySharpeSummary(url) {
     cleanString(url.searchParams.get("date_to"))
   );
 
+  const whereClause = buildWhereClause(clauses);
+
   return queryAll(`
+    WITH daily_base AS (
+      SELECT
+        vsd.experiment_id,
+        vsd.path_id,
+        vsd.source_type,
+        ${normalizedStrategyKeySql("vsd.strategy_key")} AS strategy_key,
+        vsd.strategy,
+        vsd.market,
+        ${normalizedPromptTypeSql("vsd.prompt_type")} AS prompt_type,
+        vsd.period,
+        vsd.date,
+        CAST(
+          COALESCE(
+            vsd.daily_return,
+            vsd.portfolio_value / NULLIF(
+              LAG(vsd.portfolio_value) OVER (
+                PARTITION BY vsd.experiment_id, vsd.path_id
+                ORDER BY vsd.date
+              ),
+              0.0
+            ) - 1.0
+          ) AS REAL
+        ) AS daily_return,
+        CAST(COALESCE(ppm.risk_free_rate, 0.0) AS REAL) AS risk_free_rate
+      FROM vw_strategy_daily vsd
+      LEFT JOIN path_period_metrics ppm
+        ON ppm.experiment_id = vsd.experiment_id
+       AND ppm.path_id = vsd.path_id
+       AND ppm.period = vsd.period
+      ${whereClause}
+    ),
+    daily_excess AS (
+      SELECT
+        *,
+        (POWER(1.0 + risk_free_rate, 1.0 / 252.0) - 1.0) AS daily_risk_free_rate,
+        (
+          daily_return
+          - (POWER(1.0 + risk_free_rate, 1.0 / 252.0) - 1.0)
+        ) AS excess_daily_return
+      FROM daily_base
+      WHERE daily_return IS NOT NULL
+    ),
+    path_running_stats AS (
+      SELECT
+        *,
+        ROW_NUMBER() OVER (
+          PARTITION BY experiment_id, path_id
+          ORDER BY date
+        ) AS observations,
+        SUM(excess_daily_return) OVER (
+          PARTITION BY experiment_id, path_id
+          ORDER BY date
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS expanding_excess_sum,
+        SUM(excess_daily_return * excess_daily_return) OVER (
+          PARTITION BY experiment_id, path_id
+          ORDER BY date
+          ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS expanding_excess_sumsq
+      FROM daily_excess
+    ),
+    path_sharpes AS (
+      SELECT
+        experiment_id,
+        path_id,
+        source_type,
+        strategy_key,
+        strategy,
+        market,
+        prompt_type,
+        period,
+        date,
+        observations,
+        CASE
+          WHEN observations >= 20
+            THEN expanding_excess_sum * 1.0 / observations
+          ELSE NULL
+        END AS expanding_excess_mean,
+        CASE
+          WHEN observations >= 20 AND observations > 1
+            THEN (
+              expanding_excess_sumsq
+              - (expanding_excess_sum * expanding_excess_sum) / observations
+            ) / (observations - 1)
+          ELSE NULL
+        END AS expanding_excess_variance
+      FROM path_running_stats
+    )
     SELECT
-      vsd.date,
-      ${normalizedStrategyKeySql("vsd.strategy_key")} AS strategy_key,
-      MIN(vsd.strategy) AS strategy,
-      ${normalizedPromptTypeSql("vsd.prompt_type")} AS prompt_type,
-      CASE
-        WHEN SUM(
-          CASE
-            WHEN vsd.mean_expanding_sharpe IS NOT NULL
-              THEN COALESCE(vsd.path_count, 0)
-            ELSE 0
-          END
-        ) > 0
-          THEN SUM(vsd.mean_expanding_sharpe * COALESCE(vsd.path_count, 0)) * 1.0
-            / SUM(
-              CASE
-                WHEN vsd.mean_expanding_sharpe IS NOT NULL
-                  THEN COALESCE(vsd.path_count, 0)
-                ELSE 0
-              END
-            )
-        ELSE NULL
-      END AS mean_expanding_sharpe,
-      SUM(COALESCE(vsd.path_count, 0)) AS path_count,
-      MIN(vsd.min_path_observations) AS min_path_observations,
-      MAX(vsd.max_path_observations) AS max_path_observations
-    FROM vw_strategy_sharpe_daily vsd
-    ${buildWhereClause(clauses)}
-    GROUP BY
-      vsd.date,
-      ${normalizedStrategyKeySql("vsd.strategy_key")},
-      ${normalizedPromptTypeSql("vsd.prompt_type")}
-    ORDER BY vsd.date, strategy_key, prompt_type
+      date,
+      strategy_key,
+      MIN(strategy) AS strategy,
+      prompt_type,
+      COUNT(DISTINCT path_id) AS path_count,
+      AVG(
+        CASE
+          WHEN expanding_excess_variance > 0
+            THEN expanding_excess_mean / SQRT(expanding_excess_variance) * SQRT(252.0)
+          ELSE NULL
+        END
+      ) AS mean_expanding_sharpe,
+      MIN(observations) AS min_path_observations,
+      MAX(observations) AS max_path_observations
+    FROM path_sharpes
+    WHERE expanding_excess_mean IS NOT NULL
+    GROUP BY date, strategy_key, prompt_type
+    ORDER BY date, strategy_key, prompt_type
   `, params);
 }
 
