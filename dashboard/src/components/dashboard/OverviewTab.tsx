@@ -313,8 +313,8 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
           <div>
             <p className="dashboard-label">Accumulated Return by Strategy</p>
             <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
-              Mean cumulative return over time, aggregated to one line per strategy
-              and weighted by path count across all available markets and prompt types.
+              Mean cumulative return on common trading dates, aggregated to one line
+              per strategy and weighted by path count across all available markets.
             </p>
           </div>
           <FigureExportControls

@@ -823,27 +823,49 @@ function handleCumulativeReturnSummary(url) {
     return cached.rows;
   }
 
-  const clauses = ["vcr.experiment_id = :experiment_id"];
+  const seriesClauses = ["vcr.experiment_id = :experiment_id"];
+  const coverageClauses = ["vcr.experiment_id = :experiment_id"];
   const params = {
     experiment_id: resolveExperimentId(url),
   };
 
   addEqualsFilter(
-    clauses,
+    seriesClauses,
     params,
     normalizedStrategyKeySql("vcr.strategy_key"),
     normalizeStrategyKeyValue(url.searchParams.get("strategy_key")),
     "strategy_key"
   );
   addEqualsFilter(
-    clauses,
+    coverageClauses,
+    params,
+    normalizedStrategyKeySql("vcr.strategy_key"),
+    normalizeStrategyKeyValue(url.searchParams.get("strategy_key")),
+    "strategy_key"
+  );
+  addEqualsFilter(
+    seriesClauses,
     params,
     "vcr.market",
     cleanString(url.searchParams.get("market")),
     "market"
   );
   addEqualsFilter(
-    clauses,
+    coverageClauses,
+    params,
+    "vcr.market",
+    cleanString(url.searchParams.get("market")),
+    "market"
+  );
+  addEqualsFilter(
+    seriesClauses,
+    params,
+    normalizedPromptTypeSql("vcr.prompt_type"),
+    normalizePromptTypeValue(url.searchParams.get("prompt_type")),
+    "prompt_type"
+  );
+  addEqualsFilter(
+    coverageClauses,
     params,
     normalizedPromptTypeSql("vcr.prompt_type"),
     normalizePromptTypeValue(url.searchParams.get("prompt_type")),
@@ -851,31 +873,53 @@ function handleCumulativeReturnSummary(url) {
   );
 
   addDateRangeFilter(
-    clauses,
+    seriesClauses,
     params,
     "vcr.date",
     cleanString(url.searchParams.get("date_from")),
     cleanString(url.searchParams.get("date_to"))
   );
 
-  const whereClause = buildWhereClause(clauses);
+  const seriesWhereClause = buildWhereClause(seriesClauses);
+  const coverageWhereClause = buildWhereClause(coverageClauses);
 
   const sql = `
+    WITH expected_market_counts AS (
+      SELECT
+        ${normalizedStrategyKeySql("vcr.strategy_key")} AS strategy_key,
+        COUNT(DISTINCT vcr.market) AS expected_market_count
+      FROM vw_strategy_cumulative_return_daily vcr
+      ${coverageWhereClause}
+      GROUP BY ${normalizedStrategyKeySql("vcr.strategy_key")}
+    ),
+    aggregated AS (
+      SELECT
+        vcr.date,
+        ${normalizedStrategyKeySql("vcr.strategy_key")} AS strategy_key,
+        MIN(NULLIF(TRIM(COALESCE(vcr.strategy, '')), '')) AS strategy,
+        SUM(vcr.mean_cumulative_return * COALESCE(vcr.path_count, 0)) * 1.0
+          / NULLIF(SUM(COALESCE(vcr.path_count, 0)), 0) AS mean_cumulative_return,
+        SUM(COALESCE(vcr.path_count, 0)) AS path_count,
+        COUNT(DISTINCT vcr.market) AS market_count
+      FROM vw_strategy_cumulative_return_daily vcr
+      ${seriesWhereClause}
+      GROUP BY
+        vcr.date,
+        ${normalizedStrategyKeySql("vcr.strategy_key")}
+    )
     SELECT
-      vcr.date,
-      ${normalizedStrategyKeySql("vcr.strategy_key")} AS strategy_key,
-      MIN(NULLIF(TRIM(COALESCE(vcr.strategy, '')), '')) AS strategy,
-      SUM(vcr.mean_cumulative_return * COALESCE(vcr.path_count, 0)) * 1.0
-        / NULLIF(SUM(COALESCE(vcr.path_count, 0)), 0) AS mean_cumulative_return,
-      SUM(COALESCE(vcr.path_count, 0)) AS path_count
-    FROM vw_strategy_cumulative_return_daily vcr
-    ${whereClause}
-    GROUP BY
-      vcr.date,
-      ${normalizedStrategyKeySql("vcr.strategy_key")}
+      aggregated.date,
+      aggregated.strategy_key,
+      aggregated.strategy,
+      aggregated.mean_cumulative_return,
+      aggregated.path_count
+    FROM aggregated
+    JOIN expected_market_counts
+      ON expected_market_counts.strategy_key = aggregated.strategy_key
+    WHERE aggregated.market_count = expected_market_counts.expected_market_count
     ORDER BY
-      vcr.date,
-      strategy_key
+      aggregated.date,
+      aggregated.strategy_key
   `;
 
   const rows = queryTimeSeriesRows(sql, params, "mean_cumulative_return");
