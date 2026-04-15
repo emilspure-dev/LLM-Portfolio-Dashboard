@@ -220,7 +220,7 @@ export default function Index() {
     data?.filters.models.length ?? metaQuery.data?.available_models.length ?? 0;
   const promptTypeCount = 2;
   const scopeItems = [
-    { value: runCount.toLocaleString(), label: "portfolios", emphasis: true },
+    { value: runCount.toLocaleString(), label: "portfolios" },
     { value: formatYears(yearCount), label: "years" },
     { value: marketCount.toLocaleString(), label: "markets" },
     { value: modelCount.toLocaleString(), label: "models" },
@@ -267,11 +267,7 @@ export default function Index() {
                     </span>
                   )}
                   <span
-                    className={`tabular-nums leading-none ${
-                      item.emphasis
-                        ? "text-[40px] md:text-[48px]"
-                        : "text-[26px] md:text-[30px]"
-                    }`}
+                    className="tabular-nums text-[26px] leading-none md:text-[30px]"
                     style={{ fontVariantNumeric: "oldstyle-nums tabular-nums" }}
                   >
                     {item.value}
