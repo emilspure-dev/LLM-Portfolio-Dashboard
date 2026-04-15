@@ -632,7 +632,11 @@ function handleStrategySummary(url) {
        AND sf.strategy_key = 'sixty_forty'
       WHERE ppm.experiment_id = :experiment_id
         AND ${gptStrategyKeyFilterSql("p.strategy_key")}
-      GROUP BY ppm.experiment_id, strategy_key, p.market, prompt_type
+      GROUP BY
+        ppm.experiment_id,
+        ${normalizedStrategyKeySql("p.strategy_key")},
+        p.market,
+        ${normalizedPromptTypeSql("p.prompt_type")}
     ),
     s AS (
       SELECT
@@ -657,10 +661,10 @@ function handleStrategySummary(url) {
       GROUP BY
         ppm.experiment_id,
         p.source_type,
-        strategy_key,
+        ${normalizedStrategyKeySql("p.strategy_key")},
         p.strategy,
         p.market,
-        prompt_type
+        ${normalizedPromptTypeSql("p.prompt_type")}
     )
     SELECT
       s.experiment_id,

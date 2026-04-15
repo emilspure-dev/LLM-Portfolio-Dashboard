@@ -740,7 +740,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             <select
               value={marketFilter}
               onChange={(e) => setMarketFilter(e.target.value)}
-              className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-2 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+              className="dashboard-select-input min-h-[42px]"
             >
               <option value="All">All Markets</option>
               {allMarkets.map((market) => (
@@ -756,7 +756,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             <select
               value={factorFilter}
               onChange={(e) => setFactorFilter(e.target.value as SelectionFactorKey)}
-              className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-2 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+              className="dashboard-select-input min-h-[42px]"
             >
               {Object.entries(FACTOR_CONFIG).map(([value, config]) => (
                 <option key={value} value={value}>

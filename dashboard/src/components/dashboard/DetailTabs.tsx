@@ -253,7 +253,7 @@ function FilterSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
-        className="w-full rounded-[14px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-2.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none disabled:opacity-60"
+        className="dashboard-select-input w-full disabled:opacity-60"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -282,7 +282,7 @@ function TabMarketSelector({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+          className="dashboard-select-input min-h-[40px] min-w-[180px]"
         >
           <option value="All">All Markets</option>
           {markets.map((m) => (
@@ -7775,11 +7775,11 @@ export function DataQualityTab({ data }: BaseTabProps) {
 }
 
 const SUBTAB_BUTTON_BASE =
-  "rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all";
+  "rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors";
 const SUBTAB_BUTTON_ACTIVE =
-  "border-[#191513] bg-[#191513] text-[#f9f6f1] shadow-[0_8px_18px_rgba(35,28,22,0.18)]";
+  "border-[#27211b] bg-[#27211b] text-[#faf7f2] shadow-[0_8px_20px_rgba(39,33,27,0.14)]";
 const SUBTAB_BUTTON_INACTIVE =
-  "border-white/45 bg-white/45 text-[#6e6762] shadow-sm backdrop-blur-sm hover:bg-white/65 hover:text-[#4a4542]";
+  "border-[rgba(220,213,202,0.92)] bg-[rgba(250,246,239,0.96)] text-[#6d655c] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] hover:bg-[rgba(244,239,231,0.98)] hover:text-[#453f39]";
 
 export function PathsTab({ data, runs }: BaseTabProps) {
   const [activeSection, setActiveSection] = useState<"equity" | "robustness" | "drawdowns" | "holdings" | "runs">("equity");

@@ -4,58 +4,58 @@
 
 @layer base {
   :root {
-    --background: 40 24% 84%;
-    --foreground: 18 12% 36%;
+    --background: 38 22% 94%;
+    --foreground: 30 10% 20%;
 
-    --card: 40 55% 99%;
-    --card-foreground: 18 12% 36%;
+    --card: 40 26% 96%;
+    --card-foreground: 30 10% 20%;
 
-    --popover: 40 55% 99%;
-    --popover-foreground: 18 12% 36%;
+    --popover: 40 32% 97%;
+    --popover-foreground: 30 10% 20%;
 
-    --primary: 20 10% 9%;
-    --primary-foreground: 42 55% 98%;
+    --primary: 30 11% 16%;
+    --primary-foreground: 40 32% 97%;
 
-    --secondary: 34 23% 95%;
-    --secondary-foreground: 18 12% 44%;
+    --secondary: 36 20% 91%;
+    --secondary-foreground: 30 9% 30%;
 
-    --muted: 34 18% 94%;
-    --muted-foreground: 18 10% 66%;
+    --muted: 36 19% 92%;
+    --muted-foreground: 30 8% 52%;
 
-    --accent: 8 38% 68%;
-    --accent-foreground: 42 55% 98%;
+    --accent: 40 16% 88%;
+    --accent-foreground: 30 10% 20%;
 
-    --destructive: 6 45% 68%;
-    --destructive-foreground: 42 55% 98%;
+    --destructive: 6 45% 61%;
+    --destructive-foreground: 40 32% 97%;
 
-    --success: 142 28% 70%;
-    --success-foreground: 18 12% 28%;
+    --success: 115 24% 41%;
+    --success-foreground: 40 32% 97%;
 
-    --warning: 30 42% 72%;
-    --warning-foreground: 18 12% 28%;
+    --warning: 33 46% 58%;
+    --warning-foreground: 30 10% 20%;
 
-    --border: 28 24% 88%;
-    --input: 28 24% 88%;
-    --ring: 8 38% 68%;
+    --border: 35 17% 84%;
+    --input: 35 17% 84%;
+    --ring: 35 18% 62%;
 
     --radius: 0.95rem;
 
-    --chart-accent: 8 38% 68%;
-    --chart-green: 142 28% 70%;
-    --chart-red: 6 45% 68%;
-    --chart-amber: 30 42% 72%;
+    --chart-accent: 20 21% 47%;
+    --chart-green: 115 24% 41%;
+    --chart-red: 6 45% 61%;
+    --chart-amber: 33 46% 58%;
     --chart-purple: 270 22% 77%;
     --chart-cyan: 198 26% 75%;
     --chart-orange: 24 40% 72%;
 
-    --sidebar-background: 40 55% 99%;
-    --sidebar-foreground: 18 12% 36%;
-    --sidebar-primary: 20 10% 9%;
-    --sidebar-primary-foreground: 42 55% 98%;
-    --sidebar-accent: 34 23% 95%;
-    --sidebar-accent-foreground: 18 12% 36%;
-    --sidebar-border: 28 24% 88%;
-    --sidebar-ring: 8 38% 68%;
+    --sidebar-background: 40 26% 96%;
+    --sidebar-foreground: 30 10% 20%;
+    --sidebar-primary: 30 11% 16%;
+    --sidebar-primary-foreground: 40 32% 97%;
+    --sidebar-accent: 36 20% 91%;
+    --sidebar-accent-foreground: 30 10% 20%;
+    --sidebar-border: 35 17% 84%;
+    --sidebar-ring: 35 18% 62%;
   }
 }
 
@@ -74,108 +74,182 @@
 
   body {
     @apply text-foreground antialiased;
-    font-family: "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Avenir Next", "Inter", sans-serif;
+    font-family: "Avenir Next", "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
     font-variant-numeric: tabular-nums;
     position: relative;
     isolation: isolate;
     min-height: 100vh;
-    /* Hudson River School landscape (local); warm overlay keeps cream UI readable */
-    background-color: hsl(28 22% 32%);
-    background-image:
-      linear-gradient(
-        180deg,
-        rgba(38, 32, 28, 0.26) 0%,
-        rgba(52, 44, 36, 0.1) 42%,
-        rgba(255, 248, 238, 0.22) 100%
-      ),
-      url("/backgrounds/landscape.jpg");
-    background-size: cover, cover;
-    background-position: center, center;
-    background-repeat: no-repeat, no-repeat;
-    background-attachment: fixed, fixed;
+    background-color: #f3efe7;
+    background-image: linear-gradient(
+      180deg,
+      rgba(255, 255, 252, 0.92) 0%,
+      rgba(245, 241, 233, 0.98) 44%,
+      rgba(239, 234, 225, 1) 100%
+    );
   }
 }
 
-/* Shared frosted-glass surface (Cursor-style over wallpaper) */
 @layer components {
   .dashboard-board {
-    background: rgba(255, 255, 255, 0.74);
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    box-shadow:
-      0 20px 50px rgba(42, 34, 26, 0.14),
-      0 6px 20px rgba(42, 34, 26, 0.06),
-      inset 0 1px 0 rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(24px) saturate(140%);
-    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    width: 100%;
   }
 
   .dashboard-panel {
-    background: rgba(255, 255, 255, 0.72);
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: rgba(248, 244, 237, 0.92);
+    border: 1px solid rgba(220, 213, 202, 0.92);
     box-shadow:
-      0 20px 50px rgba(42, 34, 26, 0.12),
-      0 6px 20px rgba(42, 34, 26, 0.05),
-      inset 0 1px 0 rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(24px) saturate(140%);
-    -webkit-backdrop-filter: blur(24px) saturate(140%);
+      0 1px 0 rgba(255, 255, 255, 0.84),
+      0 12px 28px rgba(74, 64, 52, 0.045);
   }
 
   .dashboard-panel-strong {
-    background: rgba(255, 255, 255, 0.78);
-    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: rgba(250, 246, 239, 0.96);
+    border: 1px solid rgba(220, 213, 202, 0.94);
     box-shadow:
-      0 22px 56px rgba(42, 34, 26, 0.12),
-      0 8px 24px rgba(42, 34, 26, 0.07),
-      inset 0 1px 0 rgba(255, 255, 255, 0.65);
-    backdrop-filter: blur(24px) saturate(140%);
-    -webkit-backdrop-filter: blur(24px) saturate(140%);
+      0 1px 0 rgba(255, 255, 255, 0.9),
+      0 16px 32px rgba(74, 64, 52, 0.05);
   }
 
-  /* Nested fields inside sidebar / forms — slightly softer glass */
   .dashboard-glass-inset {
-    background: rgba(255, 255, 255, 0.58);
-    border: 1px solid rgba(255, 255, 255, 0.42);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
-    backdrop-filter: blur(20px) saturate(140%);
-    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    background: rgba(252, 249, 244, 0.98);
+    border: 1px solid rgba(222, 215, 204, 0.94);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
   }
 
   .dashboard-tab-bar {
-    background: rgba(255, 255, 255, 0.72);
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    box-shadow:
-      0 16px 40px rgba(42, 34, 26, 0.1),
-      0 4px 14px rgba(42, 34, 26, 0.05),
-      inset 0 1px 0 rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(24px) saturate(140%);
-    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border-bottom: 1px solid rgba(214, 208, 198, 0.9);
   }
 
   .dashboard-label {
-    color: #8f8780;
-    font-size: 11px;
+    color: #979084;
+    font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.13em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
   }
 
+  .dashboard-topline {
+    color: #9b9286;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-stat {
+    background: rgba(247, 243, 236, 0.9);
+    border: 1px solid rgba(221, 214, 202, 0.92);
+    border-radius: 18px;
+    padding: 1rem 1.1rem;
+    min-height: 92px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.82),
+      0 10px 24px rgba(74, 64, 52, 0.04);
+  }
+
+  .dashboard-stat-value {
+    color: #2f2a25;
+    font-size: 2rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -0.06em;
+  }
+
+  .dashboard-stat-label {
+    margin-top: 0.55rem;
+    color: #989083;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-pill {
+    background: rgba(250, 246, 239, 0.96);
+    border: 1px solid rgba(220, 213, 202, 0.92);
+    border-radius: 9999px;
+    color: #6e665d;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.8rem 1rem;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  }
+
+  .dashboard-select-input {
+    appearance: none;
+    background-color: rgba(252, 249, 244, 0.98);
+    border: 1px solid rgba(220, 213, 202, 0.92);
+    border-radius: 14px;
+    color: #4b453f;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    outline: none;
+    padding: 0.8rem 2.75rem 0.8rem 0.95rem;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 1px 0 rgba(255, 255, 255, 0.6);
+    background-image:
+      linear-gradient(45deg, transparent 50%, rgba(91, 83, 76, 0.8) 50%),
+      linear-gradient(135deg, rgba(91, 83, 76, 0.8) 50%, transparent 50%);
+    background-position:
+      calc(100% - 18px) calc(50% - 2px),
+      calc(100% - 12px) calc(50% - 2px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+  }
+
+  .dashboard-select-input:focus {
+    border-color: rgba(166, 154, 140, 0.95);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 0 0 3px rgba(214, 205, 192, 0.28);
+  }
+
+  .dashboard-tab-button {
+    border-bottom: 2px solid transparent;
+    color: #8d857a;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    padding: 0.9rem 0.9rem 0.95rem;
+    transition:
+      color 160ms ease,
+      border-color 160ms ease;
+    white-space: nowrap;
+  }
+
+  .dashboard-tab-button:hover {
+    color: #4f4841;
+  }
+
+  .dashboard-tab-button-active {
+    border-bottom-color: #27211b;
+    color: #27211b;
+    font-weight: 600;
+  }
+
   .dashboard-soft-shadow {
-    box-shadow: 0 12px 32px rgba(121, 101, 79, 0.06);
+    box-shadow: 0 12px 28px rgba(74, 64, 52, 0.05);
   }
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(121, 110, 96, 0.08);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(146, 133, 120, 0.35);
-  border-radius: 3px;
+  background: rgba(132, 121, 109, 0.28);
+  border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(146, 133, 120, 0.5);
+  background: rgba(132, 121, 109, 0.42);
 }

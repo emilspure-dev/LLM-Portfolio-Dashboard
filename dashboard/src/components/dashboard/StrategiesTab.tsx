@@ -452,7 +452,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
               <select
                 value={marketFilter}
                 onChange={(e) => setMarketFilter(e.target.value)}
-                className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+                className="dashboard-select-input min-h-[40px] min-w-[180px]"
               >
                 <option value="All">All Markets</option>
                 {allMarkets.map((m) => (
@@ -481,7 +481,7 @@ export function StrategiesTab({ data, runs }: StrategiesTabProps) {
             <select
               value={marketFilter}
               onChange={(e) => setMarketFilter(e.target.value)}
-              className="rounded-[12px] border border-[rgba(232,224,217,0.96)] bg-[rgba(255,255,252,0.72)] px-3 py-1.5 text-[12px] font-medium text-[#6f6863] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] outline-none"
+              className="dashboard-select-input min-h-[40px] min-w-[180px]"
             >
               <option value="All">All Markets</option>
               {allMarkets.map((m) => (
