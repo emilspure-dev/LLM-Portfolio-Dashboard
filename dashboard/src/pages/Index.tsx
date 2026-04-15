@@ -108,7 +108,6 @@ function formatCompletedAt(value: string | null | undefined) {
 }
 
 export default function Index() {
-  const [selectedExperimentId, setSelectedExperimentId] = useState<string>();
   const [activeTab, setActiveTab] = useState(0);
 
   const healthQuery = useQuery({
@@ -124,8 +123,7 @@ export default function Index() {
     staleTime: 60_000,
   });
 
-  const resolvedExperimentId =
-    selectedExperimentId ?? metaQuery.data?.latest_experiment_id ?? undefined;
+  const resolvedExperimentId = metaQuery.data?.latest_experiment_id ?? undefined;
 
   const dashboardQuery = useQuery({
     queryKey: ["dashboard-data", resolvedExperimentId],
@@ -189,13 +187,7 @@ export default function Index() {
     !errorMessage &&
     metaQuery.status === "success" &&
     !resolvedExperimentId;
-  const activeExperiment =
-    metaQuery.data?.available_experiments.find(
-      (experiment) => experiment.experiment_id === resolvedExperimentId
-    ) ?? null;
-  const completedAtLabel = formatCompletedAt(
-    activeExperiment?.completed_at ?? metaQuery.data?.latest_completed_at
-  );
+  const completedAtLabel = formatCompletedAt(metaQuery.data?.latest_completed_at);
   const runCount =
     allRuns.length > 0
       ? allRuns.length
@@ -242,7 +234,6 @@ export default function Index() {
   };
 
   const handleReset = () => {
-    setSelectedExperimentId(undefined);
     setActiveTab(0);
     void metaQuery.refetch();
     void dashboardQuery.refetch();
@@ -257,11 +248,7 @@ export default function Index() {
         <header className="border-b border-[#ececec] pb-6">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0 flex-1">
-              <p className="dashboard-topline">
-                Empirical Research
-                <span className="px-1.5 text-[#a3a3a3]">·</span>
-                Experiment {resolvedExperimentId ?? "Loading"}
-              </p>
+              <p className="dashboard-topline">Empirical Research</p>
               <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.03em] text-[#0a0a0a] md:text-[36px]">
                 LLM Portfolio Evaluation Dashboard
               </h1>
@@ -283,28 +270,6 @@ export default function Index() {
 
           <div className="mt-6 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:flex-wrap">
-              {metaQuery.data && metaQuery.data.available_experiments.length > 0 && (
-                <label className="flex min-w-[min(100%,320px)] flex-col gap-2">
-                  <span className="dashboard-label">Experiment</span>
-                  <select
-                    value={resolvedExperimentId ?? ""}
-                    onChange={(event) =>
-                      setSelectedExperimentId(event.target.value || undefined)
-                    }
-                    className="dashboard-select-input min-h-[44px] min-w-[220px]"
-                  >
-                    {metaQuery.data.available_experiments.map((experiment) => (
-                      <option
-                        key={experiment.experiment_id}
-                        value={experiment.experiment_id}
-                      >
-                        {experiment.experiment_id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
