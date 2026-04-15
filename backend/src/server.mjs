@@ -860,6 +860,20 @@ function handleCumulativeReturnSummary(url) {
   addEqualsFilter(
     seriesClauses,
     params,
+    "vcr.period",
+    cleanString(url.searchParams.get("period")),
+    "period"
+  );
+  addEqualsFilter(
+    coverageClauses,
+    params,
+    "vcr.period",
+    cleanString(url.searchParams.get("period")),
+    "period"
+  );
+  addEqualsFilter(
+    seriesClauses,
+    params,
     normalizedPromptTypeSql("vcr.prompt_type"),
     normalizePromptTypeValue(url.searchParams.get("prompt_type")),
     "prompt_type"
@@ -887,16 +901,40 @@ function handleCumulativeReturnSummary(url) {
     WITH expected_market_counts AS (
       SELECT
         ${normalizedStrategyKeySql("vcr.strategy_key")} AS strategy_key,
+        vcr.period,
         COUNT(DISTINCT vcr.market) AS expected_market_count
       FROM vw_strategy_cumulative_return_daily vcr
       ${coverageWhereClause}
-      GROUP BY ${normalizedStrategyKeySql("vcr.strategy_key")}
+      GROUP BY
+        ${normalizedStrategyKeySql("vcr.strategy_key")},
+        vcr.period
+    ),
+    expected_path_counts AS (
+      SELECT
+        strategy_key,
+        period,
+        SUM(max_path_count) AS expected_path_count
+      FROM (
+        SELECT
+          ${normalizedStrategyKeySql("vcr.strategy_key")} AS strategy_key,
+          vcr.period,
+          vcr.market,
+          MAX(COALESCE(vcr.path_count, 0)) AS max_path_count
+        FROM vw_strategy_cumulative_return_daily vcr
+        ${coverageWhereClause}
+        GROUP BY
+          ${normalizedStrategyKeySql("vcr.strategy_key")},
+          vcr.period,
+          vcr.market
+      ) per_market
+      GROUP BY strategy_key, period
     ),
     aggregated AS (
       SELECT
         vcr.date,
         ${normalizedStrategyKeySql("vcr.strategy_key")} AS strategy_key,
         MIN(NULLIF(TRIM(COALESCE(vcr.strategy, '')), '')) AS strategy,
+        vcr.period,
         SUM(vcr.mean_cumulative_return * COALESCE(vcr.path_count, 0)) * 1.0
           / NULLIF(SUM(COALESCE(vcr.path_count, 0)), 0) AS mean_cumulative_return,
         SUM(COALESCE(vcr.path_count, 0)) AS path_count,
@@ -905,7 +943,8 @@ function handleCumulativeReturnSummary(url) {
       ${seriesWhereClause}
       GROUP BY
         vcr.date,
-        ${normalizedStrategyKeySql("vcr.strategy_key")}
+        ${normalizedStrategyKeySql("vcr.strategy_key")},
+        vcr.period
     )
     SELECT
       aggregated.date,
@@ -916,7 +955,12 @@ function handleCumulativeReturnSummary(url) {
     FROM aggregated
     JOIN expected_market_counts
       ON expected_market_counts.strategy_key = aggregated.strategy_key
+     AND expected_market_counts.period = aggregated.period
+    JOIN expected_path_counts
+      ON expected_path_counts.strategy_key = aggregated.strategy_key
+     AND expected_path_counts.period = aggregated.period
     WHERE aggregated.market_count = expected_market_counts.expected_market_count
+      AND aggregated.path_count = expected_path_counts.expected_path_count
     ORDER BY
       aggregated.date,
       aggregated.strategy_key

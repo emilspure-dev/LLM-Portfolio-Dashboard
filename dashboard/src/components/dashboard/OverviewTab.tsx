@@ -313,8 +313,8 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
           <div>
             <p className="dashboard-label">Accumulated Return by Strategy</p>
             <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
-              Mean cumulative return on common trading dates, aggregated to one line
-              per strategy and weighted by path count across all available markets.
+              Mean cumulative return on common dates with full market and path coverage,
+              aggregated to one line per strategy and weighted by path count.
             </p>
           </div>
           <FigureExportControls
@@ -372,7 +372,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                 {cumulativeReturnChart.series.map((series) => (
                   <Line
                     key={series.key}
-                    type="monotone"
+                    type="linear"
                     dataKey={series.key}
                     name={series.label}
                     stroke={series.color}
