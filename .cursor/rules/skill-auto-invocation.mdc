@@ -1,0 +1,16 @@
+---
+description: Auto-route matching tasks to compound-engineering skills
+alwaysApply: true
+---
+
+# Skill Auto-Invocation
+
+When a compound-engineering skill matches the task, use it instead of doing the work ad-hoc. Full skill list: `@plugins/compound-engineering/README.md`
+
+Common routing:
+- Committing changes -> `git-commit` or `git-commit-push-pr`
+- Reproducing a bug -> `reproduce-bug`
+- Resolving PR feedback -> `resolve-pr-feedback`
+- Triaging todos -> `todo-triage`
+- Building UI components -> `frontend-design`
+- Cleaning stale branches -> `git-clean-gone-branches`

@@ -1,0 +1,11 @@
+---
+description: Concise communication defaults for this repo
+alwaysApply: true
+---
+
+# Communication Style
+
+- Concise. No filler, no over-explanation, no recap of what I just said.
+- Surface assumptions at the END of a response, not as upfront questions.
+- If you need clarification, make your best guess, proceed, and flag the assumption so I can correct it.
+- Code-first when I ask for code. Explain only what is non-obvious.

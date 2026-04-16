@@ -1,0 +1,35 @@
+---
+description: Enforce the compound-engineering workflow for non-trivial work
+alwaysApply: true
+---
+
+# Compound Engineering Workflow
+
+This project uses the compound-engineering plugin. Follow its workflow automatically. See `@plugins/compound-engineering/README.md` for the full component reference.
+
+## Mandatory sequence for non-trivial work
+1. `ce:brainstorm` - clarify requirements via Q&A
+2. `ce:plan` - produce implementation plan, wait for my approval
+3. `ce:work` - execute against the plan, do not improvise
+4. `ce:review` - run before any commit, address all findings
+5. `ce:compound` - capture learnings after merge
+
+## What counts as "non-trivial"
+Non-trivial (full loop required):
+- Adding a new function, endpoint, component, or migration
+- Refactoring across more than one file
+- Bug fixes that touch logic, not just text
+- Anything you would write more than 20 lines of code for
+
+Trivial (skip to execution):
+- Typo, comment, or formatting fix
+- Renaming a single variable
+- Updating a hardcoded string or constant
+- Single-line obvious fix with no logic change
+
+When in doubt, treat it as non-trivial.
+
+## Hard rules
+- Never write more than 20 lines of code without an approved plan.
+- Never commit without running `ce:review` first.
+- If reality diverges from the plan mid-execution, stop and update the plan before continuing.

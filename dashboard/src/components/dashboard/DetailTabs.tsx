@@ -361,6 +361,206 @@ function formatMetricValue(
   return value.toFixed(digits);
 }
 
+function normalizeHoldingsPromptType(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "simple" || normalized === "advanced") {
+    return normalized;
+  }
+  return "";
+}
+
+function getHoldingsSelectionKey(
+  row: Pick<
+    HoldingDailyRow,
+    "period" | "path_id" | "run_id" | "trajectory_id" | "market" | "model" | "prompt_type"
+  >
+) {
+  const period = String(row.period ?? "").trim() || "unknown-period";
+  const pathId = String(row.path_id ?? "").trim();
+  if (pathId) {
+    return `path:${pathId}:${period}`;
+  }
+
+  const runId = String(row.run_id ?? "").trim();
+  if (runId) {
+    return `run:${runId}:${period}`;
+  }
+
+  const trajectoryId = String(row.trajectory_id ?? "").trim();
+  if (trajectoryId) {
+    return `trajectory:${trajectoryId}:${period}`;
+  }
+
+  return [
+    String(row.market ?? "").trim() || "unknown-market",
+    String(row.model ?? "").trim() || "unknown-model",
+    normalizeHoldingsPromptType(row.prompt_type) || "unknown-prompt",
+    period,
+  ].join("::");
+}
+
+function computeWeightGini(weights: number[]) {
+  if (weights.length === 0) {
+    return null;
+  }
+
+  const sorted = [...weights].sort((left, right) => left - right);
+  const total = sorted.reduce((sum, value) => sum + value, 0);
+  if (!(total > 0)) {
+    return null;
+  }
+
+  let weightedSum = 0;
+  for (let index = 0; index < sorted.length; index += 1) {
+    weightedSum += (index + 1) * sorted[index];
+  }
+
+  return (2 * weightedSum) / (sorted.length * total) - (sorted.length + 1) / sorted.length;
+}
+
+function buildHoldingsConcentrationRows(
+  holdingsRows: HoldingDailyRow[]
+): HoldingsConcentrationRow[] {
+  const configurations = new Map<
+    string,
+    {
+      model: string;
+      prompt_type: string;
+      weightsByTicker: Map<string, { sum: number; count: number }>;
+    }
+  >();
+
+  for (const row of holdingsRows) {
+    const promptType = normalizeHoldingsPromptType(row.prompt_type);
+    const ticker = String(row.ticker ?? "").trim();
+    const targetWeight = asNumber(row.target_weight);
+    if (!promptType || !ticker || targetWeight == null || targetWeight <= 0) {
+      continue;
+    }
+
+    const model = String(row.model ?? "").trim() || "unknown";
+    const key = `${model}::${promptType}::${getHoldingsSelectionKey(row)}`;
+    const configuration =
+      configurations.get(key) ?? {
+        model,
+        prompt_type: promptType,
+        weightsByTicker: new Map<string, { sum: number; count: number }>(),
+      };
+
+    const weightBucket =
+      configuration.weightsByTicker.get(ticker) ?? { sum: 0, count: 0 };
+    weightBucket.sum += targetWeight;
+    weightBucket.count += 1;
+    configuration.weightsByTicker.set(ticker, weightBucket);
+    configurations.set(key, configuration);
+  }
+
+  const grouped = new Map<
+    string,
+    {
+      model: string;
+      prompt_type: string;
+      portfolio_count: number;
+      hhiValues: number[];
+      effectiveNValues: number[];
+      weightGiniValues: number[];
+      top5ShareValues: number[];
+      top10ShareValues: number[];
+    }
+  >();
+
+  for (const configuration of configurations.values()) {
+    const averagedWeights = Array.from(configuration.weightsByTicker.values())
+      .map((value) => value.sum / value.count)
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (averagedWeights.length === 0) {
+      continue;
+    }
+
+    const totalWeight = averagedWeights.reduce((sum, value) => sum + value, 0);
+    if (!(totalWeight > 0)) {
+      continue;
+    }
+
+    const normalizedWeights = averagedWeights.map((value) => value / totalWeight);
+    const sortedWeights = [...normalizedWeights].sort((left, right) => right - left);
+    const hhi = normalizedWeights.reduce((sum, value) => sum + value ** 2, 0);
+    const effectiveN = hhi > 0 ? 1 / hhi : null;
+    const weightGini = computeWeightGini(normalizedWeights);
+    const top5Share = sortedWeights.slice(0, 5).reduce((sum, value) => sum + value, 0);
+    const top10Share = sortedWeights.slice(0, 10).reduce((sum, value) => sum + value, 0);
+
+    const key = `${configuration.model}::${configuration.prompt_type}`;
+    const bucket =
+      grouped.get(key) ?? {
+        model: configuration.model,
+        prompt_type: configuration.prompt_type,
+        portfolio_count: 0,
+        hhiValues: [],
+        effectiveNValues: [],
+        weightGiniValues: [],
+        top5ShareValues: [],
+        top10ShareValues: [],
+      };
+
+    bucket.portfolio_count += 1;
+    bucket.hhiValues.push(hhi);
+    if (effectiveN != null) bucket.effectiveNValues.push(effectiveN);
+    if (weightGini != null) bucket.weightGiniValues.push(weightGini);
+    bucket.top5ShareValues.push(top5Share);
+    bucket.top10ShareValues.push(top10Share);
+    grouped.set(key, bucket);
+  }
+
+  return Array.from(grouped.values())
+    .map((bucket) => ({
+      model: bucket.model,
+      prompt_type: bucket.prompt_type,
+      portfolio_count: bucket.portfolio_count,
+      mean_hhi: mean(bucket.hhiValues),
+      mean_effective_n: mean(bucket.effectiveNValues),
+      mean_weight_gini: mean(bucket.weightGiniValues),
+      mean_top_5_share: mean(bucket.top5ShareValues),
+      mean_top_10_share: mean(bucket.top10ShareValues),
+    }))
+    .sort((left, right) => {
+      const modelCompare = String(left.model).localeCompare(String(right.model));
+      if (modelCompare !== 0) {
+        return modelCompare;
+      }
+      return String(left.prompt_type).localeCompare(String(right.prompt_type));
+    });
+}
+
+async function fetchAllHoldingsForStrategy(
+  experimentId: string,
+  market: string,
+  strategyKey: "gpt_simple" | "gpt_advanced"
+) {
+  const firstPage = await getDailyHoldings({
+    experiment_id: experimentId,
+    market,
+    strategy_key: strategyKey,
+    page: 1,
+    page_size: 1000,
+  });
+
+  const remainingPages = await mapInBatches(
+    Array.from({ length: Math.max(firstPage.total_pages - 1, 0) }, (_, index) => index + 2),
+    4,
+    (page) =>
+      getDailyHoldings({
+        experiment_id: experimentId,
+        market,
+        strategy_key: strategyKey,
+        page,
+        page_size: firstPage.page_size,
+      })
+  );
+
+  return [firstPage, ...remainingPages].flatMap((page) => page.items);
+}
+
 function formatDateLabel(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -2569,6 +2769,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
   const [selectedPathId, setSelectedPathId] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [page, setPage] = useState(1);
+  const preferredStrategyAutoAppliedForMarketRef = useRef<string | null>(null);
 
   const pathOptions = useMemo(() => {
     const seen = new Map<string, { value: string; label: string }>();
@@ -2612,14 +2813,60 @@ export function PortfoliosTab({ data }: BaseTabProps) {
       data.active_experiment_id,
       selection.selectedMarket,
     ],
-    queryFn: () =>
-      getHoldingsConcentrationSummary({
-        experiment_id: data.active_experiment_id,
-        market: selection.selectedMarket,
-      }),
+    queryFn: async () => {
+      try {
+        const response = await getHoldingsConcentrationSummary({
+          experiment_id: data.active_experiment_id,
+          market: selection.selectedMarket,
+        });
+        return { rows: response.rows, source: "api" as const };
+      } catch (error) {
+        if (!apiRouteLikelyMissing(error)) {
+          throw error;
+        }
+
+        const holdingsRows = (
+          await Promise.all([
+            fetchAllHoldingsForStrategy(data.active_experiment_id, selection.selectedMarket, "gpt_simple"),
+            fetchAllHoldingsForStrategy(data.active_experiment_id, selection.selectedMarket, "gpt_advanced"),
+          ])
+        ).flat();
+
+        return {
+          rows: buildHoldingsConcentrationRows(holdingsRows),
+          source: "fallback" as const,
+        };
+      }
+    },
     enabled: Boolean(data.active_experiment_id && selection.selectedMarket),
     staleTime: 60_000,
   });
+
+  const preferredGptStrategyKey = useMemo(() => {
+    return (
+      selection.strategyOptions.find((option) => option.strategy_key === "gpt_simple")?.strategy_key ??
+      selection.strategyOptions.find((option) => option.strategy_key === "gpt_advanced")?.strategy_key ??
+      ""
+    );
+  }, [selection.strategyOptions]);
+
+  useEffect(() => {
+    if (!selection.selectedMarket || !preferredGptStrategyKey) {
+      return;
+    }
+    if (preferredStrategyAutoAppliedForMarketRef.current === selection.selectedMarket) {
+      return;
+    }
+    if (!selection.selectedStrategyKey || selection.selectedStrategyKey === "index") {
+      preferredStrategyAutoAppliedForMarketRef.current = selection.selectedMarket;
+      selection.setSelectedStrategyKey(preferredGptStrategyKey);
+    }
+  }, [
+    preferredGptStrategyKey,
+    selection.selectedMarket,
+    selection.selectedStrategyKey,
+    selection.setSelectedStrategyKey,
+  ]);
 
   const holdingsQuery = useQuery({
     queryKey: [
@@ -2718,6 +2965,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
     .reduce((sum, value) => sum + value ** 2, 0);
   const sectors = uniqueStrings(holdings.map((holding) => holding.sector));
   const concentrationRows = concentrationQuery.data?.rows ?? [];
+  const concentrationSource = concentrationQuery.data?.source ?? "api";
   const concentrationMaxima = useMemo(
     () => ({
       mean_hhi: Math.max(...concentrationRows.map((row) => row.mean_hhi ?? 0), 0),
@@ -2728,6 +2976,9 @@ export function PortfoliosTab({ data }: BaseTabProps) {
     }),
     [concentrationRows]
   );
+  const isAggregateBenchmarkSelection =
+    !selectedPathId &&
+    !selection.selectedStrategyKey.startsWith("gpt_");
 
   return (
     <div className="space-y-4 pb-1">
@@ -2787,6 +3038,12 @@ export function PortfoliosTab({ data }: BaseTabProps) {
               . Each small multiple aggregates one <span className="font-mono">model x prompt</span> configuration using
               target weights per constructed portfolio.
             </p>
+            {concentrationSource === "fallback" && (
+              <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#8b7152]">
+                Built in the browser from the legacy holdings endpoint because the backend summary route is not deployed on
+                the live API yet.
+              </p>
+            )}
           </div>
           <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
             <p className="dashboard-label">Market scope</p>
@@ -2809,16 +3066,12 @@ export function PortfoliosTab({ data }: BaseTabProps) {
         ) : concentrationQuery.error ? (
           <div className="mt-2 rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-8 text-center">
             <p className="text-[13px] font-semibold text-[#404040]">
-              {apiRouteLikelyMissing(concentrationQuery.error)
-                ? "Concentration summary needs the latest backend route"
-                : "Unable to load concentration shape"}
+              Unable to load concentration shape
             </p>
             <p className="mt-2 text-[12px] leading-5 text-[#737373]">
-              {apiRouteLikelyMissing(concentrationQuery.error)
-                ? "Restart the backend API after pulling the latest server routes to enable this section."
-                : concentrationQuery.error instanceof Error
-                  ? concentrationQuery.error.message
-                  : "The holdings concentration summary request failed."}
+              {concentrationQuery.error instanceof Error
+                ? concentrationQuery.error.message
+                : "The holdings concentration summary request failed."}
             </p>
           </div>
         ) : concentrationRows.length === 0 ? (
@@ -2996,7 +3249,11 @@ export function PortfoliosTab({ data }: BaseTabProps) {
       ) : holdings.length === 0 ? (
         <EmptyState
           title="No holdings available"
-          body="There is no row in daily_holdings for this path. Holdings are loaded by path_id, just like the daily charts. If this persists, confirm the experiment exported holdings rows for this path. You can still verify prompt type and model above when a run matches the path."
+          body={
+            isAggregateBenchmarkSelection
+              ? "This selection is using an aggregate benchmark view rather than a concrete GPT path, so there is no per-path holdings snapshot to show. Pick a GPT strategy or a specific path to inspect portfolio holdings."
+              : "There is no row in daily_holdings for this path. Holdings are loaded by path_id, just like the daily charts. If this persists, confirm the experiment exported holdings rows for this path. You can still verify prompt type and model above when a run matches the path."
+          }
         />
       ) : (
         <>
