@@ -458,7 +458,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
               Mean cumulative return on common dates with full market and path coverage,
               aggregated to one line per strategy and weighted by path count.
               {rebalanceMarkers.length > 0
-                ? " Faint vertical guides indicate rebalance dates."
+                ? " Rebalance dates are marked by labeled vertical guides."
                 : ""}
             </p>
           </div>
@@ -479,7 +479,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
             <ResponsiveContainer width="100%" height={340}>
               <LineChart
                 data={cumulativeReturnChart.chartRows}
-                margin={{ top: 8, right: 16, left: 6, bottom: 8 }}
+                margin={{ top: 18, right: 16, left: 6, bottom: 8 }}
               >
                 <CartesianGrid
                   stroke="rgba(220, 213, 206, 0.7)"
@@ -515,9 +515,17 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   <ReferenceLine
                     key={markerDate}
                     x={markerDate}
-                    stroke="rgba(162, 150, 140, 0.26)"
-                    strokeDasharray="2 10"
-                    strokeWidth={1}
+                    stroke="rgba(156, 142, 131, 0.42)"
+                    strokeDasharray="3 7"
+                    strokeWidth={1.2}
+                    label={{
+                      value: "R",
+                      position: "insideTop",
+                      fill: "#9a8f86",
+                      fontSize: 9,
+                      fontWeight: 600,
+                      offset: 6,
+                    }}
                   />
                 ))}
                 {cumulativeReturnChart.series.map((series) => (
