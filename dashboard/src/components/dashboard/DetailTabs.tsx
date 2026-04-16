@@ -33,6 +33,7 @@ import {
   getDailyHoldings,
   getEquityChart,
   getFactorExposureChart,
+  getHoldingsConcentrationSummary,
   getPeriods,
   getRegimeChart,
 } from "@/lib/api-client";
@@ -65,6 +66,7 @@ import {
 import type {
   FactorExposureRow,
   HoldingDailyRow,
+  HoldingsConcentrationRow,
   RegimeRow,
   StrategyDailyRow,
   StrategySummaryApiRow,
@@ -332,6 +334,31 @@ function formatSignedNumber(value: number | null | undefined, digits = 1) {
 
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(digits)}`;
+}
+
+function formatPromptTypeLabel(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "advanced") {
+    return "Advanced";
+  }
+  if (normalized === "simple") {
+    return "Simple";
+  }
+  return normalized || "Unknown";
+}
+
+function formatMetricValue(
+  value: number | null | undefined,
+  kind: "ratio" | "number",
+  digits = 1
+) {
+  if (value == null || Number.isNaN(value)) {
+    return "—";
+  }
+  if (kind === "ratio") {
+    return formatPctFromRatio(value, digits);
+  }
+  return value.toFixed(digits);
 }
 
 function formatDateLabel(value: string) {
@@ -2579,6 +2606,21 @@ export function PortfoliosTab({ data }: BaseTabProps) {
     setPage(1);
   }, [selection.selectedMarket, selection.selectedStrategyKey, selectedPathId]);
 
+  const concentrationQuery = useQuery({
+    queryKey: [
+      "holdings-concentration",
+      data.active_experiment_id,
+      selection.selectedMarket,
+    ],
+    queryFn: () =>
+      getHoldingsConcentrationSummary({
+        experiment_id: data.active_experiment_id,
+        market: selection.selectedMarket,
+      }),
+    enabled: Boolean(data.active_experiment_id && selection.selectedMarket),
+    staleTime: 60_000,
+  });
+
   const holdingsQuery = useQuery({
     queryKey: [
       "daily-holdings",
@@ -2675,6 +2717,17 @@ export function PortfoliosTab({ data }: BaseTabProps) {
     .filter((value): value is number => value != null)
     .reduce((sum, value) => sum + value ** 2, 0);
   const sectors = uniqueStrings(holdings.map((holding) => holding.sector));
+  const concentrationRows = concentrationQuery.data?.rows ?? [];
+  const concentrationMaxima = useMemo(
+    () => ({
+      mean_hhi: Math.max(...concentrationRows.map((row) => row.mean_hhi ?? 0), 0),
+      mean_effective_n: Math.max(...concentrationRows.map((row) => row.mean_effective_n ?? 0), 0),
+      mean_weight_gini: Math.max(...concentrationRows.map((row) => row.mean_weight_gini ?? 0), 0),
+      mean_top_5_share: Math.max(...concentrationRows.map((row) => row.mean_top_5_share ?? 0), 0),
+      mean_top_10_share: Math.max(...concentrationRows.map((row) => row.mean_top_10_share ?? 0), 0),
+    }),
+    [concentrationRows]
+  );
 
   return (
     <div className="space-y-4 pb-1">
@@ -2720,6 +2773,173 @@ export function PortfoliosTab({ data }: BaseTabProps) {
             </p>
           </div>
         </div>
+      </Panel>
+
+      <Panel>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="dashboard-label">Concentration shape</p>
+            <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#737373]">
+              Full-scale concentration diagnostics for GPT portfolio configurations in{" "}
+              <span className="font-medium text-[#404040]">
+                {MARKET_LABELS[selection.selectedMarket] ?? selection.selectedMarket}
+              </span>
+              . Each small multiple aggregates one <span className="font-mono">model x prompt</span> configuration using
+              target weights per constructed portfolio.
+            </p>
+          </div>
+          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
+            <p className="dashboard-label">Market scope</p>
+            <p className="mt-2 text-[13px] font-semibold text-[#404040]">
+              {MARKET_LABELS[selection.selectedMarket] ?? selection.selectedMarket}
+            </p>
+            <p className="mt-1 text-[11px] text-[#737373]">
+              Shares the market filter with the snapshot explorer below.
+            </p>
+          </div>
+        </div>
+
+        {concentrationQuery.isLoading ? (
+          <div className="mt-2 rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-8 text-center">
+            <p className="text-[13px] font-semibold text-[#404040]">Loading concentration shape</p>
+            <p className="mt-2 text-[12px] leading-5 text-[#737373]">
+              Summarizing HHI, effective breadth, Gini, and top-weight share across all GPT configurations.
+            </p>
+          </div>
+        ) : concentrationQuery.error ? (
+          <div className="mt-2 rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-8 text-center">
+            <p className="text-[13px] font-semibold text-[#404040]">
+              {apiRouteLikelyMissing(concentrationQuery.error)
+                ? "Concentration summary needs the latest backend route"
+                : "Unable to load concentration shape"}
+            </p>
+            <p className="mt-2 text-[12px] leading-5 text-[#737373]">
+              {apiRouteLikelyMissing(concentrationQuery.error)
+                ? "Restart the backend API after pulling the latest server routes to enable this section."
+                : concentrationQuery.error instanceof Error
+                  ? concentrationQuery.error.message
+                  : "The holdings concentration summary request failed."}
+            </p>
+          </div>
+        ) : concentrationRows.length === 0 ? (
+          <div className="mt-2 rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-8 text-center">
+            <p className="text-[13px] font-semibold text-[#404040]">No concentration rows for this market</p>
+            <p className="mt-2 text-[12px] leading-5 text-[#737373]">
+              No GPT holdings configurations were returned for the selected market.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-2 grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {concentrationRows.map((row) => {
+              const promptLabel = formatPromptTypeLabel(row.prompt_type);
+              const accentColor =
+                row.prompt_type === "advanced" ? COLORS.purple : COLORS.cyan;
+              const metrics: Array<{
+                key: keyof Pick<
+                  HoldingsConcentrationRow,
+                  | "mean_hhi"
+                  | "mean_effective_n"
+                  | "mean_weight_gini"
+                  | "mean_top_5_share"
+                  | "mean_top_10_share"
+                >;
+                label: string;
+                value: number | null;
+                kind: "ratio" | "number";
+                digits: number;
+              }> = [
+                { key: "mean_hhi", label: "HHI", value: row.mean_hhi, kind: "number", digits: 3 },
+                {
+                  key: "mean_effective_n",
+                  label: "Effective N",
+                  value: row.mean_effective_n,
+                  kind: "number",
+                  digits: 1,
+                },
+                {
+                  key: "mean_weight_gini",
+                  label: "Weight Gini",
+                  value: row.mean_weight_gini,
+                  kind: "number",
+                  digits: 2,
+                },
+                {
+                  key: "mean_top_5_share",
+                  label: "Top-5 share",
+                  value: row.mean_top_5_share,
+                  kind: "ratio",
+                  digits: 0,
+                },
+                {
+                  key: "mean_top_10_share",
+                  label: "Top-10 share",
+                  value: row.mean_top_10_share,
+                  kind: "ratio",
+                  digits: 0,
+                },
+              ];
+
+              return (
+                <div
+                  key={`${row.model}-${row.prompt_type}`}
+                  className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-4"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-[#a3a3a3]">
+                        {promptLabel}
+                      </p>
+                      <p className="mt-2 font-mono text-[13px] font-semibold text-[#404040]">
+                        {row.model}
+                      </p>
+                    </div>
+                    <div
+                      className="rounded-none px-3 py-2 text-right"
+                      style={{ backgroundColor: `${accentColor}16` }}
+                    >
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-[#737373]">
+                        Portfolios
+                      </p>
+                      <p className="mt-1 text-[13px] font-semibold text-[#404040]">
+                        {row.portfolio_count.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {metrics.map((metric) => {
+                      const maxValue = concentrationMaxima[metric.key] ?? 0;
+                      const width =
+                        metric.value != null && maxValue > 0
+                          ? `${Math.max(10, (metric.value / maxValue) * 100)}%`
+                          : "0%";
+                      return (
+                        <div key={metric.key}>
+                          <div className="mb-1 flex items-center justify-between gap-3 text-[11px]">
+                            <span className="text-[#737373]">{metric.label}</span>
+                            <span className="font-semibold text-[#404040]">
+                              {formatMetricValue(metric.value, metric.kind, metric.digits)}
+                            </span>
+                          </div>
+                          <div className="h-2 rounded-full bg-white">
+                            <div
+                              className="h-2 rounded-full"
+                              style={{
+                                width,
+                                backgroundColor: accentColor,
+                                opacity: metric.value == null ? 0.2 : 0.8,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </Panel>
 
       {selectedPathId && (

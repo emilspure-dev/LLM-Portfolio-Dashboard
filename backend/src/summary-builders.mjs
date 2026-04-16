@@ -37,6 +37,31 @@ function mean(values) {
     : null;
 }
 
+function normalizeWeight(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : null;
+}
+
+function computeWeightGini(weights) {
+  if (weights.length === 0) {
+    return null;
+  }
+
+  const sorted = [...weights].sort((left, right) => left - right);
+  const total = sorted.reduce((sum, value) => sum + value, 0);
+  if (!(total > 0)) {
+    return null;
+  }
+
+  let weightedSum = 0;
+  for (let index = 0; index < sorted.length; index += 1) {
+    weightedSum += (index + 1) * sorted[index];
+  }
+
+  return (2 * weightedSum) / (sorted.length * total) - (sorted.length + 1) / sorted.length;
+}
+
 function compareLabels(left, right) {
   return String(left ?? "").localeCompare(String(right ?? ""));
 }
@@ -443,4 +468,113 @@ export function buildBehaviorHoldingsSummary({
     market_keys,
     asset_frequency_rows,
   };
+}
+
+export function buildHoldingsConcentrationSummary({
+  holdingsRows,
+}) {
+  const configurations = new Map();
+
+  for (const row of holdingsRows) {
+    const promptType = normalizePromptType(row.prompt_type);
+    if (promptType !== "simple" && promptType !== "advanced") {
+      continue;
+    }
+
+    const model = normalizeString(row.model) || "unknown";
+    const ticker = normalizeString(row.ticker);
+    const weight = normalizeWeight(row.target_weight);
+    if (!ticker || weight == null) {
+      continue;
+    }
+
+    const selectionKey = getSelectionPeriodKey(row);
+    const configurationKey = `${model}::${promptType}::${selectionKey}`;
+    const configuration =
+      configurations.get(configurationKey) ??
+      {
+        model,
+        prompt_type: promptType,
+        selection_key: selectionKey,
+        weights_by_ticker: new Map(),
+      };
+
+    const weightBucket =
+      configuration.weights_by_ticker.get(ticker) ??
+      { sum: 0, count: 0 };
+    weightBucket.sum += weight;
+    weightBucket.count += 1;
+    configuration.weights_by_ticker.set(ticker, weightBucket);
+    configurations.set(configurationKey, configuration);
+  }
+
+  const grouped = new Map();
+  for (const configuration of configurations.values()) {
+    const weights = Array.from(configuration.weights_by_ticker.values())
+      .map((value) => value.sum / value.count)
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (weights.length === 0) {
+      continue;
+    }
+
+    const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+    if (!(totalWeight > 0)) {
+      continue;
+    }
+
+    const normalizedWeights = weights.map((value) => value / totalWeight);
+    const sortedWeights = [...normalizedWeights].sort((left, right) => right - left);
+    const hhi = normalizedWeights.reduce((sum, value) => sum + value ** 2, 0);
+    const effectiveN = hhi > 0 ? 1 / hhi : null;
+    const weightGini = computeWeightGini(normalizedWeights);
+    const top5Share = sortedWeights.slice(0, 5).reduce((sum, value) => sum + value, 0);
+    const top10Share = sortedWeights.slice(0, 10).reduce((sum, value) => sum + value, 0);
+
+    const key = `${configuration.model}::${configuration.prompt_type}`;
+    const bucket =
+      grouped.get(key) ??
+      {
+        model: configuration.model,
+        prompt_type: configuration.prompt_type,
+        portfolio_count: 0,
+        hhi_values: [],
+        effective_n_values: [],
+        weight_gini_values: [],
+        top_5_share_values: [],
+        top_10_share_values: [],
+      };
+
+    bucket.portfolio_count += 1;
+    bucket.hhi_values.push(hhi);
+    if (effectiveN != null) {
+      bucket.effective_n_values.push(effectiveN);
+    }
+    if (weightGini != null) {
+      bucket.weight_gini_values.push(weightGini);
+    }
+    bucket.top_5_share_values.push(top5Share);
+    bucket.top_10_share_values.push(top10Share);
+    grouped.set(key, bucket);
+  }
+
+  const rows = Array.from(grouped.values())
+    .map((bucket) => ({
+      model: bucket.model,
+      prompt_type: bucket.prompt_type,
+      portfolio_count: bucket.portfolio_count,
+      mean_hhi: mean(bucket.hhi_values),
+      mean_effective_n: mean(bucket.effective_n_values),
+      mean_weight_gini: mean(bucket.weight_gini_values),
+      mean_top_5_share: mean(bucket.top_5_share_values),
+      mean_top_10_share: mean(bucket.top_10_share_values),
+    }))
+    .sort((left, right) => {
+      const modelCompare = compareLabels(left.model, right.model);
+      if (modelCompare !== 0) {
+        return modelCompare;
+      }
+      return compareLabels(left.prompt_type, right.prompt_type);
+    });
+
+  return { rows };
 }

@@ -204,6 +204,21 @@ export interface BehaviorHoldingsSummaryResponse {
   asset_frequency_rows: BehaviorAssetSelectionRow[];
 }
 
+export interface HoldingsConcentrationRow {
+  model: string;
+  prompt_type: string;
+  portfolio_count: number;
+  mean_hhi: number | null;
+  mean_effective_n: number | null;
+  mean_weight_gini: number | null;
+  mean_top_5_share: number | null;
+  mean_top_10_share: number | null;
+}
+
+export interface HoldingsConcentrationSummaryResponse {
+  rows: HoldingsConcentrationRow[];
+}
+
 export interface StrategyDailyRow {
   experiment_id: string;
   path_id: string;

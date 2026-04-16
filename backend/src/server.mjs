@@ -28,6 +28,7 @@ import {
 import {
   buildBehaviorHoldingsSummary,
   buildFactorSelectionSummary,
+  buildHoldingsConcentrationSummary,
   getFactorLabelField,
 } from "./summary-builders.mjs";
 
@@ -1434,6 +1435,50 @@ function handleBehaviorHoldingsSummary(url) {
   });
 }
 
+function handleHoldingsConcentrationSummary(url) {
+  const experimentId = resolveExperimentId(url);
+  const market = cleanString(url.searchParams.get("market"));
+
+  const clauses = [
+    "dh.experiment_id = :experiment_id",
+    gptPromptTypeFilterSql("p.prompt_type"),
+  ];
+  const params = { experiment_id: experimentId };
+  addEqualsFilter(clauses, params, "p.market", market, "market");
+
+  const holdingsRows = queryAll(
+    `
+    SELECT
+      ${normalizedPromptTypeSql("p.prompt_type")} AS prompt_type,
+      NULLIF(p.model, '') AS model,
+      NULLIF(p.trajectory_id, '') AS trajectory_id,
+      p.run_id,
+      dh.path_id,
+      dh.period,
+      dh.ticker,
+      AVG(dh.target_weight) AS target_weight
+    FROM daily_holdings dh
+    JOIN paths p
+      ON p.experiment_id = dh.experiment_id
+     AND p.path_id = dh.path_id
+    ${buildWhereClause(clauses)}
+    GROUP BY
+      prompt_type,
+      NULLIF(p.model, ''),
+      NULLIF(p.trajectory_id, ''),
+      p.run_id,
+      dh.path_id,
+      dh.period,
+      dh.ticker
+  `,
+    params
+  );
+
+  return buildHoldingsConcentrationSummary({
+    holdingsRows,
+  });
+}
+
 function handleEquity(url) {
   const { clauses, params } = withExperimentFilters(url, {
     experimentId: "dpm.experiment_id",
@@ -1943,6 +1988,8 @@ const routes = new Map([
     handleFactorSelectionSummary(url)],
   ["GET /api/summary/behavior-holdings", ({ url }) =>
     handleBehaviorHoldingsSummary(url)],
+  ["GET /api/summary/holdings-concentration", ({ url }) =>
+    handleHoldingsConcentrationSummary(url)],
   ["GET /api/summary/run-quality", ({ url }) => handleRunQuality(url)],
   ["GET /api/charts/equity", ({ url }) => handleEquity(url)],
   ["GET /api/charts/factor-exposures", ({ url }) => handleFactorExposures(url)],

@@ -8,6 +8,7 @@ import type {
   FiltersResponse,
   HealthResponse,
   HoldingDailyRow,
+  HoldingsConcentrationSummaryResponse,
   MetaCurrentResponse,
   OverviewSummaryResponse,
   PaginatedResponse,
@@ -231,6 +232,10 @@ export function getFactorSelectionSummary(query?: Record<string, QueryValue>) {
 
 export function getBehaviorHoldingsSummary(query?: Record<string, QueryValue>) {
   return requestJson<BehaviorHoldingsSummaryResponse>("/summary/behavior-holdings", query);
+}
+
+export function getHoldingsConcentrationSummary(query?: Record<string, QueryValue>) {
+  return requestJson<HoldingsConcentrationSummaryResponse>("/summary/holdings-concentration", query);
 }
 
 export function getRunQuality(query?: Record<string, QueryValue>) {

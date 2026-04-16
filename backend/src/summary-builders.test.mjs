@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildBehaviorHoldingsSummary,
   buildFactorSelectionSummary,
+  buildHoldingsConcentrationSummary,
 } from "./summary-builders.mjs";
 
 test("buildFactorSelectionSummary compacts holdings into prompt-level summaries", () => {
@@ -153,4 +154,131 @@ test("buildBehaviorHoldingsSummary returns compact sector and asset summaries", 
   assert.equal(summary.sector_rows.length, 2);
   assert.equal(summary.asset_frequency_rows[0].ticker, "AAPL");
   assert.equal(summary.asset_frequency_rows[0].cells[0].selection_rate, 2 / 3);
+});
+
+test("buildHoldingsConcentrationSummary aggregates concentration shape by model and prompt", () => {
+  const summary = buildHoldingsConcentrationSummary({
+    holdingsRows: [
+      {
+        prompt_type: "simple",
+        model: "gpt-4o-mini",
+        run_id: "s1",
+        path_id: "p1",
+        period: "2024H1",
+        ticker: "A",
+        target_weight: 0.5,
+      },
+      {
+        prompt_type: "simple",
+        model: "gpt-4o-mini",
+        run_id: "s1",
+        path_id: "p1",
+        period: "2024H1",
+        ticker: "B",
+        target_weight: 0.3,
+      },
+      {
+        prompt_type: "simple",
+        model: "gpt-4o-mini",
+        run_id: "s1",
+        path_id: "p1",
+        period: "2024H1",
+        ticker: "C",
+        target_weight: 0.2,
+      },
+      {
+        prompt_type: "simple",
+        model: "gpt-4o-mini",
+        run_id: "s1",
+        path_id: "p1",
+        period: "2024H1",
+        ticker: "A",
+        target_weight: 0.5,
+      },
+      {
+        prompt_type: "simple",
+        model: "gpt-4o-mini",
+        run_id: "s2",
+        path_id: "p2",
+        period: "2024H1",
+        ticker: "D",
+        target_weight: 0.25,
+      },
+      {
+        prompt_type: "simple",
+        model: "gpt-4o-mini",
+        run_id: "s2",
+        path_id: "p2",
+        period: "2024H1",
+        ticker: "E",
+        target_weight: 0.25,
+      },
+      {
+        prompt_type: "simple",
+        model: "gpt-4o-mini",
+        run_id: "s2",
+        path_id: "p2",
+        period: "2024H1",
+        ticker: "F",
+        target_weight: 0.25,
+      },
+      {
+        prompt_type: "simple",
+        model: "gpt-4o-mini",
+        run_id: "s2",
+        path_id: "p2",
+        period: "2024H1",
+        ticker: "G",
+        target_weight: 0.25,
+      },
+      {
+        prompt_type: "advanced",
+        model: "gpt-4o",
+        run_id: "a1",
+        path_id: "p3",
+        period: "2024H1",
+        ticker: "H",
+        target_weight: 0.7,
+      },
+      {
+        prompt_type: "advanced",
+        model: "gpt-4o",
+        run_id: "a1",
+        path_id: "p3",
+        period: "2024H1",
+        ticker: "I",
+        target_weight: 0.2,
+      },
+      {
+        prompt_type: "advanced",
+        model: "gpt-4o",
+        run_id: "a1",
+        path_id: "p3",
+        period: "2024H1",
+        ticker: "J",
+        target_weight: 0.1,
+      },
+    ],
+  });
+
+  assert.equal(summary.rows.length, 2);
+
+  const advanced = summary.rows.find((row) => row.prompt_type === "advanced");
+  const simple = summary.rows.find((row) => row.prompt_type === "simple");
+
+  assert.equal(advanced?.model, "gpt-4o");
+  assert.equal(advanced?.portfolio_count, 1);
+  assert.ok(Math.abs((advanced?.mean_hhi ?? 0) - 0.54) < 1e-9);
+  assert.ok(Math.abs((advanced?.mean_effective_n ?? 0) - 1.8518518518518516) < 1e-9);
+  assert.ok(Math.abs((advanced?.mean_weight_gini ?? 0) - 0.4) < 1e-9);
+  assert.ok(Math.abs((advanced?.mean_top_5_share ?? 0) - 1) < 1e-9);
+  assert.ok(Math.abs((advanced?.mean_top_10_share ?? 0) - 1) < 1e-9);
+
+  assert.equal(simple?.model, "gpt-4o-mini");
+  assert.equal(simple?.portfolio_count, 2);
+  assert.ok(Math.abs((simple?.mean_hhi ?? 0) - 0.315) < 1e-9);
+  assert.ok(Math.abs((simple?.mean_effective_n ?? 0) - 3.3157894736842106) < 1e-9);
+  assert.ok(Math.abs((simple?.mean_weight_gini ?? 0) - 0.1) < 1e-9);
+  assert.equal(simple?.mean_top_5_share, 1);
+  assert.equal(simple?.mean_top_10_share, 1);
 });
