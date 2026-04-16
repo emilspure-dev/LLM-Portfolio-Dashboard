@@ -98,7 +98,7 @@ describe("data-loader", () => {
     expect(mockedApi.getRunResults).toHaveBeenNthCalledWith(1, {
       experiment_id: "exp_2",
       page: 1,
-      page_size: 500,
+      page_size: 2000,
     });
     expect(mockedApi.getRunResults).toHaveBeenNthCalledWith(2, {
       experiment_id: "exp_2",
@@ -106,14 +106,15 @@ describe("data-loader", () => {
       page_size: 500,
     });
     expect(rows).toEqual([
-      { run_id: "run-1" },
-      { run_id: "run-2" },
-      { run_id: "run-3" },
+      { run_id: "run-1", strategy_key: undefined, prompt_type: null },
+      { run_id: "run-2", strategy_key: undefined, prompt_type: null },
+      { run_id: "run-3", strategy_key: undefined, prompt_type: null },
     ]);
   });
 
-  it("detects missing daily_holdings table errors", () => {
+  it("detects missing holdings relation errors", () => {
     expect(holdingsDataLikelyUnavailable(new Error("SQLITE_ERROR: no such table: daily_holdings"))).toBe(true);
+    expect(holdingsDataLikelyUnavailable(new Error("SQLITE_ERROR: no such view: vw_holdings_daily"))).toBe(true);
     expect(holdingsDataLikelyUnavailable(new Error("Request failed with status 500"))).toBe(false);
   });
 });

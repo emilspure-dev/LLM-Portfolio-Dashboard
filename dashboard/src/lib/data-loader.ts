@@ -131,8 +131,10 @@ export function holdingsDataLikelyUnavailable(err: unknown): boolean {
   return (
     message.includes("no such table: daily_holdings") ||
     message.includes("no such table daily_holdings") ||
-    message.includes("daily_holdings")
-      && (message.includes("sqlite") || message.includes("no such table"))
+    message.includes("no such view: vw_holdings_daily") ||
+    message.includes("no such view vw_holdings_daily") ||
+    ((message.includes("daily_holdings") || message.includes("vw_holdings_daily")) &&
+      (message.includes("sqlite") || message.includes("no such table") || message.includes("no such view")))
   );
 }
 

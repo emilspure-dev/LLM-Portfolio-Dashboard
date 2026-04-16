@@ -3080,9 +3080,8 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
               Holdings snapshots are unavailable on this deployment
             </p>
             <p className="mt-2 text-[12px] leading-5 text-[#737373]">
-              The connected backend is running against a SQLite file without the
-              <span className="mx-1 font-mono text-[#525252]">daily_holdings</span>
-              table, so concentration shape cannot be computed here yet.
+              The connected backend does not expose a holdings snapshot relation,
+              so concentration shape cannot be computed here yet.
             </p>
           </div>
         ) : concentrationQuery.error ? (
@@ -3271,7 +3270,7 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
       ) : holdingsUnavailable ? (
         <EmptyState
           title="Holdings snapshots are unavailable"
-          body="The connected backend is using a SQLite file that does not expose the daily_holdings table, so this deployment cannot show portfolio snapshot rows yet. The rest of the dashboard can still load from summary data."
+          body="The connected backend does not expose a holdings snapshot relation, so this deployment cannot show portfolio snapshot rows yet. The rest of the dashboard can still load from summary data."
         />
       ) : holdingsQuery.isError ? (
         <EmptyState
@@ -3288,7 +3287,7 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
           body={
             isAggregateBenchmarkSelection
               ? "This selection is using an aggregate benchmark view rather than a concrete GPT path, so there is no per-path holdings snapshot to show. Pick a GPT strategy or a specific path to inspect portfolio holdings."
-              : "There is no row in daily_holdings for this path. Holdings are loaded by path_id, just like the daily charts. If this persists, confirm the experiment exported holdings rows for this path. You can still verify prompt type and model above when a run matches the path."
+              : "There is no holdings snapshot row for this path. Holdings are loaded by path_id, just like the daily charts. If this persists, confirm the experiment exported holdings rows for this path. You can still verify prompt type and model above when a run matches the path."
           }
         />
       ) : (
@@ -7254,7 +7253,7 @@ export function BehaviorTab({ data, runs, health }: BaseTabProps) {
               </p>
               <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#737373]">
                 {behaviorHoldingsUnavailable
-                  ? "The connected backend is using a SQLite file without the daily_holdings table, so sector concentration and stock-selection frequency cannot be computed here yet."
+                  ? "The connected backend does not expose a holdings snapshot relation, so sector concentration and stock-selection frequency cannot be computed here yet."
                   : behaviorHoldingsQuery.error instanceof Error
                     ? behaviorHoldingsQuery.error.message
                     : "The holdings-backed behavior summary request failed."}

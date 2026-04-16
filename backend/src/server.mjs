@@ -14,7 +14,6 @@ import {
   getTableColumns,
   queryAll,
   queryGet,
-  tableExists,
 } from "./db.mjs";
 import {
   addDateRangeFilter,
@@ -139,6 +138,51 @@ function gptStrategyKeyFilterSql(columnExpression) {
 
 const TIME_SERIES_CACHE_TTL_MS = 10 * 60 * 1000;
 const timeSeriesCache = new Map();
+const HOLDINGS_RELATION_CANDIDATES = ["daily_holdings", "vw_holdings_daily"];
+const RUN_RESULTS_RELATION_CANDIDATES = ["run_results", "llm_run_results"];
+
+function relationExists(relationName) {
+  try {
+    return Boolean(
+      queryGet(
+        `
+        SELECT 1 AS relation_exists
+        FROM sqlite_master
+        WHERE type IN ('table', 'view')
+          AND name = :relation_name
+        LIMIT 1
+      `,
+        { relation_name: relationName }
+      )?.relation_exists
+    );
+  } catch {
+    return false;
+  }
+}
+
+function firstAvailableRelation(candidates) {
+  return candidates.find((candidate) => relationExists(candidate)) ?? null;
+}
+
+function resolveRequiredRelation(label, candidates) {
+  const relation = firstAvailableRelation(candidates);
+  if (relation) {
+    return relation;
+  }
+
+  throw createHttpError(
+    503,
+    `SQLite ${label} relation is unavailable. Expected one of: ${candidates.join(", ")}`
+  );
+}
+
+function getHoldingsRelation() {
+  return resolveRequiredRelation("holdings", HOLDINGS_RELATION_CANDIDATES);
+}
+
+function getRunResultsRelation() {
+  return resolveRequiredRelation("run-results", RUN_RESULTS_RELATION_CANDIDATES);
+}
 
 function toSqliteLiteral(value) {
   if (value == null) {
@@ -434,6 +478,7 @@ function handleHealth() {
 function handleMetaCurrent() {
   const latest = getLatestExperimentRecord();
   const experimentId = latest?.experiment_id ?? null;
+  const runResultsRelation = experimentId ? getRunResultsRelation() : null;
 
   if (!experimentId) {
     return {
@@ -507,7 +552,7 @@ function handleMetaCurrent() {
     available_models: rowsToValues(
       queryAll(`
         SELECT DISTINCT NULLIF(model, '') AS model
-        FROM llm_run_results
+        FROM ${runResultsRelation}
         WHERE experiment_id = :experiment_id
           AND COALESCE(model, '') <> ''
         ORDER BY model
@@ -520,6 +565,7 @@ function handleMetaCurrent() {
 function handleFilters(url) {
   const experimentId = resolveExperimentId(url);
   const dateBounds = getDateBounds(experimentId);
+  const runResultsRelation = getRunResultsRelation();
 
   return {
     markets: rowsToValues(
@@ -578,7 +624,7 @@ function handleFilters(url) {
     models: rowsToValues(
       queryAll(`
         SELECT DISTINCT NULLIF(model, '') AS model
-        FROM llm_run_results
+        FROM ${runResultsRelation}
         WHERE experiment_id = :experiment_id
           AND COALESCE(model, '') <> ''
         ORDER BY model
@@ -993,6 +1039,7 @@ function handleCumulativeReturnSummary(url) {
 }
 
 function handleRunQuality(url) {
+  const runResultsRelation = getRunResultsRelation();
   const { clauses, params } = withExperimentFilters(url, {
     experimentId: "rr.experiment_id",
     market: "rr.market",
@@ -1016,7 +1063,7 @@ function handleRunQuality(url) {
       SUM(CASE WHEN COALESCE(rr.valid, 0) <> 0 THEN 1 ELSE 0 END) AS valid_rows,
       SUM(CASE WHEN COALESCE(rr.repaired, 0) <> 0 THEN 1 ELSE 0 END) AS repaired_rows,
       AVG(rr.repair_attempts) AS avg_repair_attempts
-    FROM llm_run_results rr
+    FROM ${runResultsRelation} rr
     ${buildWhereClause(clauses)}
     GROUP BY
       rr.experiment_id,
@@ -1032,6 +1079,7 @@ function handleRunQuality(url) {
 
 function handleOverviewSummary(url) {
   const experimentId = resolveExperimentId(url);
+  const runResultsRelation = getRunResultsRelation();
 
   return (
     queryGet(
@@ -1055,7 +1103,7 @@ function handleOverviewSummary(url) {
           period,
           MAX(valid) AS valid,
           AVG(hhi) AS hhi
-        FROM llm_run_results
+        FROM ${runResultsRelation}
         WHERE experiment_id = :experiment_id
         GROUP BY experiment_id, path_id, period
       ),
@@ -1127,6 +1175,7 @@ function handleOverviewSummary(url) {
 
 function handleBehaviorSummary(url) {
   const experimentId = resolveExperimentId(url);
+  const runResultsRelation = getRunResultsRelation();
   const rows = queryAll(
     `
     WITH rr_dedup AS (
@@ -1137,7 +1186,7 @@ function handleBehaviorSummary(url) {
         MAX(valid) AS valid,
         AVG(hhi) AS hhi,
         AVG(effective_n_holdings) AS effective_n_holdings
-      FROM llm_run_results
+      FROM ${runResultsRelation}
       WHERE experiment_id = :experiment_id
       GROUP BY experiment_id, path_id, period
     ),
@@ -1251,6 +1300,7 @@ function handleBehaviorSummary(url) {
 
 function handleFactorSelectionSummary(url) {
   const experimentId = resolveExperimentId(url);
+  const holdingsRelation = getHoldingsRelation();
   const market = cleanString(url.searchParams.get("market"));
   const factorKey = cleanString(url.searchParams.get("factor_key")) ?? "value";
   const factorField = getFactorLabelField(factorKey);
@@ -1290,7 +1340,7 @@ function handleFactorSelectionSummary(url) {
       dh.momentum_label,
       dh.low_risk_label,
       dh.quality_label
-    FROM daily_holdings dh
+    FROM ${holdingsRelation} dh
     JOIN paths p
       ON p.experiment_id = dh.experiment_id
      AND p.path_id = dh.path_id
@@ -1361,6 +1411,7 @@ function handleFactorSelectionSummary(url) {
 
 function handleBehaviorHoldingsSummary(url) {
   const experimentId = resolveExperimentId(url);
+  const holdingsRelation = getHoldingsRelation();
   const market = cleanString(url.searchParams.get("market"));
   const model = cleanString(url.searchParams.get("model"));
 
@@ -1394,7 +1445,7 @@ function handleBehaviorHoldingsSummary(url) {
       dh.ticker,
       ip.name,
       ip.sector
-    FROM daily_holdings dh
+    FROM ${holdingsRelation} dh
     JOIN paths p
       ON p.experiment_id = dh.experiment_id
      AND p.path_id = dh.path_id
@@ -1457,14 +1508,14 @@ function handleHoldingsConcentrationSummary(url) {
       dh.path_id,
       dh.period,
       dh.ticker,
-      AVG(dh.target_weight) AS target_weight
-    FROM daily_holdings dh
+      AVG(COALESCE(dh.target_weight, dh.effective_weight_period_start)) AS target_weight
+    FROM decision_holdings dh
     JOIN paths p
       ON p.experiment_id = dh.experiment_id
      AND p.path_id = dh.path_id
     ${buildWhereClause(clauses)}
     GROUP BY
-      prompt_type,
+      ${normalizedPromptTypeSql("p.prompt_type")},
       NULLIF(p.model, ''),
       NULLIF(p.trajectory_id, ''),
       p.run_id,
@@ -1666,6 +1717,7 @@ function handleRegimes(url) {
 }
 
 function handleHoldings(url) {
+  const holdingsRelation = getHoldingsRelation();
   const { page, pageSize, limit, offset } = parsePagination(url.searchParams);
   const clauses = ["dh.experiment_id = :experiment_id"];
   const params = {
@@ -1687,7 +1739,7 @@ function handleHoldings(url) {
   }
 
   const fromClause = `
-    FROM daily_holdings dh
+    FROM ${holdingsRelation} dh
     JOIN paths p
       ON p.experiment_id = dh.experiment_id
      AND p.path_id = dh.path_id
@@ -1810,8 +1862,8 @@ function handlePrices(url) {
   `, params);
 }
 
-function buildRunResultsSelectList() {
-  const rrColumns = getTableColumns("llm_run_results");
+function buildRunResultsSelectList(runResultsRelation) {
+  const rrColumns = getTableColumns(runResultsRelation);
   const rrColumnSet = new Set(rrColumns);
   const excluded = new Set([
     "experiment_id",
@@ -1871,7 +1923,8 @@ function buildRunResultsSelectList() {
 }
 
 function handleRunResults(url) {
-  const rrColumnSet = new Set(getTableColumns("llm_run_results"));
+  const runResultsRelation = getRunResultsRelation();
+  const rrColumnSet = new Set(getTableColumns(runResultsRelation));
   const { page, pageSize, limit, offset } = parsePagination(url.searchParams);
   const clauses = ["rr.experiment_id = :experiment_id"];
   const params = {
@@ -1899,7 +1952,7 @@ function handleRunResults(url) {
   addEqualsFilter(clauses, params, "rr.valid", validFlag, "valid");
 
   const fromClause = `
-    FROM llm_run_results rr
+    FROM ${runResultsRelation} rr
     JOIN paths p
       ON p.experiment_id = rr.experiment_id
      AND p.path_id = rr.path_id
@@ -1924,7 +1977,7 @@ function handleRunResults(url) {
 
   const items = queryAll(`
     SELECT
-      ${buildRunResultsSelectList()}
+      ${buildRunResultsSelectList(runResultsRelation)}
     ${fromClause}
     ${whereClause}
     ORDER BY market, rr.period, prompt_type, model, run_id
@@ -2046,7 +2099,7 @@ const server = http.createServer((request, response) => {
       if (url.pathname === "/api/health" && payload && typeof payload === "object") {
         const holdingsAvailable =
           "db_available" in payload && payload.db_available === true
-            ? tableExists("daily_holdings")
+            ? firstAvailableRelation(HOLDINGS_RELATION_CANDIDATES) != null
             : false;
         payload = {
           ...payload,
