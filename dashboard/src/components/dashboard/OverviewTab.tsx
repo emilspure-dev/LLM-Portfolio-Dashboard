@@ -14,7 +14,6 @@ import {
   getMarketShortLabel,
   getStrategyColor,
   getStrategyDisplayName,
-  sharpeColor,
   fmt,
   fmtp,
 } from "@/lib/constants";
@@ -51,6 +50,13 @@ function formatReturnPercent(value: number | string | null | undefined, decimals
     return "—";
   }
   return `${(numericValue * 100).toFixed(decimals)}%`;
+}
+
+function returnColor(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return "#b4aca4";
+  if (value >= 0.18) return "#9CC7A4";
+  if (value >= 0.08) return "#D8B692";
+  return "#D49790";
 }
 
 function normalizeIsoDate(value: string | null | undefined) {
@@ -318,7 +324,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
 
     return result.sort(
       (a, b) =>
-        (b.overallSharpe ?? -Infinity) - (a.overallSharpe ?? -Infinity)
+        (b.overallReturn ?? -Infinity) - (a.overallReturn ?? -Infinity)
     );
   }, [data.summary_rows]);
 
@@ -586,16 +592,14 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                       </div>
                       <p
                         className="mt-2 text-[26px] font-semibold leading-none tracking-[-0.05em]"
-                        style={{ color: sharpeColor(group.overallSharpe) }}
+                        style={{ color: returnColor(group.overallReturn) }}
                       >
-                        {fmt(group.overallSharpe, 2)}
-                      </p>
-                      <p className="mt-1.5 text-[11px] text-[#9f978f]">
-                        Sharpe ·{" "}
                         {group.overallReturn != null
                           ? fmtp(group.overallReturn * 100, 1)
-                          : "—"}{" "}
-                        ret · n={group.totalObs}
+                          : "—"}
+                      </p>
+                      <p className="mt-1.5 text-[11px] text-[#9f978f]">
+                        Sharpe {fmt(group.overallSharpe, 2)} · n={group.totalObs}
                       </p>
                     </div>
                     <span className="shrink-0 rounded-none bg-[rgba(0,0,0,0.04)] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#a3a3a3]">
@@ -616,14 +620,14 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                           </p>
                           <p
                             className="mt-1 text-[15px] font-semibold tabular-nums leading-none"
-                            style={{ color: sharpeColor(m.sharpe) }}
+                            style={{ color: returnColor(m.ret) }}
                           >
-                            {m.sharpe != null && Number.isFinite(m.sharpe)
-                              ? m.sharpe.toFixed(2)
-                              : "—"}
+                            {m.ret != null ? fmtp(m.ret * 100, 1) : "—"}
                           </p>
                           <p className="mt-0.5 text-[10px] text-[#9f978f]">
-                            {m.ret != null ? fmtp(m.ret * 100, 1) : "—"} ret
+                            Sharpe {m.sharpe != null && Number.isFinite(m.sharpe)
+                              ? m.sharpe.toFixed(2)
+                              : "—"}
                           </p>
                         </div>
                       ))}
@@ -642,11 +646,9 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   <KpiCard
                     key={`${s.strategy_key}::${s.markets?.[0] ?? ""}`}
                     label={short}
-                    value={fmt(s.mean_sharpe, 2)}
-                    color={sharpeColor(s.mean_sharpe)}
-                    sub={`Sharpe | ${
-                      s.net_return_mean != null ? fmtp(s.net_return_mean * 100, 1) : "—"
-                    } ret | n=${s.n_observations}`}
+                    value={s.net_return_mean != null ? fmtp(s.net_return_mean * 100, 1) : "—"}
+                    color={returnColor(s.net_return_mean)}
+                    sub={`Sharpe ${fmt(s.mean_sharpe, 2)} | n=${s.n_observations}`}
                   />
                 );
               })}
