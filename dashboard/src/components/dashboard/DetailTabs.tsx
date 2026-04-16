@@ -64,6 +64,12 @@ import {
   getStrategyDisplayName,
   sharpeColor,
 } from "@/lib/constants";
+import {
+  buildFallbackHoldingSnapshot,
+  buildFallbackHoldingsConcentrationRows,
+  getLatestFallbackDailyMetrics,
+  resolveHoldingsViewMode,
+} from "@/lib/holdings-fallback";
 import type {
   FactorExposureRow,
   HealthResponse,
@@ -2929,6 +2935,9 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
   }, [holdingsQuery.data, selectedDate]);
 
   const holdings = holdingsQuery.data?.items ?? [];
+  const holdingsBackendUnavailable =
+    holdingsCapabilityUnavailable ||
+    (holdingsQuery.isError && holdingsDataLikelyUnavailable(holdingsQuery.error));
   const selectedRun = useMemo(
     () =>
       findRunForPortfolioPath(
@@ -2938,6 +2947,37 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
         selection.selectedStrategyKey
       ),
     [data.runs, selectedPathId, selection.selectedMarket, selection.selectedStrategyKey]
+  );
+  const fallbackSnapshot = useMemo(
+    () => (selectedRun ? buildFallbackHoldingSnapshot(selectedRun) : null),
+    [selectedRun]
+  );
+  const holdingsViewMode = resolveHoldingsViewMode({
+    holdingsCapabilityUnavailable: holdingsBackendUnavailable,
+    fallbackSnapshot,
+  });
+  const fallbackDailyMetricsQuery = useQuery({
+    queryKey: [
+      "holdings-fallback-daily-metrics",
+      data.active_experiment_id,
+      selectedPathId,
+    ],
+    queryFn: () =>
+      getEquityChart({
+        experiment_id: data.active_experiment_id,
+        path_id: selectedPathId || undefined,
+      }),
+    enabled: Boolean(
+      data.active_experiment_id &&
+        holdingsBackendUnavailable &&
+        holdingsViewMode === "reduced" &&
+        selectedPathId
+    ),
+    staleTime: 60_000,
+  });
+  const fallbackDailyMetrics = useMemo(
+    () => getLatestFallbackDailyMetrics(fallbackDailyMetricsQuery.data ?? []),
+    [fallbackDailyMetricsQuery.data]
   );
 
   const promptSnippet = useMemo(() => {
@@ -2969,11 +3009,20 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
     .filter((value): value is number => value != null)
     .reduce((sum, value) => sum + value ** 2, 0);
   const sectors = uniqueStrings(holdings.map((holding) => holding.sector));
-  const concentrationRows = concentrationQuery.data?.rows ?? [];
-  const concentrationSource = concentrationQuery.data?.source ?? "api";
+  const concentrationRows = useMemo(
+    () =>
+      holdingsBackendUnavailable
+        ? buildFallbackHoldingsConcentrationRows(data.runs, selection.selectedMarket)
+        : concentrationQuery.data?.rows ?? [],
+    [concentrationQuery.data?.rows, data.runs, holdingsBackendUnavailable, selection.selectedMarket]
+  );
+  const concentrationSource = holdingsBackendUnavailable
+    ? "portfolio_json"
+    : concentrationQuery.data?.source ?? "api";
   const concentrationUnavailable =
-    holdingsCapabilityUnavailable ||
-    (concentrationQuery.isError && holdingsDataLikelyUnavailable(concentrationQuery.error));
+    !holdingsBackendUnavailable &&
+    concentrationQuery.isError &&
+    holdingsDataLikelyUnavailable(concentrationQuery.error);
   const concentrationMaxima = useMemo(
     () => ({
       mean_hhi: Math.max(...concentrationRows.map((row) => row.mean_hhi ?? 0), 0),
@@ -2987,9 +3036,8 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
   const isAggregateBenchmarkSelection =
     !selectedPathId &&
     !selection.selectedStrategyKey.startsWith("gpt_");
-  const holdingsUnavailable =
-    holdingsCapabilityUnavailable ||
-    (holdingsQuery.isError && holdingsDataLikelyUnavailable(holdingsQuery.error));
+  const holdingsUnavailable = holdingsViewMode === "unavailable";
+  const fallbackRows = fallbackSnapshot?.rows ?? [];
 
   return (
     <div className="space-y-4 pb-1">
@@ -3026,12 +3074,18 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
             }
           />
           <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
-            <p className="dashboard-label">Snapshot date</p>
+            <p className="dashboard-label">
+              {holdingsViewMode === "full" ? "Snapshot date" : "Snapshot scope"}
+            </p>
             <p className="mt-2 text-[13px] font-semibold text-[#404040]">
-              {selectedDate || "Auto-selecting latest"}
+              {holdingsViewMode === "full"
+                ? selectedDate || "Auto-selecting latest"
+                : selectedRun?.period || "Run-period portfolio snapshot"}
             </p>
             <p className="mt-1 text-[11px] text-[#737373]">
-              The table pages through raw holdings plus instrument metadata.
+              {holdingsViewMode === "full"
+                ? "The table pages through raw holdings plus instrument metadata."
+                : "Reduced mode comes from run-level portfolio_json rather than daily holdings rows."}
             </p>
           </div>
         </div>
@@ -3042,17 +3096,26 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
           <div>
             <p className="dashboard-label">Concentration shape</p>
             <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#737373]">
-              Full-scale concentration diagnostics for GPT portfolio configurations in{" "}
+              {holdingsBackendUnavailable
+                ? "Reduced concentration diagnostics for GPT portfolio configurations in "
+                : "Full-scale concentration diagnostics for GPT portfolio configurations in "}
               <span className="font-medium text-[#404040]">
                 {MARKET_LABELS[selection.selectedMarket] ?? selection.selectedMarket}
               </span>
-              . Each small multiple aggregates one <span className="font-mono">model x prompt</span> configuration using
-              target weights per constructed portfolio.
+              . Each small multiple aggregates one <span className="font-mono">model x prompt</span> configuration using{" "}
+              {holdingsBackendUnavailable
+                ? "period portfolio_json weights from run-results."
+                : "target weights per constructed portfolio."}
             </p>
             {concentrationSource === "fallback" && (
               <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#8b7152]">
                 Built in the browser from the legacy holdings endpoint because the backend summary route is not deployed on
                 the live API yet.
+              </p>
+            )}
+            {concentrationSource === "portfolio_json" && (
+              <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#8b7152]">
+                Built from `run-results` `portfolio_json` because this deployment does not expose `daily_holdings`.
               </p>
             )}
           </div>
@@ -3067,7 +3130,7 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
           </div>
         </div>
 
-        {concentrationQuery.isLoading ? (
+        {!holdingsBackendUnavailable && concentrationQuery.isLoading ? (
           <div className="mt-2 rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-8 text-center">
             <p className="text-[13px] font-semibold text-[#404040]">Loading concentration shape</p>
             <p className="mt-2 text-[12px] leading-5 text-[#737373]">
@@ -3098,9 +3161,15 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
           </div>
         ) : concentrationRows.length === 0 ? (
           <div className="mt-2 rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-8 text-center">
-            <p className="text-[13px] font-semibold text-[#404040]">No concentration rows for this market</p>
+            <p className="text-[13px] font-semibold text-[#404040]">
+              {holdingsBackendUnavailable
+                ? "No reduced concentration rows for this market"
+                : "No concentration rows for this market"}
+            </p>
             <p className="mt-2 text-[12px] leading-5 text-[#737373]">
-              No GPT holdings configurations were returned for the selected market.
+              {holdingsBackendUnavailable
+                ? "No run-level portfolio_json snapshots were available for the selected market."
+                : "No GPT holdings configurations were returned for the selected market."}
             </p>
           </div>
         ) : (
@@ -3266,12 +3335,83 @@ export function PortfoliosTab({ data, health }: BaseTabProps) {
         </Panel>
       )}
 
-      {holdingsQuery.isLoading ? (
+      {holdingsViewMode === "reduced" ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <KpiCard
+              label="Positions"
+              value={String(fallbackRows.length)}
+              color={COLORS.accent}
+              sub={selectedStrategy ? formatStrategyLabel(selectedStrategy.strategy, selectedStrategy.strategy_key) : "—"}
+            />
+            <KpiCard
+              label="Top Weight"
+              value={formatPctFromRatio(fallbackDailyMetrics?.top1Weight ?? fallbackSnapshot?.top1Weight, 1)}
+              color={COLORS.amber}
+              sub={fallbackDailyMetrics ? `Latest daily metric ${formatDateLabel(fallbackDailyMetrics.date)}` : "Period snapshot"}
+            />
+            <KpiCard
+              label="Concentration (HHI)"
+              value={(fallbackDailyMetrics?.driftedHhi ?? fallbackSnapshot?.hhi)?.toFixed(3) ?? "—"}
+              color={(fallbackDailyMetrics?.driftedHhi ?? fallbackSnapshot?.hhi ?? 0) > 0.15 ? COLORS.red : COLORS.green}
+              sub={fallbackDailyMetrics ? "Latest daily path metric" : "Derived from period weights"}
+            />
+            <KpiCard
+              label="Active Holdings"
+              value={
+                fallbackDailyMetrics?.activeHoldings != null
+                  ? fallbackDailyMetrics.activeHoldings.toFixed(0)
+                  : String(fallbackRows.length)
+              }
+              color={COLORS.cyan}
+              sub={fallbackDailyMetrics ? "Latest daily path metric" : "Period snapshot count"}
+            />
+          </div>
+
+          <Panel>
+            <p className="dashboard-label">Reduced period portfolio snapshot</p>
+            <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#737373]">
+              This deployment does not expose `daily_holdings`, so the table below is reconstructed from the selected
+              run&apos;s `portfolio_json`. Daily breadth and concentration use `charts/equity` when available.
+            </p>
+            <p className="mt-2 max-w-3xl text-[11px] leading-5 text-[#8b7152]">
+              Instrument names, sectors, daily contribution, and factor labels remain unavailable in reduced mode.
+            </p>
+          </Panel>
+
+          <Panel className="overflow-x-auto p-0">
+            <table className="w-full min-w-[640px] text-[11px]">
+              <thead>
+                <tr className="border-b border-[#ececec] bg-[#fafafa]">
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Rank</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Ticker</th>
+                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Weight</th>
+                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Available detail</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fallbackRows.map((holding) => (
+                  <tr key={`${holding.run_id ?? holding.path_id ?? "snapshot"}-${holding.ticker}`} className="border-b border-[#ececec] last:border-0">
+                    <td className="px-3 py-2.5 text-[#737373]">{holding.rank}</td>
+                    <td className="px-3 py-2.5 font-medium text-[#404040]">{holding.ticker}</td>
+                    <td className="px-3 py-2.5 text-right text-[#737373]">{formatPctFromRatio(holding.weight, 1)}</td>
+                    <td className="px-3 py-2.5 text-[#737373]">Weight only</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        </>
+      ) : holdingsQuery.isLoading ? (
         <LoadingState title="Loading holdings snapshot" />
       ) : holdingsUnavailable ? (
         <EmptyState
           title="Holdings snapshots are unavailable"
-          body="The connected backend is using a SQLite file that does not expose the daily_holdings table, so this deployment cannot show portfolio snapshot rows yet. The rest of the dashboard can still load from summary data."
+          body={
+            isAggregateBenchmarkSelection
+              ? "This selection is using an aggregate benchmark view rather than a concrete GPT path, so there is no run-level portfolio_json snapshot to fall back to. Pick a GPT strategy or a specific path to inspect holdings."
+              : "The connected backend does not expose daily_holdings, and the selected run did not include a usable portfolio_json snapshot."
+          }
         />
       ) : holdingsQuery.isError ? (
         <EmptyState
@@ -4139,10 +4279,10 @@ export function RunExplorerTab({ data, runs, health }: BaseTabProps) {
                       !pathIdForCharts
                         ? "Needs path_id on this run"
                         : holdingsCapabilityUnavailable
-                          ? "Holdings snapshots unavailable on this deployment"
+                          ? "Full holdings rows unavailable; use Holdings tab for reduced snapshot"
                           : runHoldingsQuery.isError
                           ? holdingsDataLikelyUnavailable(runHoldingsQuery.error)
-                            ? "Holdings snapshots unavailable on this deployment"
+                            ? "Full holdings rows unavailable; use Holdings tab for reduced snapshot"
                             : "Could not load holdings"
                           : runHoldingsWeightTotals
                             ? `Latest snapshot ${formatDateLabel(runHoldingsWeightTotals.latestDate)} · ${runHoldingsWeightTotals.positionCount} line${runHoldingsWeightTotals.positionCount === 1 ? "" : "s"}${runHoldingsWeightTotals.multiPage ? " (holdings are paginated — totals use loaded rows only)" : ""}`
@@ -7254,7 +7394,7 @@ export function BehaviorTab({ data, runs, health }: BaseTabProps) {
               </p>
               <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#737373]">
                 {behaviorHoldingsUnavailable
-                  ? "The connected backend is using a SQLite file without the daily_holdings table, so sector concentration and stock-selection frequency cannot be computed here yet."
+                  ? "The connected backend is using a SQLite file without the daily_holdings table, so sector concentration and stock-selection frequency cannot be computed here yet. The reduced Holdings tab fallback does not include the per-ticker metadata this view needs."
                   : behaviorHoldingsQuery.error instanceof Error
                     ? behaviorHoldingsQuery.error.message
                     : "The holdings-backed behavior summary request failed."}
