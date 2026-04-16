@@ -7782,14 +7782,14 @@ const SUBTAB_BUTTON_INACTIVE =
   "border-[#ececec] bg-[#fafafa] text-[#6d655c] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] hover:bg-[rgba(244,239,231,0.98)] hover:text-[#453f39]";
 
 export function PathsTab({ data, runs }: BaseTabProps) {
-  const [activeSection, setActiveSection] = useState<"equity" | "robustness" | "drawdowns" | "holdings" | "runs">("equity");
+  const [activeSection, setActiveSection] = useState<"equity" | "robustness" | "drawdowns" | "runs">("equity");
 
   return (
     <div className="space-y-4 pb-1">
       <Panel className="border border-[#ececec] bg-[#fafafa]">
         <p className="text-[12px] leading-5 text-[#737373]">
-          This path-analysis lane starts with the typical strategy path, then lets you drill into drawdowns, holdings,
-          and individual runs without leaving the same top-level view.
+          This path-analysis lane starts with the typical strategy path, then lets you drill into robustness,
+          drawdowns, and individual runs without leaving the same top-level view.
         </p>
       </Panel>
 
@@ -7799,7 +7799,6 @@ export function PathsTab({ data, runs }: BaseTabProps) {
             { key: "equity", label: "Equity & Factors" },
             { key: "robustness", label: "Robustness" },
             { key: "drawdowns", label: "Drawdowns" },
-            { key: "holdings", label: "Holdings" },
             { key: "runs", label: "Run Explorer" },
           ].map((section) => (
             <button
@@ -7819,7 +7818,6 @@ export function PathsTab({ data, runs }: BaseTabProps) {
       {activeSection === "equity" && <EquityCurvesTab data={data} runs={runs} />}
       {activeSection === "robustness" && <RollingRiskTab data={data} runs={runs} />}
       {activeSection === "drawdowns" && <DrawdownsTab data={data} runs={runs} />}
-      {activeSection === "holdings" && <PortfoliosTab data={data} runs={runs} />}
       {activeSection === "runs" && <RunExplorerTab data={data} runs={runs} />}
     </div>
   );

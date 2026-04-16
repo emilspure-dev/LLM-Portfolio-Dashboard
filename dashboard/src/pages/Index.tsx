@@ -7,6 +7,7 @@ import {
   ByMarketTab,
   FactorStyleTab,
   PathsTab,
+  PortfoliosTab,
   RegimesTab,
   StrategiesTab,
 } from "@/components/dashboard/DetailTabs";
@@ -26,6 +27,7 @@ const TAB_NAMES = [
   "Performance",
   "Factor Style",
   "Paths",
+  "Holdings",
   "Markets",
   "Regimes",
   "Behavior",
@@ -335,15 +337,18 @@ export default function Index() {
                 <PathsTab data={visibleData} runs={allRuns} />
               )}
               {activeTab === 4 && (
-                <ByMarketTab data={visibleData} runs={allRuns} />
+                <PortfoliosTab data={visibleData} runs={allRuns} />
               )}
               {activeTab === 5 && (
-                <RegimesTab data={visibleData} runs={allRuns} />
+                <ByMarketTab data={visibleData} runs={allRuns} />
               )}
               {activeTab === 6 && (
-                <BehaviorTab data={visibleData} runs={allRuns} />
+                <RegimesTab data={visibleData} runs={allRuns} />
               )}
               {activeTab === 7 && (
+                <BehaviorTab data={visibleData} runs={allRuns} />
+              )}
+              {activeTab === 8 && (
                 <DiagnosticsTab data={visibleData} runs={allRuns} />
               )}
             </div>
