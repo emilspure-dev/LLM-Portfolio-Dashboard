@@ -543,6 +543,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                       stroke="#111111"
                       strokeOpacity={0.5}
                       strokeWidth={1.2}
+                      strokeDasharray="4 4"
                       label={{
                         value: "Rebalance",
                         position: "top",
