@@ -448,6 +448,27 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     return snappedMarkers;
   }, [cumulativeReturnChart.chartRows, data.periods]);
 
+  const rebalanceLineRange = useMemo(() => {
+    const values = cumulativeReturnChart.chartRows.flatMap((row) =>
+      cumulativeReturnChart.series
+        .map((series) => row[series.key])
+        .filter((value): value is number => typeof value === "number" && Number.isFinite(value))
+    );
+
+    if (!values.length) {
+      return null;
+    }
+
+    const domainMin = cumulativeReturnAxisDomain?.[0] ?? Math.min(...values);
+    const domainMax = cumulativeReturnAxisDomain?.[1] ?? Math.max(...values);
+    const span = Math.max(domainMax - domainMin, 0.05);
+
+    return {
+      top: domainMax - Math.max(span * 0.14, 0.04),
+      bottom: domainMin,
+    };
+  }, [cumulativeReturnAxisDomain, cumulativeReturnChart]);
+
   return (
     <div className="space-y-4 pb-1">
       <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
@@ -458,7 +479,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
               Mean cumulative return on common dates with full market and path coverage,
               aggregated to one line per strategy and weighted by path count.
               {rebalanceMarkers.length > 0
-                ? " Rebalance dates are marked by labeled vertical guides."
+                ? " Rebalance dates are marked with short black guide lines."
                 : ""}
             </p>
           </div>
@@ -479,7 +500,7 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
             <ResponsiveContainer width="100%" height={340}>
               <LineChart
                 data={cumulativeReturnChart.chartRows}
-                margin={{ top: 18, right: 16, left: 6, bottom: 8 }}
+                margin={{ top: 28, right: 16, left: 6, bottom: 8 }}
               >
                 <CartesianGrid
                   stroke="rgba(220, 213, 206, 0.7)"
@@ -511,23 +532,27 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   stroke="rgba(192, 180, 170, 0.9)"
                   strokeDasharray="3 6"
                 />
-                {rebalanceMarkers.map((markerDate) => (
-                  <ReferenceLine
-                    key={markerDate}
-                    x={markerDate}
-                    stroke="rgba(156, 142, 131, 0.42)"
-                    strokeDasharray="3 7"
-                    strokeWidth={1.2}
-                    label={{
-                      value: "R",
-                      position: "insideTop",
-                      fill: "#9a8f86",
-                      fontSize: 9,
-                      fontWeight: 600,
-                      offset: 6,
-                    }}
-                  />
-                ))}
+                {rebalanceLineRange != null &&
+                  rebalanceMarkers.map((markerDate) => (
+                    <ReferenceLine
+                      key={markerDate}
+                      segment={[
+                        { x: markerDate, y: rebalanceLineRange.top },
+                        { x: markerDate, y: rebalanceLineRange.bottom },
+                      ]}
+                      stroke="#111111"
+                      strokeOpacity={0.5}
+                      strokeWidth={1.2}
+                      label={{
+                        value: "Rebalance",
+                        position: "top",
+                        fill: "#111111",
+                        fontSize: 9,
+                        fontWeight: 500,
+                        offset: 4,
+                      }}
+                    />
+                  ))}
                 {cumulativeReturnChart.series.map((series) => (
                   <Line
                     key={series.key}
