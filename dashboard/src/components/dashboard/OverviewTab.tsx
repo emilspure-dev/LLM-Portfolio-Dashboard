@@ -53,6 +53,19 @@ function formatReturnPercent(value: number | string | null | undefined, decimals
   return `${(numericValue * 100).toFixed(decimals)}%`;
 }
 
+function normalizeIsoDate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = String(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.slice(0, 10);
+}
+
 interface ChartTooltipItem {
   color?: string;
   name?: string;
@@ -406,6 +419,42 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     return [minValue - padding, maxValue + padding];
   }, [cumulativeReturnChart]);
 
+  const rebalanceMarkers = useMemo(() => {
+    const chartDates = cumulativeReturnChart.chartRows
+      .map((row) => normalizeIsoDate(String(row.date ?? "")))
+      .filter((value): value is string => Boolean(value));
+
+    if (chartDates.length === 0 || (data.periods?.length ?? 0) <= 1) {
+      return [] as string[];
+    }
+
+    const uniqueChartDates = Array.from(new Set(chartDates)).sort((left, right) =>
+      left.localeCompare(right)
+    );
+
+    const uniquePeriodStarts = Array.from(
+      new Set(
+        (data.periods ?? [])
+          .map((period) => normalizeIsoDate(period.period_start_date))
+          .filter((value): value is string => Boolean(value))
+      )
+    ).sort((left, right) => left.localeCompare(right));
+
+    const snappedMarkers: string[] = [];
+    for (const rawDate of uniquePeriodStarts.slice(1)) {
+      const snappedDate = uniqueChartDates.find((candidate) => candidate >= rawDate);
+      if (!snappedDate) {
+        continue;
+      }
+      if (snappedMarkers[snappedMarkers.length - 1] === snappedDate) {
+        continue;
+      }
+      snappedMarkers.push(snappedDate);
+    }
+
+    return snappedMarkers;
+  }, [cumulativeReturnChart.chartRows, data.periods]);
+
   return (
     <div className="space-y-4 pb-1">
       <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
@@ -415,6 +464,9 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
             <p className="mt-1 max-w-3xl text-[12px] leading-5 text-[#8f8780]">
               Mean cumulative return on common dates with full market and path coverage,
               aggregated to one line per strategy and weighted by path count.
+              {rebalanceMarkers.length > 0
+                ? " Faint vertical guides indicate rebalance dates."
+                : ""}
             </p>
           </div>
           <FigureExportControls
@@ -466,6 +518,15 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
                   stroke="rgba(192, 180, 170, 0.9)"
                   strokeDasharray="3 6"
                 />
+                {rebalanceMarkers.map((markerDate) => (
+                  <ReferenceLine
+                    key={markerDate}
+                    x={markerDate}
+                    stroke="rgba(162, 150, 140, 0.26)"
+                    strokeDasharray="2 10"
+                    strokeWidth={1}
+                  />
+                ))}
                 {cumulativeReturnChart.series.map((series) => (
                   <Line
                     key={series.key}
