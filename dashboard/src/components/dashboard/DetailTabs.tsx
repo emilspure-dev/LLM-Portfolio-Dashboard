@@ -6079,7 +6079,6 @@ export function BehaviorTab({ data, runs, health }: BaseTabProps) {
   const [reasoningPromptFilter, setReasoningPromptFilter] = useState<"all" | "simple" | "advanced">("all");
   const [reasoningSearch, setReasoningSearch] = useState("");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [showModelComparisonAnomalies, setShowModelComparisonAnomalies] = useState(false);
   const behaviorDiversificationRef = useRef<HTMLDivElement>(null);
   const behaviorForecastRef = useRef<HTMLDivElement>(null);
   const behaviorModelReturnRef = useRef<HTMLDivElement>(null);
@@ -6098,8 +6097,6 @@ export function BehaviorTab({ data, runs, health }: BaseTabProps) {
   }));
 
   const modelComparisonData = useMemo(() => {
-    const SHARPE_ANOMALY_MAX_ABS = 0.05;
-    const RETURN_ANOMALY_MIN_ABS_PCT = 20;
     const points = runs
       .filter((run) => {
         const prompt = String(run.prompt_type ?? "");
@@ -6111,18 +6108,11 @@ export function BehaviorTab({ data, runs, health }: BaseTabProps) {
         const sharpe = asNumber(run.sharpe_ratio);
         const returnRatio = asNumber(run.period_return ?? run.net_return ?? run.period_return_net);
         const hhi = asNumber(run.hhi);
-        const returnPct = returnRatio != null ? returnRatio * 100 : null;
-        const isSharpeReturnAnomaly =
-          sharpe != null &&
-          returnPct != null &&
-          Math.abs(sharpe) < SHARPE_ANOMALY_MAX_ABS &&
-          Math.abs(returnPct) >= RETURN_ANOMALY_MIN_ABS_PCT;
         return {
           model,
           sharpe,
-          returnPct,
+          returnPct: returnRatio != null ? returnRatio * 100 : null,
           hhi,
-          isSharpeReturnAnomaly,
           marketKey: run.market ?? "unknown",
           promptLabel:
             run.prompt_type === "advanced"
@@ -6149,16 +6139,6 @@ export function BehaviorTab({ data, runs, health }: BaseTabProps) {
       models.map((model, index) => [model, MODEL_SCATTER_COLORS[index % MODEL_SCATTER_COLORS.length]])
     );
 
-    const anomalyPoints = points.filter((point) => point.isSharpeReturnAnomaly);
-    const anomalyCountsByModel = Array.from(
-      anomalyPoints.reduce((map, point) => {
-        map.set(point.model, (map.get(point.model) ?? 0) + 1);
-        return map;
-      }, new Map<string, number>())
-    )
-      .sort((left, right) => right[1] - left[1])
-      .map(([model, count]) => ({ model, count }));
-
     const returnPoints = points
       .filter((point) => point.sharpe != null && point.returnPct != null)
       .map((point) => ({
@@ -6182,8 +6162,6 @@ export function BehaviorTab({ data, runs, health }: BaseTabProps) {
     return {
       models,
       colorMap,
-      anomalyPoints,
-      anomalyCountsByModel,
       returnPoints,
       hhiPoints,
     };
@@ -6240,35 +6218,16 @@ export function BehaviorTab({ data, runs, health }: BaseTabProps) {
     const filterFn = <T extends { marketKey: string }>(point: T) =>
       modelMarketFilter === "All" || point.marketKey === modelMarketFilter;
 
-    const anomalyFilter = <T extends { isSharpeReturnAnomaly?: boolean }>(point: T) =>
-      showModelComparisonAnomalies || !point.isSharpeReturnAnomaly;
-
-    const returnPoints = modelComparisonData.returnPoints
-      .filter(filterFn)
-      .filter(anomalyFilter);
-    const hhiPoints = modelComparisonData.hhiPoints
-      .filter(filterFn)
-      .filter(anomalyFilter);
-    const hiddenAnomalyPoints = modelComparisonData.anomalyPoints.filter(filterFn);
-    const hiddenAnomalyCountsByModel = Array.from(
-      hiddenAnomalyPoints.reduce((map, point) => {
-        map.set(point.model, (map.get(point.model) ?? 0) + 1);
-        return map;
-      }, new Map<string, number>())
-    )
-      .sort((left, right) => right[1] - left[1])
-      .map(([model, count]) => ({ model, count }));
-
+    const returnPoints = modelComparisonData.returnPoints.filter(filterFn);
+    const hhiPoints = modelComparisonData.hhiPoints.filter(filterFn);
     if (returnPoints.length === 0 && hhiPoints.length === 0) return null;
 
     return {
       ...modelComparisonData,
-      hiddenAnomalyPoints,
-      hiddenAnomalyCountsByModel,
       returnPoints,
       hhiPoints,
     };
-  }, [modelComparisonData, modelMarketFilter, showModelComparisonAnomalies]);
+  }, [modelComparisonData, modelMarketFilter]);
 
   const modelMarketReference = useMemo(
     () => computeMarketIndexReference(runs, data.summary_rows, modelMarketFilter, "All"),
@@ -6725,16 +6684,6 @@ export function BehaviorTab({ data, runs, health }: BaseTabProps) {
                       GPT runs only. Filter by market and compare each model against the selected market's
                       benchmark Sharpe line.
                     </p>
-                    {filteredModelComparisonData.hiddenAnomalyPoints.length > 0 && (
-                      <p className="mt-2 text-[11px] leading-5 text-[#8b7152]">
-                        {showModelComparisonAnomalies
-                          ? `Showing ${filteredModelComparisonData.hiddenAnomalyPoints.length} raw run rows with near-zero Sharpe and large absolute returns from the source metrics.`
-                          : `Hiding ${filteredModelComparisonData.hiddenAnomalyPoints.length} run rows with |Sharpe| < 0.05 and |return| >= 20% to keep the scatter readable. Most are ${filteredModelComparisonData.hiddenAnomalyCountsByModel
-                              .slice(0, 2)
-                              .map((entry) => `${entry.model} (${entry.count})`)
-                              .join(", ")}.`}
-                      </p>
-                    )}
                   </div>
                   <div className="min-w-[220px]">
                     <FilterSelect
@@ -6744,15 +6693,6 @@ export function BehaviorTab({ data, runs, health }: BaseTabProps) {
                       options={modelMarketOptions}
                     />
                   </div>
-                  {filteredModelComparisonData.hiddenAnomalyPoints.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowModelComparisonAnomalies((value) => !value)}
-                      className="rounded-none border border-[#d7d0c8] bg-white px-3 py-2 text-[11px] font-medium text-[#5c534c] transition-colors hover:bg-[#f8f4ee]"
-                    >
-                      {showModelComparisonAnomalies ? "Hide raw anomalies" : "Show raw anomalies"}
-                    </button>
-                  )}
                 </div>
               </Panel>
 
