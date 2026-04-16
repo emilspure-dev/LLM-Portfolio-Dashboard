@@ -5,6 +5,7 @@ import { SQLITE_DB_PATH } from "./config.mjs";
 let database;
 let schemaVersionCache;
 const tableColumnsCache = new Map();
+const tableExistsCache = new Map();
 
 function normalizeRow(row) {
   return row ? Object.fromEntries(Object.entries(row)) : null;
@@ -113,6 +114,19 @@ export function getTableColumns(tableName) {
   return columns;
 }
 
+export function tableExists(tableName) {
+  const normalizedTable = assertSafeIdentifier(tableName);
+
+  if (tableExistsCache.has(normalizedTable)) {
+    return tableExistsCache.get(normalizedTable);
+  }
+
+  const exists = tableExistsInDatabase(openDatabase(), normalizedTable);
+
+  tableExistsCache.set(normalizedTable, exists);
+  return exists;
+}
+
 export function openWritableDatabase(databasePath = SQLITE_DB_PATH) {
   return openDatabaseAt(databasePath, { readOnly: false, queryOnly: false });
 }
@@ -131,6 +145,19 @@ export function getTableColumnsFromDatabase(db, tableName) {
   return rowsToValues(rows.map((row) => normalizeRow(row)), "name");
 }
 
+export function tableExistsInDatabase(db, tableName) {
+  const normalizedTable = assertSafeIdentifier(tableName);
+  return Boolean(
+    db.prepare(`
+      SELECT 1 AS table_exists
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name = :table_name
+      LIMIT 1
+    `).get({ table_name: normalizedTable })?.table_exists
+  );
+}
+
 export function closeDatabase() {
   if (!database) {
     return;
@@ -140,6 +167,7 @@ export function closeDatabase() {
   database = undefined;
   schemaVersionCache = undefined;
   tableColumnsCache.clear();
+  tableExistsCache.clear();
 }
 
 function rowsToValues(rows, key) {

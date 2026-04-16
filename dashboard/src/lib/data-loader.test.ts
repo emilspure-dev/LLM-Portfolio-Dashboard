@@ -15,6 +15,7 @@ vi.mock("./api-client", () => ({
 import {
   fetchAllRunResults,
   fetchEvaluationData,
+  holdingsDataLikelyUnavailable,
 } from "./data-loader";
 import * as apiClient from "./api-client";
 
@@ -109,5 +110,10 @@ describe("data-loader", () => {
       { run_id: "run-2" },
       { run_id: "run-3" },
     ]);
+  });
+
+  it("detects missing daily_holdings table errors", () => {
+    expect(holdingsDataLikelyUnavailable(new Error("SQLITE_ERROR: no such table: daily_holdings"))).toBe(true);
+    expect(holdingsDataLikelyUnavailable(new Error("Request failed with status 500"))).toBe(false);
   });
 });

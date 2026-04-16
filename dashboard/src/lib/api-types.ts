@@ -5,6 +5,8 @@ export interface HealthResponse {
   /** Present on newer APIs; false means the VPS process is an older build (restart after git pull). */
   routes?: {
     factor_style: boolean;
+    /** False when the connected SQLite file does not expose `daily_holdings`. */
+    holdings?: boolean;
     /** True when OPENAI_API_KEY is set (POST /api/ai/factor-style-analysis available). */
     ai_factor_style?: boolean;
   };

@@ -49,6 +49,7 @@ import {
   collectPathIdsForStrategyMarket,
   getRunModelFallbackKey,
   getRunModelGroupKey,
+  holdingsDataLikelyUnavailable,
   ljungBoxStatistic,
   mapInBatches,
   rollingMetricSeries,
@@ -65,6 +66,7 @@ import {
 } from "@/lib/constants";
 import type {
   FactorExposureRow,
+  HealthResponse,
   HoldingDailyRow,
   HoldingsConcentrationRow,
   RegimeRow,
@@ -80,6 +82,7 @@ import { SharpeGapDiagnostic } from "./OverviewTab";
 interface BaseTabProps {
   data: EvaluationData;
   runs: RunRow[];
+  health?: HealthResponse;
 }
 
 interface SelectionState {
@@ -2764,12 +2767,13 @@ export function EquityCurvesTab({ data }: BaseTabProps) {
   );
 }
 
-export function PortfoliosTab({ data }: BaseTabProps) {
+export function PortfoliosTab({ data, health }: BaseTabProps) {
   const selection = useDailySelection(data);
   const [selectedPathId, setSelectedPathId] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [page, setPage] = useState(1);
   const preferredStrategyAutoAppliedForMarketRef = useRef<string | null>(null);
+  const holdingsCapabilityUnavailable = health?.routes?.holdings === false;
 
   const pathOptions = useMemo(() => {
     const seen = new Map<string, { value: string; label: string }>();
@@ -2838,7 +2842,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
         };
       }
     },
-    enabled: Boolean(data.active_experiment_id && selection.selectedMarket),
+    enabled: Boolean(data.active_experiment_id && selection.selectedMarket && !holdingsCapabilityUnavailable),
     staleTime: 60_000,
   });
 
@@ -2902,7 +2906,8 @@ export function PortfoliosTab({ data }: BaseTabProps) {
     enabled: Boolean(
       selection.selectedMarket &&
         selection.selectedStrategyKey &&
-        (pathOptions.length === 0 || Boolean(selectedPathId))
+        (pathOptions.length === 0 || Boolean(selectedPathId)) &&
+        !holdingsCapabilityUnavailable
     ),
     staleTime: 60_000,
   });
@@ -2966,6 +2971,9 @@ export function PortfoliosTab({ data }: BaseTabProps) {
   const sectors = uniqueStrings(holdings.map((holding) => holding.sector));
   const concentrationRows = concentrationQuery.data?.rows ?? [];
   const concentrationSource = concentrationQuery.data?.source ?? "api";
+  const concentrationUnavailable =
+    holdingsCapabilityUnavailable ||
+    (concentrationQuery.isError && holdingsDataLikelyUnavailable(concentrationQuery.error));
   const concentrationMaxima = useMemo(
     () => ({
       mean_hhi: Math.max(...concentrationRows.map((row) => row.mean_hhi ?? 0), 0),
@@ -2979,6 +2987,9 @@ export function PortfoliosTab({ data }: BaseTabProps) {
   const isAggregateBenchmarkSelection =
     !selectedPathId &&
     !selection.selectedStrategyKey.startsWith("gpt_");
+  const holdingsUnavailable =
+    holdingsCapabilityUnavailable ||
+    (holdingsQuery.isError && holdingsDataLikelyUnavailable(holdingsQuery.error));
 
   return (
     <div className="space-y-4 pb-1">
@@ -3061,6 +3072,17 @@ export function PortfoliosTab({ data }: BaseTabProps) {
             <p className="text-[13px] font-semibold text-[#404040]">Loading concentration shape</p>
             <p className="mt-2 text-[12px] leading-5 text-[#737373]">
               Summarizing HHI, effective breadth, Gini, and top-weight share across all GPT configurations.
+            </p>
+          </div>
+        ) : concentrationUnavailable ? (
+          <div className="mt-2 rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-8 text-center">
+            <p className="text-[13px] font-semibold text-[#404040]">
+              Holdings snapshots are unavailable on this deployment
+            </p>
+            <p className="mt-2 text-[12px] leading-5 text-[#737373]">
+              The connected backend is running against a SQLite file without the
+              <span className="mx-1 font-mono text-[#525252]">daily_holdings</span>
+              table, so concentration shape cannot be computed here yet.
             </p>
           </div>
         ) : concentrationQuery.error ? (
@@ -3246,6 +3268,20 @@ export function PortfoliosTab({ data }: BaseTabProps) {
 
       {holdingsQuery.isLoading ? (
         <LoadingState title="Loading holdings snapshot" />
+      ) : holdingsUnavailable ? (
+        <EmptyState
+          title="Holdings snapshots are unavailable"
+          body="The connected backend is using a SQLite file that does not expose the daily_holdings table, so this deployment cannot show portfolio snapshot rows yet. The rest of the dashboard can still load from summary data."
+        />
+      ) : holdingsQuery.isError ? (
+        <EmptyState
+          title="Unable to load holdings snapshot"
+          body={
+            holdingsQuery.error instanceof Error
+              ? holdingsQuery.error.message
+              : "The holdings snapshot request failed."
+          }
+        />
       ) : holdings.length === 0 ? (
         <EmptyState
           title="No holdings available"
@@ -3357,7 +3393,7 @@ export function PortfoliosTab({ data }: BaseTabProps) {
   );
 }
 
-export function RunExplorerTab({ data, runs }: BaseTabProps) {
+export function RunExplorerTab({ data, runs, health }: BaseTabProps) {
   const allMarkets = useMemo(() => getMarketOptions(data), [data]);
 
   // Portfolio options derive from strategy_key for consistent naming across tabs
@@ -3440,6 +3476,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
     selectedRun?.path_id != null && String(selectedRun.path_id).length > 0
       ? String(selectedRun.path_id)
       : null;
+  const holdingsCapabilityUnavailable = health?.routes?.holdings === false;
 
   const runEquityQuery = useQuery({
     queryKey: ["run-explorer-equity", data.active_experiment_id, pathIdForCharts],
@@ -3472,7 +3509,7 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
         page: 1,
         page_size: 500,
       }),
-    enabled: Boolean(data.active_experiment_id && pathIdForCharts),
+    enabled: Boolean(data.active_experiment_id && pathIdForCharts && !holdingsCapabilityUnavailable),
     staleTime: 60_000,
   });
 
@@ -4101,8 +4138,12 @@ export function RunExplorerTab({ data, runs }: BaseTabProps) {
                     sub={
                       !pathIdForCharts
                         ? "Needs path_id on this run"
-                        : runHoldingsQuery.isError
-                          ? "Could not load holdings"
+                        : holdingsCapabilityUnavailable
+                          ? "Holdings snapshots unavailable on this deployment"
+                          : runHoldingsQuery.isError
+                          ? holdingsDataLikelyUnavailable(runHoldingsQuery.error)
+                            ? "Holdings snapshots unavailable on this deployment"
+                            : "Could not load holdings"
                           : runHoldingsWeightTotals
                             ? `Latest snapshot ${formatDateLabel(runHoldingsWeightTotals.latestDate)} · ${runHoldingsWeightTotals.positionCount} line${runHoldingsWeightTotals.positionCount === 1 ? "" : "s"}${runHoldingsWeightTotals.multiPage ? " (holdings are paginated — totals use loaded rows only)" : ""}`
                             : "No holdings rows for this path"
@@ -6031,10 +6072,11 @@ export function StatisticalTestsTab({ data, runs }: BaseTabProps) {
   );
 }
 
-export function BehaviorTab({ data, runs }: BaseTabProps) {
+export function BehaviorTab({ data, runs, health }: BaseTabProps) {
   const rows = data.behavior;
   const [modelMarketFilter, setModelMarketFilter] = useState("All");
   const [behaviorModelFilter, setBehaviorModelFilter] = useState("All");
+  const holdingsCapabilityUnavailable = health?.routes?.holdings === false;
   const [reasoningPromptFilter, setReasoningPromptFilter] = useState<"all" | "simple" | "advanced">("all");
   const [reasoningSearch, setReasoningSearch] = useState("");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -6355,7 +6397,7 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
         return buildBehaviorHoldingsSummaryFallback(holdingsRows, runRows);
       }
     },
-    enabled: Boolean(data.active_experiment_id),
+    enabled: Boolean(data.active_experiment_id && !holdingsCapabilityUnavailable),
     staleTime: 60_000,
   });
   const sectorConcentrationRows = useMemo(
@@ -6399,6 +6441,9 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
   const assetFrequencyRows = useMemo(() => {
     return assetSelectionMatrix.rows.slice(0, 15);
   }, [assetSelectionMatrix]);
+  const behaviorHoldingsUnavailable =
+    holdingsCapabilityUnavailable ||
+    (behaviorHoldingsQuery.isError && holdingsDataLikelyUnavailable(behaviorHoldingsQuery.error));
 
   // Compute post-loss runs: for each (strategy, market, model, prompt_type) group sorted by
   // period, find runs where the immediately preceding period had a negative return.
@@ -7196,6 +7241,24 @@ export function BehaviorTab({ data, runs }: BaseTabProps) {
                   ))}
                 </tbody>
               </table>
+            </Panel>
+          )}
+
+          {(behaviorHoldingsQuery.isError || behaviorHoldingsUnavailable) && (
+            <Panel>
+              <p className="dashboard-label">Holdings-backed behavior views</p>
+              <p className="mt-2 text-[13px] font-semibold text-[#404040]">
+                {behaviorHoldingsUnavailable
+                  ? "Holdings-backed behavior views are unavailable on this deployment"
+                  : "Unable to load holdings-backed behavior views"}
+              </p>
+              <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#737373]">
+                {behaviorHoldingsUnavailable
+                  ? "The connected backend is using a SQLite file without the daily_holdings table, so sector concentration and stock-selection frequency cannot be computed here yet."
+                  : behaviorHoldingsQuery.error instanceof Error
+                    ? behaviorHoldingsQuery.error.message
+                    : "The holdings-backed behavior summary request failed."}
+              </p>
             </Panel>
           )}
 
@@ -8258,7 +8321,7 @@ const SUBTAB_BUTTON_ACTIVE =
 const SUBTAB_BUTTON_INACTIVE =
   "border-[#ececec] bg-[#fafafa] text-[#6d655c] shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] hover:bg-[rgba(244,239,231,0.98)] hover:text-[#453f39]";
 
-export function PathsTab({ data, runs }: BaseTabProps) {
+export function PathsTab({ data, runs, health }: BaseTabProps) {
   const [activeSection, setActiveSection] = useState<"equity" | "robustness" | "drawdowns" | "runs">("equity");
 
   return (
@@ -8295,7 +8358,7 @@ export function PathsTab({ data, runs }: BaseTabProps) {
       {activeSection === "equity" && <EquityCurvesTab data={data} runs={runs} />}
       {activeSection === "robustness" && <RollingRiskTab data={data} runs={runs} />}
       {activeSection === "drawdowns" && <DrawdownsTab data={data} runs={runs} />}
-      {activeSection === "runs" && <RunExplorerTab data={data} runs={runs} />}
+      {activeSection === "runs" && <RunExplorerTab data={data} runs={runs} health={health} />}
     </div>
   );
 }

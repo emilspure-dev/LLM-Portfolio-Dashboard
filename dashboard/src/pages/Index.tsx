@@ -331,13 +331,13 @@ export default function Index() {
                 <StrategiesTab data={visibleData} runs={allRuns} />
               )}
               {activeTab === 2 && (
-                <FactorStyleTab data={visibleData} />
+                <FactorStyleTab data={visibleData} health={healthQuery.data} />
               )}
               {activeTab === 3 && (
-                <PathsTab data={visibleData} runs={allRuns} />
+                <PathsTab data={visibleData} runs={allRuns} health={healthQuery.data} />
               )}
               {activeTab === 4 && (
-                <PortfoliosTab data={visibleData} runs={allRuns} />
+                <PortfoliosTab data={visibleData} runs={allRuns} health={healthQuery.data} />
               )}
               {activeTab === 5 && (
                 <ByMarketTab data={visibleData} runs={allRuns} />
@@ -346,7 +346,7 @@ export default function Index() {
                 <RegimesTab data={visibleData} runs={allRuns} />
               )}
               {activeTab === 7 && (
-                <BehaviorTab data={visibleData} runs={allRuns} />
+                <BehaviorTab data={visibleData} runs={allRuns} health={healthQuery.data} />
               )}
               {activeTab === 8 && (
                 <DiagnosticsTab data={visibleData} runs={allRuns} />

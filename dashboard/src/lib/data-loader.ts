@@ -126,6 +126,16 @@ export function apiRouteLikelyMissing(err: unknown): boolean {
   );
 }
 
+export function holdingsDataLikelyUnavailable(err: unknown): boolean {
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    message.includes("no such table: daily_holdings") ||
+    message.includes("no such table daily_holdings") ||
+    message.includes("daily_holdings")
+      && (message.includes("sqlite") || message.includes("no such table"))
+  );
+}
+
 function getReturnCol(row: RunRow): number | null {
   return row.period_return ?? row.net_return ?? row.period_return_net ?? null;
 }

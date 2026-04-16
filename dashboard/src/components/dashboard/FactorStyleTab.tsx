@@ -21,9 +21,9 @@ import {
   getFactorSelectionSummary,
   postFactorStyleAnalysis,
 } from "@/lib/api-client";
-import { apiRouteLikelyMissing } from "@/lib/data-loader";
+import { apiRouteLikelyMissing, holdingsDataLikelyUnavailable } from "@/lib/data-loader";
 import { FACTOR_DEFINITIONS_BLURB, STRATEGY_GLOSSARY } from "@/lib/strategy-factor-glossary";
-import type { FactorStyleSummaryRow, HoldingDailyRow } from "@/lib/api-types";
+import type { FactorStyleSummaryRow, HealthResponse, HoldingDailyRow } from "@/lib/api-types";
 import type { EvaluationData } from "@/lib/types";
 
 const FACTOR_STYLE_ORDER = [
@@ -62,6 +62,7 @@ const tooltipStyle = {
 
 interface FactorStyleTabProps {
   data: EvaluationData;
+  health?: HealthResponse;
 }
 
 type GptStrategyKey = (typeof GPT_STRATEGY_KEYS)[number];
@@ -607,12 +608,13 @@ function FactorStyleAiSection({
   );
 }
 
-export function FactorStyleTab({ data }: FactorStyleTabProps) {
+export function FactorStyleTab({ data, health }: FactorStyleTabProps) {
   const allMarkets: string[] = data.filters?.markets ?? [];
   const [marketFilter, setMarketFilter] = useState("All");
   const [factorFilter, setFactorFilter] = useState<SelectionFactorKey>("value");
   const countSummaryRef = useRef<HTMLDivElement>(null);
   const runMixRef = useRef<HTMLDivElement>(null);
+  const holdingsCapabilityUnavailable = health?.routes?.holdings === false;
 
   const factorStyleFiltered = useMemo(() => {
     const rows = data.factor_style_rows ?? [];
@@ -696,7 +698,7 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
         };
       }
     },
-    enabled: Boolean(data.active_experiment_id),
+    enabled: Boolean(data.active_experiment_id && !holdingsCapabilityUnavailable),
     staleTime: 60_000,
   });
 
@@ -792,6 +794,14 @@ export function FactorStyleTab({ data }: FactorStyleTabProps) {
             type="info"
             title="Loading prompt selection counts"
             body="Fetching compact selection summaries so the page can count how each prompt selects names across factor buckets."
+          />
+        </div>
+      ) : holdingsCapabilityUnavailable || holdingsDataLikelyUnavailable(selectionSummaryQuery.error) ? (
+        <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
+          <InsightCard
+            type="warn"
+            title="Holdings-backed factor selection is unavailable"
+            body="The connected backend is using a SQLite file without the daily_holdings table, so prompt-level stock-selection views cannot be computed on this deployment yet."
           />
         </div>
       ) : selectionSummaryQuery.error ? (

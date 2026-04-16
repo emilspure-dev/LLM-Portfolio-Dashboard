@@ -14,6 +14,7 @@ import {
   getTableColumns,
   queryAll,
   queryGet,
+  tableExists,
 } from "./db.mjs";
 import {
   addDateRangeFilter,
@@ -2043,10 +2044,15 @@ const server = http.createServer((request, response) => {
 
       let payload = handler({ request, response, url });
       if (url.pathname === "/api/health" && payload && typeof payload === "object") {
+        const holdingsAvailable =
+          "db_available" in payload && payload.db_available === true
+            ? tableExists("daily_holdings")
+            : false;
         payload = {
           ...payload,
           routes: {
             factor_style: routes.has("GET /api/summary/factor-style"),
+            holdings: holdingsAvailable,
             ai_factor_style: Boolean(process.env.OPENAI_API_KEY?.trim()),
           },
         };

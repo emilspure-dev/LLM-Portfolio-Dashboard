@@ -107,6 +107,12 @@ export function DashboardSidebar({
                   the VPS: <span className="font-mono">git pull</span>, restart the Node API, reload.
                 </p>
               )}
+              {health?.routes?.holdings === false && (
+                <p className="mt-2 text-[12px] leading-4 text-[#b45309]">
+                  Holdings snapshots are unavailable because the connected SQLite file does not expose{" "}
+                  <span className="font-mono">daily_holdings</span>.
+                </p>
+              )}
             </div>
           </div>
           <Button
