@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  ReferenceLine, Cell, CartesianGrid, LineChart, Line, Legend,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
+  ReferenceLine, CartesianGrid, LineChart, Line, Legend,
 } from "recharts";
 import { KpiCard } from "./KpiCard";
 import { InsightCard } from "./InsightCard";
@@ -163,7 +163,6 @@ interface OverviewTabProps {
 export function OverviewTab({ data, runs }: OverviewTabProps) {
   const { summary } = data;
   const overviewAccumulatedReturnRef = useRef<HTMLDivElement>(null);
-  const overviewBeatIndexRef = useRef<HTMLDivElement>(null);
   const cumulativeReturnQuery = useQuery({
     queryKey: ["overview-cumulative-return", data.active_experiment_id],
     queryFn: async () => {
@@ -181,18 +180,6 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
     enabled: Boolean(data.active_experiment_id),
     staleTime: 60_000,
   });
-
-  // Beat rate chart data
-  const beatIndexData = useMemo(() => {
-    return summary
-      .filter((s) => s.pct_runs_beating_index_sharpe != null && !isNaN(s.pct_runs_beating_index_sharpe))
-      .sort((a, b) => a.pct_runs_beating_index_sharpe - b.pct_runs_beating_index_sharpe)
-      .map((s) => ({
-        name: getStrategyDisplayName(s.Strategy, s.strategy_key),
-        value: Number(s.pct_runs_beating_index_sharpe.toFixed(1)),
-        color: getStrategyColor(s.strategy_key),
-      }));
-  }, [summary]);
 
   // Insights
   const insights = useMemo(() => {
@@ -654,60 +641,6 @@ export function OverviewTab({ data, runs }: OverviewTabProps) {
               })}
             </div>
           )}
-        </>
-      )}
-
-      <SoftHr />
-
-      {/* Beat rate chart */}
-      {beatIndexData.length > 0 && (
-        <>
-          <SectionHeader>Beat Rate Comparison</SectionHeader>
-          <div className="dashboard-panel-strong rounded-none p-4 md:p-5">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-              <p className="dashboard-label">% of runs beating market index (Sharpe)</p>
-              <FigureExportControls
-                captureRef={overviewBeatIndexRef}
-                slug="overview-beat-index-sharpe"
-                caption="Overview — Percent of runs beating market index (Sharpe)"
-                experimentId={data.active_experiment_id}
-              />
-            </div>
-            <div ref={overviewBeatIndexRef} className="min-w-0">
-              <ResponsiveContainer width="100%" height={beatIndexData.length * 40 + 36}>
-                <BarChart data={beatIndexData} layout="vertical" margin={{ left: 104, right: 18, top: 4, bottom: 4 }}>
-                <CartesianGrid horizontal stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                <XAxis
-                  type="number"
-                  domain={[0, 105]}
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: "#aca49d" }}
-                />
-                <YAxis
-                  dataKey="name"
-                  type="category"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: "#737373" }}
-                  width={100}
-                />
-                <Tooltip {...tooltipStyle} formatter={(v: number) => `${v}%`} />
-                <ReferenceLine x={50} stroke="rgba(192, 180, 170, 0.9)" strokeDasharray="3 6" strokeWidth={1} />
-                <Bar
-                  dataKey="value"
-                  radius={[999, 999, 999, 999]}
-                  barSize={12}
-                  label={{ position: "right", fontSize: 10, fill: "#737373", formatter: (v: number) => `${v}%` }}
-                >
-                  {beatIndexData.map((d, i) => (
-                    <Cell key={i} fill={d.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
         </>
       )}
 
