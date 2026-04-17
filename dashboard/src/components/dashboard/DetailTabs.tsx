@@ -81,11 +81,15 @@ import {
   buildExcessReturnHeatmapCells,
   buildIndexReturnLookup,
   computeRunEquityShare,
+  regimesDiagnoseEmptyBehavioural,
+  regimesDiagnoseEmptyHeatmap,
   regimesRunIdentity,
+  type RegimesBehaviouralEmptyReason,
   type RegimesBehaviouralRow,
   type RegimesEquityLabel,
   type RegimesFilterSet,
   type RegimesHeatmapCell,
+  type RegimesHeatmapEmptyReason,
   type RegimesPromptFilter,
   type RegimesPromptLabel,
   type RegimesVolBucket,
@@ -5162,6 +5166,85 @@ export function RegimesTab({ data, runs, health }: BaseTabProps) {
     [behaviouralRows]
   );
 
+  // run_details_loading is set in Index.tsx on the visibleData wrapper so child tabs can
+  // distinguish "runs are still streaming in" from "runs arrived but every gate rejected
+  // them". Without this both states render the same generic empty panel.
+  const runsLoading = Boolean(data.run_details_loading);
+  const heatmapEmptyReason: RegimesHeatmapEmptyReason | null = useMemo(
+    () =>
+      heatmapHasData ? null : regimesDiagnoseEmptyHeatmap(runs, indexLookup, filters),
+    [filters, heatmapHasData, indexLookup, runs]
+  );
+  const behaviouralEmptyReason: RegimesBehaviouralEmptyReason | null = useMemo(
+    () =>
+      behaviouralHasData
+        ? null
+        : regimesDiagnoseEmptyBehavioural(runs, behaviouralRows, filters),
+    [behaviouralHasData, behaviouralRows, filters, runs]
+  );
+
+  const heatmapEmptyCopy = useMemo(() => {
+    switch (heatmapEmptyReason) {
+      case "no_runs":
+        return {
+          title: "No runs available for this experiment",
+          body: "The run-results endpoint returned no rows. Check the active experiment in the API meta.",
+        };
+      case "no_gpt_runs":
+        return {
+          title: "No GPT-strategy runs in this experiment",
+          body: "Excess return is computed against gpt_simple and gpt_advanced runs only; this experiment has neither.",
+        };
+      case "no_labels":
+        return {
+          title: "No equity-regime labels on the GPT runs",
+          body: "Every GPT run is missing market_regime_label. This usually means market_periods isn't populated for the active data snapshot.",
+        };
+      case "no_index":
+        return {
+          title: "No paired index strategy runs",
+          body: "GPT runs exist but no index-strategy run shares the same (market, period). Excess return cannot be computed.",
+        };
+      case "filters_too_narrow":
+      default:
+        return {
+          title: "No regime cells match these filters",
+          body: "Try widening the market, model, or prompt filter — every cell is currently empty.",
+        };
+    }
+  }, [heatmapEmptyReason]);
+
+  const behaviouralEmptyCopy = useMemo(() => {
+    switch (behaviouralEmptyReason) {
+      case "no_runs":
+        return {
+          title: "No runs available for this experiment",
+          body: "The run-results endpoint returned no rows.",
+        };
+      case "no_gpt_runs":
+        return {
+          title: "No GPT-strategy runs in this experiment",
+          body: "Behavioural response is computed for gpt_simple and gpt_advanced runs only.",
+        };
+      case "no_labels":
+        return {
+          title: "No equity-regime labels on the GPT runs",
+          body: "Every GPT run is missing market_regime_label, so equity-regime buckets cannot be formed.",
+        };
+      case "no_features":
+        return {
+          title: "No equity-share or HHI values on the GPT runs",
+          body: "Equity share needs the holdings asset-class lookup, and HHI needs the hhi field on each run. Neither is populated for the runs that survive filters.",
+        };
+      case "filters_too_narrow":
+      default:
+        return {
+          title: "No behavioural rows match these filters",
+          body: "No (model, prompt, equity-regime) cell currently has enough runs. Try widening the filter set.",
+        };
+    }
+  }, [behaviouralEmptyReason]);
+
   // ----- Render -----
   const heatmapRowsByModelPrompt = useMemo(() => {
     const ordered: Array<{ model: string; prompt: RegimesPromptLabel }> = [];
@@ -5372,15 +5455,21 @@ export function RegimesTab({ data, runs, health }: BaseTabProps) {
         </Panel>
 
         <SectionHeader>Exhibit 1 — Excess return by regime</SectionHeader>
-        {periodsQuery.isLoading ? (
-          <LoadingState title="Loading regime period rows" />
+        {periodsQuery.isLoading || runsLoading ? (
+          <LoadingState
+            title={
+              runsLoading
+                ? "Loading run results"
+                : "Loading regime period rows"
+            }
+          />
         ) : heatmapHasData ? null : (
           <EmptyState
-            title="No regime cells match these filters"
-            body="Try widening the market, model, or prompt filter — every cell is currently empty."
+            title={heatmapEmptyCopy.title}
+            body={heatmapEmptyCopy.body}
           />
         )}
-        {!periodsQuery.isLoading && heatmapHasData && (
+        {!periodsQuery.isLoading && !runsLoading && heatmapHasData && (
           <Panel>
             <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
               <p className="dashboard-label">
@@ -5473,12 +5562,32 @@ export function RegimesTab({ data, runs, health }: BaseTabProps) {
         )}
 
         <SectionHeader>Exhibit 2 — Behavioural response by regime</SectionHeader>
-        {!behaviouralHasData && !tickerAssetClassQuery.isLoading && !holdingsCapabilityUnavailable && (
-          <EmptyState
-            title="No behavioural rows match these filters"
-            body="No (model, prompt, equity-regime) cell currently has enough runs. Try widening the filter set."
+        {/*
+          Loading and empty states gate on runsLoading too, not just tickerAssetClassQuery.
+          Without this, the panel paints "no behavioural rows" while runs are still streaming in.
+          holdingsCapabilityUnavailable is intentionally not blocked here: the HHI half of the
+          grid still works without holdings, and the inner equity_share cells render their own
+          "Holdings unavailable" notice.
+        */}
+        {(runsLoading ||
+          (!holdingsCapabilityUnavailable && tickerAssetClassQuery.isLoading)) && (
+          <LoadingState
+            title={
+              runsLoading
+                ? "Loading run results"
+                : "Loading holdings asset classes"
+            }
           />
         )}
+        {!runsLoading &&
+          !behaviouralHasData &&
+          !tickerAssetClassQuery.isLoading &&
+          !holdingsCapabilityUnavailable && (
+            <EmptyState
+              title={behaviouralEmptyCopy.title}
+              body={behaviouralEmptyCopy.body}
+            />
+          )}
         <Panel>
           <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
             <p className="dashboard-label">

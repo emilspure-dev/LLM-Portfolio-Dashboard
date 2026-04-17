@@ -7,6 +7,8 @@ import {
   buildExcessReturnHeatmapCells,
   buildIndexReturnLookup,
   computeRunEquityShare,
+  regimesDiagnoseEmptyBehavioural,
+  regimesDiagnoseEmptyHeatmap,
   regimesRunIdentity,
 } from "./regimes-helpers";
 
@@ -284,5 +286,90 @@ describe("regimes-helpers / buildBehaviouralResponseRows", () => {
     );
     expect(advancedRow?.nRuns).toBe(0);
     expect(simpleRow?.nRuns).toBe(1);
+  });
+});
+
+describe("regimes-helpers / regimesDiagnoseEmptyHeatmap", () => {
+  const indexLookup = new Map([["us::2024H1", 0.05]]);
+  const allFilters = { market: "All", model: "All", prompt: "All" } as const;
+
+  it("flags 'no_runs' when the runs array is empty", () => {
+    expect(regimesDiagnoseEmptyHeatmap([], indexLookup, allFilters)).toBe("no_runs");
+  });
+
+  it("flags 'no_gpt_runs' when only non-GPT strategies are present", () => {
+    expect(
+      regimesDiagnoseEmptyHeatmap([indexRun({})], indexLookup, allFilters)
+    ).toBe("no_gpt_runs");
+  });
+
+  it("flags 'no_labels' when GPT runs exist but lack market_regime_label", () => {
+    expect(
+      regimesDiagnoseEmptyHeatmap(
+        [gptRun({ market_regime_label: null })],
+        indexLookup,
+        allFilters
+      )
+    ).toBe("no_labels");
+  });
+
+  it("flags 'no_index' when GPT runs are well-labelled but no index strategy is paired", () => {
+    expect(
+      regimesDiagnoseEmptyHeatmap([gptRun({})], new Map(), allFilters)
+    ).toBe("no_index");
+  });
+
+  it("flags 'filters_too_narrow' when filters drop every otherwise-valid GPT run", () => {
+    expect(
+      regimesDiagnoseEmptyHeatmap(
+        [gptRun({})],
+        indexLookup,
+        { market: "All", model: "future-model", prompt: "All" }
+      )
+    ).toBe("filters_too_narrow");
+  });
+});
+
+describe("regimes-helpers / regimesDiagnoseEmptyBehavioural", () => {
+  const allFilters = { market: "All", model: "All", prompt: "All" } as const;
+
+  it("flags 'no_runs' when the runs array is empty", () => {
+    expect(regimesDiagnoseEmptyBehavioural([], [], allFilters)).toBe("no_runs");
+  });
+
+  it("flags 'no_gpt_runs' when only non-GPT strategies are present", () => {
+    expect(
+      regimesDiagnoseEmptyBehavioural([indexRun({})], [], allFilters)
+    ).toBe("no_gpt_runs");
+  });
+
+  it("flags 'no_labels' when GPT runs exist but lack market_regime_label", () => {
+    expect(
+      regimesDiagnoseEmptyBehavioural(
+        [gptRun({ market_regime_label: null })],
+        [],
+        allFilters
+      )
+    ).toBe("no_labels");
+  });
+
+  it("flags 'no_features' when GPT runs survive filters but no row has a value", () => {
+    const runs = [gptRun({ run_id: "a", hhi: null })];
+    const rows = buildBehaviouralResponseRows(
+      runs,
+      new Map<string, number | null>(),
+      allFilters
+    );
+    expect(regimesDiagnoseEmptyBehavioural(runs, rows, allFilters)).toBe("no_features");
+  });
+
+  it("flags 'filters_too_narrow' when filters drop every otherwise-valid GPT run", () => {
+    expect(
+      regimesDiagnoseEmptyBehavioural(
+        [gptRun({})],
+        [],
+        { market: "All", model: "future-model", prompt: "All" }
+      )
+    ).toBe("filters_too_narrow");
   });
 });

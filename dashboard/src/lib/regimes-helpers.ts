@@ -326,6 +326,117 @@ export function buildExcessReturnHeatmapCells(
 }
 
 /**
+ * Reasons buildExcessReturnHeatmapCells can return an all-empty grid. Used to render an
+ * actionable empty-state instead of the generic "every cell is currently empty" copy.
+ *
+ * Order matters: the helper short-circuits on the first reason that applies, so the cascade
+ * goes from "no inputs at all" to "inputs present but filters reject everything".
+ */
+export type RegimesHeatmapEmptyReason =
+  | "no_runs"
+  | "no_gpt_runs"
+  | "no_labels"
+  | "no_index"
+  | "filters_too_narrow";
+
+/**
+ * Diagnoses why the excess-return heatmap is empty. Cheap to compute (single pass), so
+ * the caller can always invoke it when heatmapCells.length === 0 without worrying about
+ * cost. Mirrors the gates inside buildExcessReturnHeatmapCells.
+ */
+export function regimesDiagnoseEmptyHeatmap(
+  runs: RunRow[],
+  indexLookup: Map<string, number>,
+  filters: RegimesFilterSet
+): RegimesHeatmapEmptyReason {
+  if (runs.length === 0) return "no_runs";
+
+  let gptRunCount = 0;
+  let gptRunWithLabelCount = 0;
+  let gptRunPassingFiltersCount = 0;
+  let gptRunWithIndexPairCount = 0;
+
+  for (const run of runs) {
+    const strategyKey = String(run.strategy_key ?? "");
+    if (strategyKey !== "gpt_simple" && strategyKey !== "gpt_advanced") continue;
+    gptRunCount += 1;
+
+    if (regimesNormalizeEquityRegimeLabel(run.market_regime_label) != null) {
+      gptRunWithLabelCount += 1;
+    }
+
+    if (!regimesRunMatchesFilters(run, filters)) continue;
+    const prompt = normalizePromptType(run.prompt_type);
+    if (!regimesIsValidPrompt(prompt)) continue;
+    if (filters.prompt !== "All" && prompt !== filters.prompt) continue;
+    gptRunPassingFiltersCount += 1;
+
+    if (indexLookup.get(regimesPeriodKey(run.market, run.period)) != null) {
+      gptRunWithIndexPairCount += 1;
+    }
+  }
+
+  if (gptRunCount === 0) return "no_gpt_runs";
+  if (gptRunWithLabelCount === 0) return "no_labels";
+  if (gptRunPassingFiltersCount === 0) return "filters_too_narrow";
+  if (gptRunWithIndexPairCount === 0) return "no_index";
+  return "filters_too_narrow";
+}
+
+/**
+ * Reasons buildBehaviouralResponseRows yields no usable rows for the grid. "Usable" means
+ * at least one (model, prompt, equity) bucket has either an equity_share or hhi value.
+ */
+export type RegimesBehaviouralEmptyReason =
+  | "no_runs"
+  | "no_gpt_runs"
+  | "no_labels"
+  | "filters_too_narrow"
+  | "no_features";
+
+/**
+ * Diagnoses why the behavioural-response grid is empty. Distinguishes "no runs at all" from
+ * "runs exist but neither equity_share nor hhi could be computed for any bucket" — the latter
+ * usually means tickerToAssetClass was empty (so equity_share is null everywhere) and hhi is
+ * also missing on every run.
+ */
+export function regimesDiagnoseEmptyBehavioural(
+  runs: RunRow[],
+  rows: RegimesBehaviouralRow[],
+  filters: RegimesFilterSet
+): RegimesBehaviouralEmptyReason {
+  if (runs.length === 0) return "no_runs";
+
+  let gptRunCount = 0;
+  let gptRunWithLabelCount = 0;
+  let gptRunPassingFiltersCount = 0;
+
+  for (const run of runs) {
+    const strategyKey = String(run.strategy_key ?? "");
+    if (strategyKey !== "gpt_simple" && strategyKey !== "gpt_advanced") continue;
+    gptRunCount += 1;
+
+    if (regimesNormalizeEquityRegimeLabel(run.market_regime_label) != null) {
+      gptRunWithLabelCount += 1;
+    }
+
+    if (!regimesRunMatchesFilters(run, filters)) continue;
+    const prompt = normalizePromptType(run.prompt_type);
+    if (!regimesIsValidPrompt(prompt)) continue;
+    if (filters.prompt !== "All" && prompt !== filters.prompt) continue;
+    gptRunPassingFiltersCount += 1;
+  }
+
+  if (gptRunCount === 0) return "no_gpt_runs";
+  if (gptRunWithLabelCount === 0) return "no_labels";
+  if (gptRunPassingFiltersCount === 0) return "filters_too_narrow";
+
+  const hasAnyValue = rows.some((row) => row.nRuns > 0 && row.mean != null);
+  if (!hasAnyValue) return "no_features";
+  return "filters_too_narrow";
+}
+
+/**
  * Behavioural-response rows for the 3x2 grid: per (model, prompt, equity-regime), the mean and
  * standard error of equity_share and HHI across runs.
  */
