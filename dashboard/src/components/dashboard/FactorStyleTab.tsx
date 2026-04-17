@@ -801,7 +801,7 @@ export function FactorStyleTab({ data, health }: FactorStyleTabProps) {
           <InsightCard
             type="warn"
             title="Holdings-backed factor selection is unavailable"
-            body="The connected backend does not expose a holdings snapshot relation, so prompt-level stock-selection views cannot be computed on this deployment yet."
+            body="The connected backend is using a SQLite file without the daily_holdings table, so prompt-level stock-selection views cannot be computed on this deployment yet. The reduced Holdings tab fallback restores portfolio weights, but not the labeled per-ticker detail this view needs."
           />
         </div>
       ) : selectionSummaryQuery.error ? (

@@ -420,13 +420,16 @@ export interface RunResultRow {
   prompt_stage?: string | null;
   execution_mode?: string | null;
   run_id?: number | string | null;
+  path_id?: number | string | null;
   trajectory_id?: string | null;
   experiment_id?: string | null;
+  source_type?: string | null;
   failure_type?: string | null;
   repair_attempts?: number | null;
   repaired?: number | boolean | null;
   strategy_key?: string | null;
   strategy?: string | null;
+  portfolio_json?: unknown;
   market_regime_label?: string | null;
   vol_regime_label?: string | null;
   rate_regime_label?: string | null;
