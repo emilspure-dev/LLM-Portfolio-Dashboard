@@ -4976,6 +4976,21 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
     return buildDerivedTransitionMarkers(timelineRows);
   }, [regimeTimelineQuery.data, timelineRows]);
 
+  const recurrenceChartRows = useMemo(
+    () =>
+      regimeSummaryRows
+        .map((row) => ({
+          ...row,
+          label:
+            marketFilter === "All"
+              ? `${MARKET_LABELS[row.market] ?? row.market} · ${row.regimeCode}`
+              : row.regimeCode,
+          stateLabel: describeRegimeState(row.marketLabel, row.volLabel, row.rateLabel),
+        }))
+        .slice(0, 12),
+    [regimeSummaryRows, marketFilter]
+  );
+
   const recurrenceRegimeColumns = useMemo(() => {
     const grouped = new Map<
       string,
