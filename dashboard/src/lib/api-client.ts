@@ -73,21 +73,36 @@ function buildUrl(path: string, query?: Record<string, QueryValue>) {
   return url.toString();
 }
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
 async function requestJson<T>(path: string, query?: Record<string, QueryValue>): Promise<T> {
   const requestUrl = buildUrl(path, query);
-  let response: Response;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
 
+  let response: Response;
   try {
     response = await fetch(requestUrl, {
       method: "GET",
       headers: {
         Accept: "application/json",
       },
+      signal: controller.signal,
     });
-  } catch {
+  } catch (cause) {
+    if (controller.signal.aborted) {
+      throw new Error(
+        `API request timed out after ${Math.round(
+          DEFAULT_REQUEST_TIMEOUT_MS / 1000
+        )}s: ${path}. The backend may be overloaded or restarting; refresh in a moment.`
+      );
+    }
     throw new Error(
-      `Unable to reach API at ${requestUrl}. Start the backend API or set NEXT_PUBLIC_API_BASE_URL.`
+      `Unable to reach API at ${requestUrl}. Start the backend API or set NEXT_PUBLIC_API_BASE_URL.`,
+      { cause }
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   if (!response.ok) {

@@ -10,6 +10,10 @@ async function readRequestBody(req) {
   return chunks.length > 0 ? Buffer.concat(chunks) : null;
 }
 
+const UPSTREAM_TIMEOUT_MS = Number(
+  process.env.BACKEND_API_TIMEOUT_MS || 25000
+);
+
 module.exports = async function handler(req, res) {
   const base = (process.env.BACKEND_API_ORIGIN || "http://204.168.227.31").replace(
     /\/$/,
@@ -24,6 +28,9 @@ module.exports = async function handler(req, res) {
   const search = qs ? `?${qs}` : "";
   const pathname = subPath ? `/api/${subPath}` : "/api";
   const target = `${base}${pathname}${search}`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
 
   try {
     const method = req.method || "GET";
@@ -42,6 +49,7 @@ module.exports = async function handler(req, res) {
       headers,
       body: body && body.length > 0 ? body : undefined,
       duplex: hasBody ? "half" : undefined,
+      signal: controller.signal,
     });
 
     const ct = upstream.headers.get("content-type");
@@ -52,10 +60,19 @@ module.exports = async function handler(req, res) {
     const buf = Buffer.from(await upstream.arrayBuffer());
     res.status(upstream.status).send(buf);
   } catch (err) {
-    res.status(502).json({
-      error: "api_proxy_failed",
-      message: err instanceof Error ? err.message : String(err),
+    const aborted = controller.signal.aborted;
+    res.status(aborted ? 504 : 502).json({
+      error: aborted ? "api_proxy_timeout" : "api_proxy_failed",
+      message: aborted
+        ? `Upstream API at ${base} did not respond within ${Math.round(
+            UPSTREAM_TIMEOUT_MS / 1000
+          )}s. The backend may be overloaded or restarting.`
+        : err instanceof Error
+          ? err.message
+          : String(err),
       target,
     });
+  } finally {
+    clearTimeout(timeoutId);
   }
 };

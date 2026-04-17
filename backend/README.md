@@ -52,6 +52,24 @@ Relevant environment variables:
 - `REGIME_SNAPSHOT_ID` provides a default target snapshot.
 - `REGIME_VERIFY_FIXTURE_PATH` overrides the default parity fixture path.
 
+## Performance indexes
+
+`better-sqlite3` runs synchronously inside the Node event loop. If a single query has to scan the whole `llm_run_results` join, it wedges the entire API for every other request. To avoid that, the snapshot must carry a small set of join indexes that the dashboard depends on.
+
+Run this once after a fresh ETL or after promoting a new snapshot:
+
+```bash
+cd backend
+npm run perf:indexes -- --db /srv/thesis/db/current.sqlite
+```
+
+It is idempotent (`CREATE INDEX IF NOT EXISTS` + `ANALYZE`), skips tables that aren't present in the snapshot, and finishes in seconds. Restart the API afterwards so SQLite reopens with the new indexes:
+
+```bash
+sudo systemctl restart thesis-dashboard-api
+# or: pm2 restart thesis-dashboard-api
+```
+
 ## Production notes
 
 - The browser never connects to SQLite directly.

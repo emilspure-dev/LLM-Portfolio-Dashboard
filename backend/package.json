@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node --watch src/server.mjs",
     "start": "node src/server.mjs",
-    "regime:build": "node scripts/build-regimes.mjs"
+    "regime:build": "node scripts/build-regimes.mjs",
+    "perf:indexes": "node scripts/add-perf-indexes.mjs"
   }
 }

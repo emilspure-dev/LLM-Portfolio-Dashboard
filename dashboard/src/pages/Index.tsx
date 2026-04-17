@@ -150,6 +150,7 @@ export default function Index() {
       }),
     enabled: Boolean(resolvedExperimentId && metaQuery.data),
     staleTime: 30_000,
+    retry: 1,
   });
 
   const runsQuery = useQuery({
@@ -159,6 +160,7 @@ export default function Index() {
       Boolean(resolvedExperimentId && metaQuery.data) &&
       dashboardQuery.status === "success",
     staleTime: 30_000,
+    retry: 1,
   });
 
   useEffect(() => {
