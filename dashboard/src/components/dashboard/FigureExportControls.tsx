@@ -12,6 +12,13 @@ export interface FigureExportControlsProps {
   experimentId?: string;
   /** Default matches LaTeX: figures/{slug}.png */
   imagePath?: string;
+  /**
+   * Disables the PNG export when the chart isn't ready (still loading, no data,
+   * etc.). The LaTeX copy button stays enabled because it doesn't read DOM.
+   */
+  pngDisabled?: boolean;
+  /** Optional title override for the PNG button when disabled. */
+  pngDisabledReason?: string;
 }
 
 export function FigureExportControls({
@@ -20,6 +27,8 @@ export function FigureExportControls({
   caption,
   experimentId,
   imagePath,
+  pngDisabled = false,
+  pngDisabledReason,
 }: FigureExportControlsProps) {
   const handlePng = async () => {
     const el = captureRef.current;
@@ -47,10 +56,15 @@ export function FigureExportControls({
         type="button"
         variant="ghost"
         size="sm"
-        className="h-8 shrink-0 gap-1.5 px-2 text-[11px] font-medium text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a]"
+        disabled={pngDisabled}
+        className="h-8 shrink-0 gap-1.5 px-2 text-[11px] font-medium text-[#737373] hover:bg-[#f5f5f5] hover:text-[#0a0a0a] disabled:cursor-not-allowed disabled:opacity-50"
         onClick={() => void handlePng()}
         aria-label="Download figure as PNG"
-        title="Downloads a high-resolution PNG of the chart below. Save it under figures/ using the same base name as in the LaTeX snippet."
+        title={
+          pngDisabled
+            ? pngDisabledReason ?? "Chart isn't ready to export yet."
+            : "Downloads a high-resolution PNG of the chart below. Save it under figures/ using the same base name as in the LaTeX snippet."
+        }
       >
         <Download className="h-3.5 w-3.5" aria-hidden />
         PNG

@@ -343,7 +343,7 @@ export default function Index() {
                 <ByMarketTab data={visibleData} runs={allRuns} />
               )}
               {activeTab === 6 && (
-                <RegimesTab data={visibleData} runs={allRuns} />
+                <RegimesTab data={visibleData} runs={allRuns} health={healthQuery.data} />
               )}
               {activeTab === 7 && (
                 <BehaviorTab data={visibleData} runs={allRuns} health={healthQuery.data} />

@@ -40,9 +40,9 @@ export interface FallbackDailyMetricsSnapshot {
 
 export type HoldingsViewMode = "full" | "reduced" | "unavailable";
 
-type WeightEntry = { ticker: string; weight: number };
+export type WeightEntry = { ticker: string; weight: number };
 
-const RUN_HOLDINGS_KEYS = [
+export const RUN_HOLDINGS_KEYS = [
   "portfolio_json",
   "holdings",
   "weights",
@@ -72,7 +72,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value != null && !Array.isArray(value);
 }
 
-function parseRawPortfolioJson(raw: unknown): unknown {
+export function parseRawPortfolioJson(raw: unknown): unknown {
   if (raw == null) return null;
   if (typeof raw === "string") {
     const trimmed = raw.trim();
@@ -97,7 +97,7 @@ function parseRawPortfolioJson(raw: unknown): unknown {
   return typeof raw === "object" ? raw : null;
 }
 
-function pickRunHoldingsPayload(run: Pick<RunResultRow, keyof RunResultRow>): unknown {
+export function pickRunHoldingsPayload(run: Pick<RunResultRow, keyof RunResultRow>): unknown {
   for (const key of RUN_HOLDINGS_KEYS) {
     const raw = run[key];
     if (raw == null) {
@@ -111,7 +111,18 @@ function pickRunHoldingsPayload(run: Pick<RunResultRow, keyof RunResultRow>): un
   return null;
 }
 
-function extractWeightEntries(node: unknown, depth = 0): WeightEntry[] {
+/**
+ * Convenience: pick the first holdings-bearing field on a run row, parse it
+ * (JSON + Python-literal recovery), and return the extracted weight entries.
+ * Empty array means no readable weights were found.
+ */
+export function parseRunHoldingsEntries(
+  run: Pick<RunResultRow, keyof RunResultRow>
+): WeightEntry[] {
+  return extractWeightEntries(pickRunHoldingsPayload(run));
+}
+
+export function extractWeightEntries(node: unknown, depth = 0): WeightEntry[] {
   if (depth > 4 || node == null) return [];
 
   if (Array.isArray(node)) {

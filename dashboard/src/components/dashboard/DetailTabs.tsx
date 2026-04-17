@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Area,
@@ -20,14 +20,14 @@ import {
   YAxis,
   ZAxis,
 } from "recharts";
+import {
+  Tooltip as UITooltip,
+  TooltipContent as UITooltipContent,
+  TooltipProvider as UITooltipProvider,
+  TooltipTrigger as UITooltipTrigger,
+} from "@/components/ui/tooltip";
 import { AlertCircle, ChevronLeft, ChevronRight, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import {
   getBehaviorHoldingsSummary,
   getDailyHoldings,
@@ -52,6 +52,7 @@ import {
   holdingsDataLikelyUnavailable,
   ljungBoxStatistic,
   mapInBatches,
+  normalizePromptType,
   rollingMetricSeries,
 } from "@/lib/data-loader";
 import {
@@ -68,8 +69,27 @@ import {
   buildFallbackHoldingSnapshot,
   buildFallbackHoldingsConcentrationRows,
   getLatestFallbackDailyMetrics,
+  parseRunHoldingsEntries,
   resolveHoldingsViewMode,
 } from "@/lib/holdings-fallback";
+import {
+  REGIMES_EQUITY_LABELS,
+  REGIMES_FIXED_MODELS,
+  REGIMES_MIN_PERIODS,
+  REGIMES_VOL_LABELS,
+  buildBehaviouralResponseRows,
+  buildExcessReturnHeatmapCells,
+  buildIndexReturnLookup,
+  computeRunEquityShare,
+  regimesRunIdentity,
+  type RegimesBehaviouralRow,
+  type RegimesEquityLabel,
+  type RegimesFilterSet,
+  type RegimesHeatmapCell,
+  type RegimesPromptFilter,
+  type RegimesPromptLabel,
+  type RegimesVolBucket,
+} from "@/lib/regimes-helpers";
 import type {
   FactorExposureRow,
   HealthResponse,
@@ -157,24 +177,6 @@ const CHART_LEGEND_WRAPPER = {
   color: "#404040",
   paddingTop: 8,
 };
-
-const REGIME_BADGE_STYLES = {
-  market: {
-    Bear: { backgroundColor: "rgba(214, 140, 130, 0.18)", color: "#a85e5a" },
-    Flat: { backgroundColor: "rgba(211, 189, 154, 0.22)", color: "#8b7152" },
-    Bull: { backgroundColor: "rgba(127, 184, 139, 0.2)", color: "#3f7b52" },
-  },
-  vol: {
-    Low: { backgroundColor: "rgba(109, 174, 194, 0.18)", color: "#4f7385" },
-    Elevated: { backgroundColor: "rgba(218, 191, 154, 0.2)", color: "#866c52" },
-    High: { backgroundColor: "rgba(210, 145, 126, 0.18)", color: "#a25f50" },
-  },
-  rate: {
-    Easing: { backgroundColor: "rgba(114, 181, 170, 0.18)", color: "#48766f" },
-    Stable: { backgroundColor: "rgba(214, 205, 190, 0.24)", color: "#7b7067" },
-    Tightening: { backgroundColor: "rgba(189, 155, 208, 0.18)", color: "#7a5d8e" },
-  },
-} as const;
 
 const MODEL_SCATTER_COLORS = [
   CHART_COLORS[0],
@@ -581,34 +583,6 @@ function formatDateLabel(value: string) {
     day: "numeric",
     year: "2-digit",
   });
-}
-
-function getRegimeBadgeStyle(
-  kind: keyof typeof REGIME_BADGE_STYLES,
-  label: string | null | undefined
-) {
-  const trimmed = String(label ?? "").trim();
-  const match = REGIME_BADGE_STYLES[kind][trimmed as keyof (typeof REGIME_BADGE_STYLES)[typeof kind]];
-  return match ?? { backgroundColor: "rgba(214,205,190,0.18)", color: "#8c847d" };
-}
-
-function RegimeBadge({
-  kind,
-  label,
-}: {
-  kind: keyof typeof REGIME_BADGE_STYLES;
-  label: string | null | undefined;
-}) {
-  const display = String(label ?? "").trim() || "—";
-  const tone = getRegimeBadgeStyle(kind, label);
-  return (
-    <span
-      className="inline-flex rounded-none px-2.5 py-1 text-[10px] font-semibold"
-      style={tone}
-    >
-      {display}
-    </span>
-  );
 }
 
 function describeRegimeState(
@@ -4934,32 +4908,13 @@ export function ByMarketTab({ data }: BaseTabProps) {
   );
 }
 
-export function RegimesTab({ data, runs }: BaseTabProps) {
+export function RegimesTab({ data, runs, health }: BaseTabProps) {
   const allMarkets = useMemo(() => getMarketOptions(data), [data]);
   const [marketFilter, setMarketFilter] = useState("All");
   const [modelFilter, setModelFilter] = useState("All");
   const [promptFilter, setPromptFilter] = useState("All");
-  const timelineSelection = useDailySelection(data);
-  const regimeTimelineRef = useRef<HTMLDivElement>(null);
-  const regimeRecurrenceRef = useRef<HTMLDivElement>(null);
-  const regimePerformanceChartRef = useRef<HTMLDivElement>(null);
-  const regimePeriodsRef = useRef<HTMLDivElement>(null);
-  const regimePerformanceRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (
-      marketFilter !== "All" &&
-      timelineSelection.marketOptions.includes(marketFilter) &&
-      timelineSelection.selectedMarket !== marketFilter
-    ) {
-      timelineSelection.setSelectedMarket(marketFilter);
-    }
-  }, [
-    marketFilter,
-    timelineSelection.marketOptions,
-    timelineSelection.selectedMarket,
-    timelineSelection.setSelectedMarket,
-  ]);
+  const heatmapRef = useRef<HTMLDivElement>(null);
+  const behaviouralGridRef = useRef<HTMLDivElement>(null);
 
   const periodsQuery = useQuery({
     queryKey: ["regime-periods", data.active_experiment_id, marketFilter],
@@ -4972,1033 +4927,735 @@ export function RegimesTab({ data, runs }: BaseTabProps) {
     staleTime: 60_000,
   });
 
-  const periodRows = useMemo(() => {
-    const rows = [...(periodsQuery.data ?? [])];
-    return rows.sort((left, right) => {
-      const marketCompare = String(left.market ?? "").localeCompare(String(right.market ?? ""));
-      if (marketCompare !== 0) {
-        return marketCompare;
-      }
-      const leftOrder = Number(left.period_order ?? Number.POSITIVE_INFINITY);
-      const rightOrder = Number(right.period_order ?? Number.POSITIVE_INFINITY);
-      if (Number.isFinite(leftOrder) && Number.isFinite(rightOrder) && leftOrder !== rightOrder) {
-        return leftOrder - rightOrder;
-      }
-      return String(left.period ?? "").localeCompare(String(right.period ?? ""));
-    });
-  }, [periodsQuery.data]);
+  const periodRows = useMemo(() => periodsQuery.data ?? [], [periodsQuery.data]);
 
-  const latestPeriodRow = periodRows.length > 0 ? periodRows[periodRows.length - 1] : null;
-  const regimeTransitionCount = periodRows.filter((row) => Number(row.any_regime_changed ?? 0) > 0).length;
-  const distinctRegimeCodes = new Set(periodRows.map((row) => row.regime_code).filter(Boolean)).size;
+  const holdingsRouteAvailable = health?.routes?.holdings !== false;
 
-  const regimeSummaryRows = useMemo(() => {
-    const grouped = new Map<
-      string,
-      {
-        market: string;
-        regimeCode: string;
-        marketLabel: string | null;
-        volLabel: string | null;
-        rateLabel: string | null;
-        periodCount: number;
-        transitionCount: number;
+  // Distinct tickers we actually need an asset_class for, derived from parsed run holdings.
+  // This lets the holdings query short-circuit once every needed ticker has been seen,
+  // instead of always scanning every page of /holdings/daily.
+  const requiredTickers = useMemo(() => {
+    const set = new Set<string>();
+    for (const run of runs) {
+      for (const entry of parseRunHoldingsEntries(run)) {
+        const ticker = entry.ticker.trim().toUpperCase();
+        if (ticker && entry.weight > 0) set.add(ticker);
       }
-    >();
-
-    for (const row of periodRows) {
-      const key = `${row.market}::${row.regime_code ?? "unknown"}`;
-      const bucket = grouped.get(key) ?? {
-        market: row.market,
-        regimeCode: row.regime_code ?? "unknown",
-        marketLabel: row.market_regime_label,
-        volLabel: row.vol_regime_label,
-        rateLabel: row.rate_regime_label,
-        periodCount: 0,
-        transitionCount: 0,
-      };
-      bucket.periodCount += 1;
-      if (Number(row.any_regime_changed ?? 0) > 0) {
-        bucket.transitionCount += 1;
-      }
-      grouped.set(key, bucket);
     }
+    return set;
+  }, [runs]);
 
-    return Array.from(grouped.values()).sort((left, right) => {
-      if (right.periodCount !== left.periodCount) {
-        return right.periodCount - left.periodCount;
-      }
-      return left.market.localeCompare(right.market);
-    });
-  }, [periodRows]);
-
-  const allRegimePerformanceRows = useMemo(
-    () =>
-      buildRegimePerformanceRows(runs).filter((row) => {
-        if (row.regimeCode === "unknown") return false;
-        return true;
-      }),
-    [runs]
-  );
-
-  const regimePerformanceRows = useMemo(
-    () =>
-      allRegimePerformanceRows.filter((row) => {
-        if (marketFilter !== "All" && row.market !== marketFilter) return false;
-        if (modelFilter !== "All" && row.model !== modelFilter) return false;
-        if (promptFilter !== "All" && row.promptType !== promptFilter) return false;
-        return true;
-      }),
-    [allRegimePerformanceRows, marketFilter, modelFilter, promptFilter]
-  );
-
-  const modelOptions = useMemo(
-    () => ["All", ...Array.from(new Set(allRegimePerformanceRows.map((row) => row.model))).sort()],
-    [allRegimePerformanceRows]
-  );
-  const promptOptions = useMemo(
-    () => ["All", ...Array.from(new Set(allRegimePerformanceRows.map((row) => row.promptType))).sort()],
-    [allRegimePerformanceRows]
-  );
-
-  const regimeTimelineQuery = useQuery({
+  const tickerAssetClassQuery = useQuery({
     queryKey: [
-      "regime-timeline",
+      "regimes-ticker-asset-class",
       data.active_experiment_id,
-      timelineSelection.selectedMarket,
-      timelineSelection.selectedStrategyKey,
+      requiredTickers.size,
     ],
-    queryFn: async (): Promise<RegimeTimelinePayload> => {
-      const regimes = await fetchRegimeSeriesWithPathFallback(
-        data.active_experiment_id,
-        timelineSelection.selectedMarket,
-        timelineSelection.selectedStrategyKey,
-        data.runs
-      );
-      if (regimes.length > 0) {
-        return { source: "Regime metrics", rows: regimes };
+    enabled: Boolean(data.active_experiment_id) && holdingsRouteAvailable,
+    staleTime: Infinity,
+    queryFn: async () => {
+      const map = new Map<string, string>();
+      const needed = new Set(requiredTickers);
+      const ingest = (rows: Array<{ ticker?: string | null; asset_class?: string | null }>) => {
+        for (const row of rows) {
+          const ticker = row.ticker?.toUpperCase();
+          if (!ticker || !row.asset_class) continue;
+          if (!map.has(ticker)) map.set(ticker, row.asset_class);
+          needed.delete(ticker);
+        }
+      };
+
+      const first = await getDailyHoldings({
+        experiment_id: data.active_experiment_id,
+        page: 1,
+        page_size: 2000,
+      });
+      ingest(first.items);
+
+      const totalPages = Math.max(first.total_pages, 1);
+      const shouldFetchMore = needed.size > 0 || requiredTickers.size === 0;
+      if (shouldFetchMore && totalPages > 1) {
+        const remainingPageNumbers = Array.from(
+          { length: totalPages - 1 },
+          (_, index) => index + 2
+        );
+        outer: for (let start = 0; start < remainingPageNumbers.length; start += 4) {
+          const batch = remainingPageNumbers.slice(start, start + 4);
+          const responses = await Promise.all(
+            batch.map((page) =>
+              getDailyHoldings({
+                experiment_id: data.active_experiment_id,
+                page,
+                page_size: first.page_size,
+              })
+            )
+          );
+          for (const response of responses) {
+            ingest(response.items);
+            if (requiredTickers.size > 0 && needed.size === 0) {
+              break outer;
+            }
+          }
+        }
       }
-      const equity = await fetchEquitySeriesWithPathFallback(
-        data.active_experiment_id,
-        timelineSelection.selectedMarket,
-        timelineSelection.selectedStrategyKey,
-        data.runs
-      );
-      return { source: "Path metrics fallback", rows: equity };
+      return map;
     },
-    enabled: Boolean(
-      data.active_experiment_id &&
-        timelineSelection.selectedMarket &&
-        timelineSelection.selectedStrategyKey
-    ),
-    staleTime: 60_000,
   });
 
-  const timelineRows = useMemo(() => {
-    const payload = regimeTimelineQuery.data;
-    if (!payload) {
-      return [];
-    }
-    if (payload.source === "Regime metrics") {
-      return aggregateRegimeRows(payload.rows);
-    }
-    return aggregateStrategyDailyForDrawdown(payload.rows);
-  }, [regimeTimelineQuery.data]);
+  const tickerToAssetClass = tickerAssetClassQuery.data ?? null;
+  const holdingsCapabilityUnavailable =
+    !holdingsRouteAvailable || Boolean(tickerAssetClassQuery.error) ||
+    (tickerAssetClassQuery.isFetched && (tickerToAssetClass?.size ?? 0) === 0);
 
-  const timelineTransitionMarkers = useMemo(() => {
-    const payload = regimeTimelineQuery.data;
-    if (!payload) {
-      return [];
-    }
-    if (payload.source === "Regime metrics") {
-      return buildPeriodTransitionMarkers(payload.rows);
-    }
-    return buildDerivedTransitionMarkers(timelineRows);
-  }, [regimeTimelineQuery.data, timelineRows]);
-
-  const recurrenceChartRows = useMemo(
-    () =>
-      regimeSummaryRows
-        .map((row) => ({
-          ...row,
-          label:
-            marketFilter === "All"
-              ? `${MARKET_LABELS[row.market] ?? row.market} · ${row.regimeCode}`
-              : row.regimeCode,
-          stateLabel: describeRegimeState(row.marketLabel, row.volLabel, row.rateLabel),
-        }))
-        .slice(0, 12),
-    [regimeSummaryRows, marketFilter]
+  const filters = useMemo<RegimesFilterSet>(
+    () => ({
+      market: marketFilter,
+      model: modelFilter,
+      prompt: promptFilter as RegimesPromptFilter,
+    }),
+    [marketFilter, modelFilter, promptFilter]
   );
 
-  const recurrenceRegimeColumns = useMemo(() => {
-    const grouped = new Map<
-      string,
-      {
-        regimeCode: string;
-        stateLabel: string;
-        totalPeriods: number;
-        totalTransitions: number;
-      }
-    >();
+  const indexLookup = useMemo(() => buildIndexReturnLookup(runs), [runs]);
 
-    for (const row of regimeSummaryRows) {
-      const bucket = grouped.get(row.regimeCode) ?? {
-        regimeCode: row.regimeCode,
-        stateLabel: describeRegimeState(row.marketLabel, row.volLabel, row.rateLabel),
-        totalPeriods: 0,
-        totalTransitions: 0,
-      };
-      bucket.totalPeriods += row.periodCount;
-      bucket.totalTransitions += row.transitionCount;
-      grouped.set(row.regimeCode, bucket);
+  const equityShareByRun = useMemo(() => {
+    const map = new Map<string, number | null>();
+    if (!tickerToAssetClass || tickerToAssetClass.size === 0) return map;
+    for (const run of runs) {
+      map.set(regimesRunIdentity(run), computeRunEquityShare(run, tickerToAssetClass));
     }
+    return map;
+  }, [runs, tickerToAssetClass]);
 
-    return Array.from(grouped.values())
-      .sort((left, right) => {
-        if (right.totalPeriods !== left.totalPeriods) {
-          return right.totalPeriods - left.totalPeriods;
-        }
-        return left.regimeCode.localeCompare(right.regimeCode);
-      })
-      .slice(0, marketFilter === "All" ? 8 : 10);
-  }, [regimeSummaryRows, marketFilter]);
-
-  const recurrenceHeatmapRows = useMemo(() => {
-    const columns = recurrenceRegimeColumns.map((column) => column.regimeCode);
-    const rowsByMarket = new Map<
-      string,
-      {
-        market: string;
-        marketLabel: string;
-        totalPeriods: number;
-        totalTransitions: number;
-        cells: Array<{
-          regimeCode: string;
-          stateLabel: string;
-          periodCount: number;
-          transitionCount: number;
-          shareOfMarket: number;
-        }>;
-      }
-    >();
-
-    for (const row of regimeSummaryRows) {
-      const marketBucket = rowsByMarket.get(row.market) ?? {
-        market: row.market,
-        marketLabel: MARKET_LABELS[row.market] ?? row.market,
-        totalPeriods: 0,
-        totalTransitions: 0,
-        cells: [],
-      };
-      marketBucket.totalPeriods += row.periodCount;
-      marketBucket.totalTransitions += row.transitionCount;
-      rowsByMarket.set(row.market, marketBucket);
-    }
-
-    return Array.from(rowsByMarket.values())
-      .map((marketRow) => ({
-        ...marketRow,
-        cells: columns.map((regimeCode) => {
-          const match = regimeSummaryRows.find(
-            (row) => row.market === marketRow.market && row.regimeCode === regimeCode
-          );
-          const periodCount = match?.periodCount ?? 0;
-          const transitionCount = match?.transitionCount ?? 0;
-          return {
-            regimeCode,
-            stateLabel:
-              recurrenceRegimeColumns.find((column) => column.regimeCode === regimeCode)?.stateLabel ??
-              "—",
-            periodCount,
-            transitionCount,
-            shareOfMarket: marketRow.totalPeriods > 0 ? periodCount / marketRow.totalPeriods : 0,
-          };
-        }),
-      }))
-      .sort((left, right) => left.marketLabel.localeCompare(right.marketLabel));
-  }, [regimeSummaryRows, recurrenceRegimeColumns]);
-
-  const transitionByMarketRows = useMemo(
-    () =>
-      recurrenceHeatmapRows
-        .map((row) => ({
-          market: row.market,
-          marketLabel: row.marketLabel,
-          transitionCount: row.totalTransitions,
-          totalPeriods: row.totalPeriods,
-          transitionRate: row.totalPeriods > 0 ? row.totalTransitions / row.totalPeriods : null,
-        }))
-        .sort((left, right) => (right.transitionRate ?? -Infinity) - (left.transitionRate ?? -Infinity)),
-    [recurrenceHeatmapRows]
+  const heatmapCells = useMemo(
+    () => buildExcessReturnHeatmapCells(runs, indexLookup, filters),
+    [runs, indexLookup, filters]
   );
 
-  const conditionalChartRows = useMemo(() => {
-    const grouped = new Map<
-      string,
-      {
-        market: string;
-        regimeCode: string;
-        marketRegimeLabel: string | null;
-        volRegimeLabel: string | null;
-        rateRegimeLabel: string | null;
-        sharpeWeightedSum: number;
-        sharpeWeight: number;
-        returnWeightedSum: number;
-        returnWeight: number;
-        count: number;
-      }
-    >();
+  const behaviouralRows = useMemo(
+    () => buildBehaviouralResponseRows(runs, equityShareByRun, filters),
+    [runs, equityShareByRun, filters]
+  );
 
-    for (const row of regimePerformanceRows) {
-      const key = `${row.market}::${row.regimeCode}`;
-      const bucket = grouped.get(key) ?? {
-        market: row.market,
-        regimeCode: row.regimeCode,
-        marketRegimeLabel: row.marketRegimeLabel,
-        volRegimeLabel: row.volRegimeLabel,
-        rateRegimeLabel: row.rateRegimeLabel,
-        sharpeWeightedSum: 0,
-        sharpeWeight: 0,
-        returnWeightedSum: 0,
-        returnWeight: 0,
-        count: 0,
-      };
-
-      if (row.meanSharpe != null) {
-        bucket.sharpeWeightedSum += row.meanSharpe * row.count;
-        bucket.sharpeWeight += row.count;
-      }
-      if (row.meanReturn != null) {
-        bucket.returnWeightedSum += row.meanReturn * row.count;
-        bucket.returnWeight += row.count;
-      }
-      bucket.count += row.count;
-      grouped.set(key, bucket);
+  const modelOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const run of runs) {
+      const model = String(run.model ?? "").trim();
+      if (model) set.add(model);
     }
+    return ["All", ...Array.from(set).sort()];
+  }, [runs]);
 
-    return Array.from(grouped.values())
-      .map((row) => ({
-        ...row,
-        label:
-          marketFilter === "All"
-            ? `${MARKET_LABELS[row.market] ?? row.market} · ${row.regimeCode}`
-            : row.regimeCode,
-        meanSharpe:
-          row.sharpeWeight > 0 ? row.sharpeWeightedSum / row.sharpeWeight : null,
-        meanReturn:
-          row.returnWeight > 0 ? row.returnWeightedSum / row.returnWeight : null,
-      }))
-      .sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity))
-      .slice(0, 12);
-  }, [regimePerformanceRows, marketFilter]);
+  const promptOptions = useMemo(() => ["All", "simple", "advanced"], []);
 
-  const topRegimeRow =
-    [...regimePerformanceRows].sort((left, right) => (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity))[0] ??
-    null;
-  const weakestRegimeRow =
-    [...regimePerformanceRows]
-      .filter((row) => row.meanSharpe != null)
-      .sort((left, right) => (left.meanSharpe ?? Infinity) - (right.meanSharpe ?? Infinity))[0] ??
-    null;
-  const dominantRegimeRow = regimeSummaryRows[0] ?? null;
-  const latestTransitionCandidates = [...periodRows]
-    .filter((row) => Number(row.any_regime_changed ?? 0) > 0)
-    .sort((left, right) => {
-      const leftOrder = Number(left.period_order ?? Number.POSITIVE_INFINITY);
-      const rightOrder = Number(right.period_order ?? Number.POSITIVE_INFINITY);
-      if (Number.isFinite(leftOrder) && Number.isFinite(rightOrder) && leftOrder !== rightOrder) {
-        return leftOrder - rightOrder;
-      }
-      return String(left.period ?? "").localeCompare(String(right.period ?? ""));
+  // ----- Header strip stats -----
+  const distinctRegimeCodes = useMemo(
+    () => new Set(periodRows.map((row) => row.regime_code).filter(Boolean)).size,
+    [periodRows]
+  );
+  const regimeChangeCount = useMemo(
+    () => periodRows.filter((row) => Number(row.any_regime_changed ?? 0) > 0).length,
+    [periodRows]
+  );
+  const mostCommonRegime = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const row of periodRows) {
+      const code = row.regime_code ?? null;
+      if (!code) continue;
+      counts.set(code, (counts.get(code) ?? 0) + 1);
+    }
+    let best: { code: string; n: number } | null = null;
+    for (const [code, n] of counts.entries()) {
+      if (!best || n > best.n) best = { code, n };
+    }
+    return best;
+  }, [periodRows]);
+
+  // ----- Heatmap colour scale (clamped at 5th/95th percentile, symmetric) -----
+  const heatmapScale = useMemo(() => {
+    const values = heatmapCells
+      .map((cell) => cell.meanExcessPp)
+      .filter((value): value is number => value != null);
+    if (values.length === 0) return { absMax: 1 };
+    const sorted = [...values].sort((left, right) => left - right);
+    // Linear interpolation between the two adjacent ranks. Rounding produced visible
+    // jumps in the colour scale on small samples (e.g. 5 values, 5th percentile snapped
+    // to the minimum), which made the diverging palette look discontinuous.
+    const pickPercentile = (pct: number) => {
+      if (sorted.length === 1) return sorted[0];
+      const rank = (sorted.length - 1) * pct;
+      const lo = Math.floor(rank);
+      const hi = Math.ceil(rank);
+      if (lo === hi) return sorted[lo];
+      const fraction = rank - lo;
+      return sorted[lo] + (sorted[hi] - sorted[lo]) * fraction;
+    };
+    const lo = pickPercentile(0.05);
+    const hi = pickPercentile(0.95);
+    const absMax = Math.max(Math.abs(lo), Math.abs(hi));
+    return { absMax: absMax > 0 ? absMax : 1 };
+  }, [heatmapCells]);
+
+  const cellBackground = (value: number | null, sparse: boolean) => {
+    if (value == null || sparse) {
+      return undefined; // Hatched/empty styling handled by inline element below.
+    }
+    const ratio = Math.max(-1, Math.min(1, value / heatmapScale.absMax));
+    if (ratio === 0) return "rgba(245, 245, 245, 0.6)";
+    if (ratio > 0) {
+      // Green for positive
+      const alpha = 0.18 + 0.55 * Math.abs(ratio);
+      return `rgba(156, 199, 164, ${alpha.toFixed(3)})`;
+    }
+    const alpha = 0.18 + 0.55 * Math.abs(ratio);
+    return `rgba(212, 151, 144, ${alpha.toFixed(3)})`;
+  };
+
+  const headerStripText = `${periodRows.length} market-period cells loaded · ${distinctRegimeCodes} distinct regime codes · ${regimeChangeCount} of ${periodRows.length} show regime change · Most common regime: ${
+    mostCommonRegime ? `${mostCommonRegime.code} (${mostCommonRegime.n})` : "—"
+  }`;
+
+  // ----- Behavioural grid: per-column y-axis range so models stay visually comparable -----
+  const equityShareDomain = useMemo<[number, number]>(() => {
+    const values = behaviouralRows
+      .filter(
+        (row) => row.feature === "equity_share" && row.nPeriods >= REGIMES_MIN_PERIODS && row.mean != null
+      )
+      // Equity share is a [0,1] ratio. The error-bar tip should be clamped at 1 so a
+      // wide SEM doesn't push the inferred axis beyond a meaningful bound.
+      .map((row) => Math.min(1, Math.max(0, (row.mean as number) + (row.sem ?? 0))));
+    if (values.length === 0) return [0, 1];
+    const max = Math.min(1, Math.max(...values, 0.05));
+    return [0, Math.min(1, max + 0.05)];
+  }, [behaviouralRows]);
+
+  const hhiDomain = useMemo<[number, number]>(() => {
+    const values = behaviouralRows
+      .filter(
+        (row) => row.feature === "hhi" && row.nPeriods >= REGIMES_MIN_PERIODS && row.mean != null
+      )
+      .map((row) => Math.max(0, (row.mean as number) + (row.sem ?? 0)));
+    if (values.length === 0) return [0, 0.5];
+    const max = Math.max(...values, 0.05);
+    return [0, max * 1.1];
+  }, [behaviouralRows]);
+
+  const modelsForGrid = useMemo(() => {
+    if (modelFilter !== "All") {
+      return [modelFilter];
+    }
+    // Union of the fixed three with any extra models seen in the runs, so a future model
+    // also gets a row. Fixed models stay first to preserve the headline ordering.
+    const fixed = REGIMES_FIXED_MODELS as readonly string[];
+    const extras = modelOptions
+      .filter((model) => model !== "All" && !fixed.includes(model))
+      .sort();
+    return [...fixed, ...extras];
+  }, [modelFilter, modelOptions]);
+
+  const heatmapHasData = useMemo(
+    () => heatmapCells.some((cell) => cell.nRuns > 0),
+    [heatmapCells]
+  );
+  const behaviouralHasData = useMemo(
+    () => behaviouralRows.some((row) => row.nRuns > 0 && row.mean != null),
+    [behaviouralRows]
+  );
+
+  // ----- Render -----
+  const heatmapRowsByModelPrompt = useMemo(() => {
+    const ordered: Array<{ model: string; prompt: RegimesPromptLabel }> = [];
+    const seen = new Set<string>();
+    for (const cell of heatmapCells) {
+      const key = `${cell.model}::${cell.prompt}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ordered.push({ model: cell.model, prompt: cell.prompt });
+    }
+    // Stable ordering: fixed models first, then any extras alphabetically; within model, simple then advanced.
+    const modelOrder = (model: string) => {
+      const idx = (REGIMES_FIXED_MODELS as readonly string[]).indexOf(model);
+      return idx === -1 ? REGIMES_FIXED_MODELS.length + 1 : idx;
+    };
+    const promptOrder = (prompt: RegimesPromptLabel) => (prompt === "simple" ? 0 : 1);
+    return ordered.sort((a, b) => {
+      const m = modelOrder(a.model) - modelOrder(b.model);
+      if (m !== 0) return m;
+      const p = promptOrder(a.prompt) - promptOrder(b.prompt);
+      if (p !== 0) return p;
+      return a.model.localeCompare(b.model);
     });
-  const latestTransitionRow =
-    latestTransitionCandidates.length > 0
-      ? latestTransitionCandidates[latestTransitionCandidates.length - 1]
-      : null;
-  const sparseConditionalRows = regimePerformanceRows.filter((row) => row.count < 3).length;
-  const timelineSourceLabel = regimeTimelineQuery.data?.source ?? "—";
-  const timelineRawRowCount = regimeTimelineQuery.data?.rows.length ?? 0;
-  const timelineDominantRegime = Array.from(
-    timelineRows.reduce((map, row) => {
-      const key = row.marketRegimeLabel ?? "Unknown";
-      map.set(key, (map.get(key) ?? 0) + 1);
-      return map;
-    }, new Map<string, number>())
-  )
-    .sort((left, right) => right[1] - left[1])[0] ?? null;
+  }, [heatmapCells]);
+
+  const heatmapColumns = useMemo(() => {
+    const cols: Array<{ equity: RegimesEquityLabel; vol: RegimesVolBucket }> = [];
+    for (const equity of REGIMES_EQUITY_LABELS) {
+      for (const vol of REGIMES_VOL_LABELS) cols.push({ equity, vol });
+    }
+    for (const equity of REGIMES_EQUITY_LABELS) cols.push({ equity, vol: "Overall" });
+    return cols;
+  }, []);
+
+  const cellByKey = useMemo(() => {
+    const map = new Map<string, RegimesHeatmapCell>();
+    for (const cell of heatmapCells) {
+      map.set(`${cell.model}::${cell.prompt}::${cell.equity}::${cell.vol}`, cell);
+    }
+    return map;
+  }, [heatmapCells]);
+
+  const renderHeatmapCell = (
+    row: { model: string; prompt: RegimesPromptLabel },
+    col: { equity: RegimesEquityLabel; vol: RegimesVolBucket }
+  ) => {
+    const key = `${row.model}::${row.prompt}::${col.equity}::${col.vol}`;
+    const cell = cellByKey.get(key);
+    const sparse =
+      !cell ||
+      cell.nRuns === 0 ||
+      cell.nPeriods < REGIMES_MIN_PERIODS;
+    const background = cell ? cellBackground(cell.meanExcessPp, sparse) : undefined;
+    const labelText =
+      cell && cell.meanExcessPp != null
+        ? `${cell.meanExcessPp >= 0 ? "+" : ""}${cell.meanExcessPp.toFixed(1)}`
+        : "—";
+
+    return (
+      <UITooltip key={key}>
+        <UITooltipTrigger asChild>
+          <div
+            className="relative flex h-10 items-center justify-center border-r border-b border-[#ececec] text-[11px] tabular-nums"
+            style={{
+              background: background,
+              color: sparse ? "#a3a3a3" : "#404040",
+              backgroundImage: sparse
+                ? "repeating-linear-gradient(45deg, rgba(214,205,190,0.18) 0 4px, transparent 4px 8px)"
+                : undefined,
+            }}
+          >
+            <span className="px-1">{labelText}</span>
+          </div>
+        </UITooltipTrigger>
+        <UITooltipContent
+          side="top"
+          align="center"
+          className="max-w-xs rounded-none border border-[#dcd5ce] bg-[#fafafa] p-3 text-[11px] text-[#404040] shadow-lg"
+        >
+          <p className="font-semibold text-[#111111]">
+            {col.equity} · {col.vol === "Overall" ? "All vol" : `${col.vol} vol`}
+          </p>
+          <p className="mt-1 text-[#525252]">
+            {row.model} · {row.prompt}
+          </p>
+          <p className="mt-2">
+            Mean excess return:{" "}
+            <span className="font-medium text-[#111111]">
+              {cell && cell.meanExcessPp != null
+                ? `${cell.meanExcessPp >= 0 ? "+" : ""}${cell.meanExcessPp.toFixed(2)} pp`
+                : "—"}
+            </span>
+          </p>
+          <p>
+            n_runs: {cell?.nRuns ?? 0} · n_periods: {cell?.nPeriods ?? 0} · n_markets:{" "}
+            {cell?.nMarkets ?? 0}
+          </p>
+        </UITooltipContent>
+      </UITooltip>
+    );
+  };
+
+  // Behavioural-response chart helpers — memoised so each (model, feature) lookup
+  // is O(1) for the renderer instead of re-scanning behaviouralRows on every cell.
+  const behaviouralBarsByCell = useMemo(() => {
+    type Bar = {
+      equity: RegimesEquityLabel;
+      simple: number | null;
+      simpleSem: number;
+      advanced: number | null;
+      advancedSem: number;
+    };
+    const byKey = new Map<string, Map<RegimesEquityLabel, Map<RegimesPromptLabel, RegimesBehaviouralRow>>>();
+    for (const row of behaviouralRows) {
+      const key = `${row.model}::${row.feature}`;
+      let byEquity = byKey.get(key);
+      if (!byEquity) {
+        byEquity = new Map();
+        byKey.set(key, byEquity);
+      }
+      let byPrompt = byEquity.get(row.equity);
+      if (!byPrompt) {
+        byPrompt = new Map();
+        byEquity.set(row.equity, byPrompt);
+      }
+      byPrompt.set(row.prompt, row);
+    }
+
+    const result = new Map<string, Bar[]>();
+    for (const [key, byEquity] of byKey) {
+      const bars = REGIMES_EQUITY_LABELS.map<Bar>((equity) => {
+        const promptMap = byEquity.get(equity);
+        const simple = promptMap?.get("simple");
+        const advanced = promptMap?.get("advanced");
+        const includeSimple = !!simple && simple.nPeriods >= REGIMES_MIN_PERIODS && simple.mean != null;
+        const includeAdvanced =
+          !!advanced && advanced.nPeriods >= REGIMES_MIN_PERIODS && advanced.mean != null;
+        return {
+          equity,
+          simple: includeSimple ? (simple!.mean as number) : null,
+          simpleSem: includeSimple ? simple!.sem ?? 0 : 0,
+          advanced: includeAdvanced ? (advanced!.mean as number) : null,
+          advancedSem: includeAdvanced ? advanced!.sem ?? 0 : 0,
+        };
+      });
+      result.set(key, bars);
+    }
+    return result;
+  }, [behaviouralRows]);
+
+  const behaviouralBarsForCell = (model: string, feature: "equity_share" | "hhi") =>
+    behaviouralBarsByCell.get(`${model}::${feature}`) ??
+    REGIMES_EQUITY_LABELS.map((equity) => ({
+      equity,
+      simple: null,
+      simpleSem: 0,
+      advanced: null,
+      advancedSem: 0,
+    }));
 
   return (
-    <div className="space-y-4 pb-1">
-      <Panel className="border border-[#ececec] bg-[#fafafa]">
-        <p className="text-[12px] leading-5 text-[#737373]">
-          This view makes the regime system explicit in the dashboard. The first section reads the canonical
-          market-period classifications from `market_periods`; the second shows which model and prompt combinations
-          have performed best inside each regime state. The charts below separate regime timing, recurrence, and
-          conditional performance so the tables act as audit trails instead of the first thing you have to read.
-        </p>
-      </Panel>
-
-      <Panel>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <FilterSelect
-            label="Market"
-            value={marketFilter}
-            onChange={setMarketFilter}
-            options={[
-              { value: "All", label: "All markets" },
-              ...allMarkets.map((market) => ({
-                value: market,
-                label: MARKET_LABELS[market] ?? market,
-              })),
-            ]}
-          />
-          <FilterSelect
-            label="Model"
-            value={modelFilter}
-            onChange={setModelFilter}
-            options={modelOptions.map((model) => ({
-              value: model,
-              label: model,
-            }))}
-          />
-          <FilterSelect
-            label="Prompt"
-            value={promptFilter}
-            onChange={setPromptFilter}
-            options={promptOptions.map((prompt) => ({
-              value: prompt,
-              label: prompt,
-            }))}
-          />
-          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
-            <p className="dashboard-label">Latest classified period</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#404040]">
-              {latestPeriodRow?.period ?? "—"}
-            </p>
-            <p className="mt-1 text-[11px] text-[#737373]">
-              {latestPeriodRow ? `${MARKET_LABELS[latestPeriodRow.market] ?? latestPeriodRow.market}` : "No period rows loaded"}
-            </p>
-          </div>
-        </div>
-      </Panel>
-
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <KpiCard
-          label="Period Rows"
-          value={String(periodRows.length)}
-          color={COLORS.cyan}
-          sub="Loaded from market_periods"
-        />
-        <KpiCard
-          label="Distinct Regime Codes"
-          value={String(distinctRegimeCodes)}
-          color={COLORS.amber}
-          sub="Within current market filter"
-        />
-        <KpiCard
-          label="Transition Periods"
-          value={String(regimeTransitionCount)}
-          color={COLORS.accent}
-          sub="Rows with any regime change"
-        />
-        <KpiCard
-          label="Top Conditional Sharpe"
-          value={topRegimeRow?.meanSharpe != null ? topRegimeRow.meanSharpe.toFixed(2) : "—"}
-          color={sharpeColor(topRegimeRow?.meanSharpe)}
-          sub={
-            topRegimeRow
-              ? `${MARKET_LABELS[topRegimeRow.market] ?? topRegimeRow.market} · ${topRegimeRow.model} · ${topRegimeRow.promptType}`
-              : "No regime-performance rows"
-          }
-        />
-      </div>
-
-      <SectionHeader>Analysis</SectionHeader>
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Panel className="border border-[#ececec] bg-[#fafafa]">
-          <p className="dashboard-label">Dominant state</p>
-          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#404040]">
-            {dominantRegimeRow
-              ? `${MARKET_LABELS[dominantRegimeRow.market] ?? dominantRegimeRow.market} · ${dominantRegimeRow.regimeCode}`
-              : "No dominant state yet"}
-          </p>
-          <p className="mt-2 text-[12px] leading-5 text-[#737373]">
-            {dominantRegimeRow
-              ? `${describeRegimeState(
-                  dominantRegimeRow.marketLabel,
-                  dominantRegimeRow.volLabel,
-                  dominantRegimeRow.rateLabel
-                )} is the most recurrent classified regime in the current filter, appearing in ${dominantRegimeRow.periodCount} period${dominantRegimeRow.periodCount === 1 ? "" : "s"}.`
-              : "No period rows matched the current market filter."}
-          </p>
-        </Panel>
-
-        <Panel className="border border-[#ececec] bg-[#fafafa]">
-          <p className="dashboard-label">Latest transition</p>
-          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#404040]">
-            {latestTransitionRow
-              ? `${MARKET_LABELS[latestTransitionRow.market] ?? latestTransitionRow.market} · ${latestTransitionRow.period}`
-              : "No transition detected"}
-          </p>
-          <p className="mt-2 text-[12px] leading-5 text-[#737373]">
-            {latestTransitionRow
-              ? `The latest regime change in the current filter set moves into ${describeRegimeState(
-                  latestTransitionRow.market_regime_label,
-                  latestTransitionRow.vol_regime_label,
-                  latestTransitionRow.rate_regime_label
-                )}. ${regimeTransitionCount} of ${periodRows.length || 0} period rows show at least one regime-field change.`
-              : "None of the loaded period rows are flagged as a regime transition."}
-          </p>
-        </Panel>
-
-        <Panel className="border border-[#ececec] bg-[#fafafa]">
-          <p className="dashboard-label">Performance read</p>
-          <p className="mt-2 text-[14px] font-semibold tracking-[-0.03em] text-[#404040]">
-            {topRegimeRow
-              ? `${topRegimeRow.model} · ${topRegimeRow.promptType}`
-              : "No conditional result"}
-          </p>
-          <p className="mt-2 text-[12px] leading-5 text-[#737373]">
-            {topRegimeRow
-              ? `Best conditional Sharpe is ${formatSignedNumber(topRegimeRow.meanSharpe, 2)} in ${
-                  MARKET_LABELS[topRegimeRow.market] ?? topRegimeRow.market
-                } under ${describeRegimeState(
-                  topRegimeRow.marketRegimeLabel,
-                  topRegimeRow.volRegimeLabel,
-                  topRegimeRow.rateRegimeLabel
-                )}, with mean return ${formatSignedPctFromRatio(topRegimeRow.meanReturn, 1)} across ${topRegimeRow.count} run${topRegimeRow.count === 1 ? "" : "s"}${
-                  weakestRegimeRow
-                    ? `. Weakest observed conditional Sharpe is ${formatSignedNumber(weakestRegimeRow.meanSharpe, 2)} in ${MARKET_LABELS[weakestRegimeRow.market] ?? weakestRegimeRow.market}.`
-                    : "."
-                }`
-              : "No valid run-level regime-performance rows matched the current filters."}
-          </p>
-        </Panel>
-      </div>
-
-      <Panel className="border border-[#ececec] bg-[#fafafa]">
-        <p className="dashboard-label">How to read this</p>
-        <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-3">
-          <p className="text-[12px] leading-5 text-[#737373]">
-            <span className="font-semibold text-[#655f5b]">Timeline:</span> shows when the selected market and strategy
-            moved through regime changes and what the path looked like around those shifts.
-          </p>
-          <p className="text-[12px] leading-5 text-[#737373]">
-            <span className="font-semibold text-[#655f5b]">Recurrence:</span> counts how often each classified regime
-            appeared in the `market_periods` source of truth and how often it was entered via a flagged transition.
-          </p>
-          <p className="text-[12px] leading-5 text-[#737373]">
-            <span className="font-semibold text-[#655f5b]">Conditional performance:</span> summarizes which regime states
-            were most and least favorable after applying the current market, model, and prompt filters.
-          </p>
-        </div>
-      </Panel>
-
-      <SectionHeader>Visual Analysis</SectionHeader>
-      <Panel>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <FilterSelect
-            label="Timeline market"
-            value={timelineSelection.selectedMarket}
-            onChange={timelineSelection.setSelectedMarket}
-            disabled={marketFilter !== "All" || timelineSelection.marketOptions.length <= 1}
-            options={timelineSelection.marketOptions.map((market) => ({
-              value: market,
-              label: MARKET_LABELS[market] ?? market,
-            }))}
-          />
-          <FilterSelect
-            label="Timeline strategy"
-            value={timelineSelection.selectedStrategyKey}
-            onChange={timelineSelection.setSelectedStrategyKey}
-            options={timelineSelection.strategyOptions.map((option) => ({
-              value: option.strategy_key,
-              label: formatStrategyLabel(option.strategy, option.strategy_key),
-            }))}
-          />
-          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
-            <p className="dashboard-label">Timeline source</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#404040]">{timelineSourceLabel}</p>
-            <p className="mt-1 text-[11px] text-[#737373]">
-              Regime metrics when present; otherwise the chart falls back to path metrics with regime labels.
-            </p>
-          </div>
-          <div className="rounded-none border border-[#ececec] bg-[#fafafa] px-4 py-3">
-            <p className="dashboard-label">Timeline rows</p>
-            <p className="mt-2 text-[13px] font-semibold text-[#404040]">{timelineRawRowCount}</p>
-            <p className="mt-1 text-[11px] text-[#737373]">
-              {timelineDominantRegime
-                ? `Dominant daily market regime: ${timelineDominantRegime[0]}`
-                : "No daily regime data loaded"}
-            </p>
-          </div>
-        </div>
-      </Panel>
-
-      {regimeTimelineQuery.isLoading ? (
-        <LoadingState title="Loading regime timeline" />
-      ) : timelineRows.length === 0 ? (
-        <EmptyState
-          title="No regime timeline available"
-          body="No regime-chart or equity fallback rows were returned for the current timeline market and strategy selection."
-        />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <Panel>
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-              <p className="dashboard-label">Drawdown around regime transitions</p>
-              <FigureExportControls
-                captureRef={regimeTimelineRef}
-                slug="regimes-daily-timeline"
-                caption="Regimes — drawdown around regime transitions"
-                experimentId={data.active_experiment_id}
-              />
-            </div>
-            <div ref={regimeTimelineRef} className="min-w-0">
-              <ResponsiveContainer width="100%" height={320}>
-                <AreaChart data={timelineRows} margin={{ top: 10, right: 18, left: 6, bottom: 8 }}>
-                  <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" vertical={false} strokeDasharray="3 6" />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={formatDateLabel}
-                    minTickGap={28}
-                    tick={CHART_X_TICK}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={CHART_Y_TICK}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(value: number) => `${value.toFixed(0)}%`}
-                  />
-                  <Tooltip
-                    {...tooltipStyle}
-                    labelFormatter={(value) => formatDateLabel(String(value))}
-                    formatter={(value: number | null, name: string) => {
-                      if (name === "Drawdown") {
-                        return value != null ? `${value.toFixed(1)}%` : "—";
-                      }
-                      return value != null ? `${value.toFixed(2)}%` : "—";
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey={(row: { drawdown: number | null }) =>
-                      row.drawdown != null ? row.drawdown * 100 : null
-                    }
-                    stroke={COLORS.red}
-                    fill="rgba(212, 151, 144, 0.28)"
-                    strokeWidth={2}
-                    name="Drawdown"
-                  />
-                  {timelineTransitionMarkers.map((marker) => (
-                    <ReferenceLine
-                      key={`${marker.date}-${marker.regime}`}
-                      x={marker.date}
-                      stroke="rgba(92, 82, 74, 0.45)"
-                      strokeDasharray="5 4"
-                      strokeWidth={1}
-                      ifOverflow="extendDomain"
-                    />
-                  ))}
-                </AreaChart>
-              </ResponsiveContainer>
-              <p className="mt-2 text-[11px] leading-5 text-[#737373]">
-                Vertical dashed lines mark the first trading day of each changed regime period for the selected
-                market. The filled area is the average strategy drawdown, so this chart is meant to show whether
-                drawdowns cluster around regime shifts rather than to plot the regime labels themselves.
-              </p>
-              {timelineTransitionMarkers.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {timelineTransitionMarkers.slice(0, 8).map((marker) => (
-                    <span
-                      key={`timeline-marker-${marker.date}-${marker.regime}`}
-                      className="rounded-none border border-[#ececec] bg-[#fafafa] px-2.5 py-1 text-[10px] leading-4 text-[#737373]"
-                    >
-                      <span className="font-medium text-[#404040]">{formatDateLabel(marker.date)}</span>
-                      {" · "}
-                      {marker.period}
-                      {" · "}
-                      {marker.regime}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Panel>
-
-          <Panel>
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-              <p className="dashboard-label">Regime recurrence</p>
-              <FigureExportControls
-                captureRef={regimeRecurrenceRef}
-                slug="regimes-recurrence-chart"
-                caption="Regimes — recurrence by classified regime"
-                experimentId={data.active_experiment_id}
-              />
-            </div>
-            <div ref={regimeRecurrenceRef} className="min-w-0">
-              <ResponsiveContainer width="100%" height={340}>
-                <BarChart
-                  data={recurrenceChartRows}
-                  layout="vertical"
-                  margin={{ top: 8, right: 24, left: 18, bottom: 8 }}
-                >
-                  <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" horizontal={false} strokeDasharray="3 6" />
-                  <XAxis type="number" tick={CHART_Y_TICK} axisLine={false} tickLine={false} />
-                  <YAxis
-                    type="category"
-                    dataKey="label"
-                    width={150}
-                    tick={CHART_X_TICK}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    {...tooltipStyle}
-                    formatter={(value: number | null, name: string) => {
-                      if (name === "Transitions") {
-                        return value != null ? `${value}` : "—";
-                      }
-                      return value != null ? `${value}` : "—";
-                    }}
-                    labelFormatter={(value) => String(value)}
-                  />
-                  <Legend wrapperStyle={CHART_LEGEND_WRAPPER} iconType="circle" />
-                  <Bar dataKey="periodCount" name="Periods" fill={COLORS.cyan} radius={[0, 10, 10, 0]} />
-                  <Bar
-                    dataKey="transitionCount"
-                    name="Transitions"
-                    fill="rgba(145, 126, 107, 0.72)"
-                    radius={[0, 10, 10, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Panel>
-        </div>
-      )}
-
-      <Panel>
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <p className="dashboard-label">Conditional Sharpe by regime</p>
-            <p className="mt-1 text-[11px] leading-5 text-[#737373]">
-              Aggregates the current market, model, and prompt filters back to regime-state rows so you can compare which
-              states were most supportive. {sparseConditionalRows > 0 ? `${sparseConditionalRows} filtered rows have fewer than 3 runs.` : "All visible rows have at least 3 runs."}
-            </p>
-          </div>
-          <FigureExportControls
-            captureRef={regimePerformanceChartRef}
-            slug="regimes-conditional-sharpe-chart"
-            caption="Regimes — conditional Sharpe by regime"
-            experimentId={data.active_experiment_id}
-          />
-        </div>
-        {conditionalChartRows.length === 0 ? (
-          <EmptyState
-            title="No conditional chart data"
-            body="The current market, model, and prompt filters leave no aggregated regime-performance rows to chart."
-          />
-        ) : (
-          <div ref={regimePerformanceChartRef} className="min-w-0">
-            <ResponsiveContainer
-              width="100%"
-              height={Math.max(300, conditionalChartRows.length * 42)}
-            >
-              <BarChart
-                data={conditionalChartRows}
-                layout="vertical"
-                margin={{ top: 8, right: 22, left: 18, bottom: 8 }}
-              >
-                <CartesianGrid stroke="rgba(220, 213, 206, 0.7)" horizontal={false} strokeDasharray="3 6" />
-                <XAxis type="number" tick={CHART_Y_TICK} axisLine={false} tickLine={false} />
-                <YAxis
-                  type="category"
-                  dataKey="label"
-                  width={150}
-                  tick={CHART_X_TICK}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <ReferenceLine x={0} stroke="rgba(145,126,107,0.45)" />
-                <Tooltip
-                  {...tooltipStyle}
-                  labelFormatter={(value) => String(value)}
-                  formatter={(value: number | null, name: string, payload) => {
-                    if (name === "Mean Sharpe") {
-                      return value != null ? value.toFixed(2) : "—";
-                    }
-                    return payload.payload.meanReturn != null
-                      ? formatSignedPctFromRatio(payload.payload.meanReturn, 1)
-                      : "—";
-                  }}
-                />
-                <Bar dataKey="meanSharpe" name="Mean Sharpe" radius={[0, 10, 10, 0]}>
-                  {conditionalChartRows.map((row) => (
-                    <Cell key={row.label} fill={sharpeColor(row.meanSharpe)} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        )}
-      </Panel>
-
-      <div className="space-y-3">
-        <SectionHeader>Methodology</SectionHeader>
-        <p className="max-w-3xl text-[12px] leading-5 text-[#737373]">
-          The charts above separate the regime source of truth from the performance aggregation layer so you can see both
-          what the market state was and how strategies behaved inside those states.
-        </p>
-        <Accordion
-          type="multiple"
-          className="dashboard-panel rounded-none border border-[#ececec] px-3"
-        >
-          <AccordionItem value="regime-labels" className="border-[#ececec]">
-            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#404040] hover:no-underline">
-              Regime labels and regime codes
-            </AccordionTrigger>
-            <AccordionContent className="text-[12px] leading-5 text-[#525252]">
-              `Bear`, `Flat`, and `Bull` describe the market leg; `Low`, `Elevated`, and `High` describe the volatility
-              environment; `Easing`, `Stable`, and `Tightening` describe the rate leg. `regime_code` combines those three
-              labels into one compact identifier for the full state.
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="source-of-truth" className="border-[#ececec]">
-            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#404040] hover:no-underline">
-              Source-of-truth periods vs run-level performance
-            </AccordionTrigger>
-            <AccordionContent className="text-[12px] leading-5 text-[#525252]">
-              The period tables and recurrence chart come directly from `market_periods`, which is the canonical market
-              classification layer. The conditional performance chart uses run rows that inherit those regime labels and then
-              aggregates realized outcomes by regime, market, model, and prompt combination.
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="timeline-method" className="border-[#ececec]">
-            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#404040] hover:no-underline">
-              Daily timeline construction
-            </AccordionTrigger>
-            <AccordionContent className="text-[12px] leading-5 text-[#525252]">
-              The timeline prefers `/charts/regimes` so it can use daily regime metrics directly. When those rows are not
-              available, it falls back to daily path metrics and infers the consensus market regime from the attached daily
-              labels. Dashed lines mark dates where any regime field changed.
-            </AccordionContent>
-          </AccordionItem>
-          <AccordionItem value="sample-caveats" className="border-[#ececec]">
-            <AccordionTrigger className="py-3 text-left text-[12px] font-semibold text-[#404040] hover:no-underline">
-              Sample-size caveats
-            </AccordionTrigger>
-            <AccordionContent className="text-[12px] leading-5 text-[#525252]">
-              Conditional regime rows with low run counts can move sharply when filters change. Use the run counts in the
-              table below to judge whether a regime advantage looks broad-based or driven by only a few observations.
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
-      </div>
-
-      <SectionHeader>Source-Of-Truth Period Regimes</SectionHeader>
-      {periodsQuery.isLoading ? (
-        <LoadingState title="Loading market period regimes" />
-      ) : periodRows.length === 0 ? (
-        <EmptyState
-          title="No period-level regimes available"
-          body="The `/api/periods` endpoint returned no rows for the current experiment or market filter."
-        />
-      ) : (
-        <>
-          <Panel className="overflow-x-auto p-0">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
-              <p className="dashboard-label">Market-period regime table</p>
-              <FigureExportControls
-                captureRef={regimePeriodsRef}
-                slug="regimes-market-period-table"
-                caption="Regimes — market-period regime table"
-                experimentId={data.active_experiment_id}
-              />
-            </div>
-            <div ref={regimePeriodsRef} className="min-w-0">
-              <table className="w-full min-w-[980px] text-[11px]">
-                <thead>
-                  <tr className="border-b border-[#ececec] bg-[#fafafa]">
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Period</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Window</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Vol</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Rates</th>
-                    <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Regime code</th>
-                    <th className="px-3 py-2.5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Changed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {periodRows.map((row) => (
-                    <tr
-                      key={`${row.market}-${row.period}`}
-                      className="border-b border-[#ececec] last:border-0"
-                    >
-                      <td className="px-3 py-2.5 font-medium text-[#404040]">
-                        {MARKET_LABELS[row.market] ?? row.market}
-                      </td>
-                      <td className="px-3 py-2.5 text-[#737373]">{row.period}</td>
-                      <td className="px-3 py-2.5 text-[#737373]">
-                        {row.period_start_date && row.period_end_date
-                          ? `${formatDateLabel(row.period_start_date)} - ${formatDateLabel(row.period_end_date)}`
-                          : "—"}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <RegimeBadge kind="market" label={row.market_regime_label} />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <RegimeBadge kind="vol" label={row.vol_regime_label} />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <RegimeBadge kind="rate" label={row.rate_regime_label} />
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] text-[#737373]">
-                        {row.regime_code ?? "—"}
-                      </td>
-                      <td className="px-3 py-2.5 text-center">
-                        <span
-                          className="inline-flex rounded-none px-2.5 py-1 text-[10px] font-semibold"
-                          style={
-                            Number(row.any_regime_changed ?? 0) > 0
-                              ? { backgroundColor: "rgba(116, 188, 160, 0.18)", color: "#4b7667" }
-                              : { backgroundColor: "rgba(214,205,190,0.18)", color: "#8c847d" }
-                          }
-                        >
-                          {Number(row.any_regime_changed ?? 0) > 0 ? "Yes" : "No"}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
-
-          <Panel className="overflow-x-auto p-0">
-            <div className="border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
-              <p className="dashboard-label">Regime code recurrence</p>
-            </div>
-            <table className="w-full min-w-[760px] text-[11px]">
-              <thead>
-                <tr className="border-b border-[#ececec] bg-[#fafafa]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Regime code</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">State</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Periods</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Transitions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {regimeSummaryRows.map((row) => (
-                  <tr
-                    key={`${row.market}-${row.regimeCode}`}
-                    className="border-b border-[#ececec] last:border-0"
-                  >
-                    <td className="px-3 py-2.5 font-medium text-[#404040]">
-                      {MARKET_LABELS[row.market] ?? row.market}
-                    </td>
-                    <td className="px-3 py-2.5 font-mono text-[10px] text-[#737373]">
-                      {row.regimeCode}
-                    </td>
-                    <td className="px-3 py-2.5 text-[#737373]">
-                      <div className="flex flex-wrap gap-1.5">
-                        <RegimeBadge kind="market" label={row.marketLabel} />
-                        <RegimeBadge kind="vol" label={row.volLabel} />
-                        <RegimeBadge kind="rate" label={row.rateLabel} />
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.periodCount}</td>
-                    <td className="px-3 py-2.5 text-right text-[#737373]">{row.transitionCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Panel>
-        </>
-      )}
-
-      <SectionHeader>Regime-Conditional Performance</SectionHeader>
-      {regimePerformanceRows.length === 0 ? (
-        <EmptyState
-          title="No regime-conditional performance rows"
-          body="No valid runs matched the current market, model, and prompt filters."
-        />
-      ) : (
-        <Panel className="overflow-x-auto p-0">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#ececec] bg-[#fafafa] px-3 py-2">
-            <p className="dashboard-label">Model and prompt performance by regime</p>
-            <FigureExportControls
-              captureRef={regimePerformanceRef}
-              slug="regimes-conditional-performance-table"
-              caption="Regimes — conditional performance by model and prompt"
-              experimentId={data.active_experiment_id}
+    <UITooltipProvider delayDuration={150}>
+      <div className="space-y-5 pb-1">
+        <Panel>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <FilterSelect
+              label="Market"
+              value={marketFilter}
+              onChange={setMarketFilter}
+              options={[
+                { value: "All", label: "All markets" },
+                ...allMarkets.map((market) => ({
+                  value: market,
+                  label: MARKET_LABELS[market] ?? market,
+                })),
+              ]}
+            />
+            <FilterSelect
+              label="Model"
+              value={modelFilter}
+              onChange={setModelFilter}
+              options={modelOptions.map((model) => ({ value: model, label: model }))}
+            />
+            <FilterSelect
+              label="Prompt"
+              value={promptFilter}
+              onChange={setPromptFilter}
+              options={promptOptions.map((prompt) => ({
+                value: prompt,
+                label: prompt === "All" ? "All prompts" : prompt,
+              }))}
             />
           </div>
-          <div ref={regimePerformanceRef} className="min-w-0">
-            <table className="w-full min-w-[980px] text-[11px]">
-              <thead>
-                <tr className="border-b border-[#ececec] bg-[#fafafa]">
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Market</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Regime code</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">State</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Model</th>
-                  <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Prompt</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Sharpe</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Mean Return</th>
-                  <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">Runs</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...regimePerformanceRows]
-                  .sort((left, right) => {
-                    if ((right.meanSharpe ?? -Infinity) !== (left.meanSharpe ?? -Infinity)) {
-                      return (right.meanSharpe ?? -Infinity) - (left.meanSharpe ?? -Infinity);
-                    }
-                    return right.count - left.count;
-                  })
-                  .map((row) => (
-                    <tr
-                      key={`${row.market}-${row.regimeCode}-${row.model}-${row.promptType}`}
-                      className="border-b border-[#ececec] last:border-0"
-                    >
-                      <td className="px-3 py-2.5 font-medium text-[#404040]">
-                        {MARKET_LABELS[row.market] ?? row.market}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] text-[#737373]">
-                        {row.regimeCode}
-                      </td>
-                      <td className="px-3 py-2.5 text-[#737373]">
-                        <div className="flex flex-wrap gap-1.5">
-                          <RegimeBadge kind="market" label={row.marketRegimeLabel} />
-                          <RegimeBadge kind="vol" label={row.volRegimeLabel} />
-                          <RegimeBadge kind="rate" label={row.rateRegimeLabel} />
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-[#737373]">{row.model}</td>
-                      <td className="px-3 py-2.5 text-[#737373]">{row.promptType}</td>
-                      <td
-                        className="px-3 py-2.5 text-right font-medium"
-                        style={{ color: sharpeColor(row.meanSharpe) }}
-                      >
-                        {row.meanSharpe != null ? row.meanSharpe.toFixed(2) : "—"}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-[#737373]">
-                        {formatPctFromRatio(row.meanReturn, 1)}
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-[#737373]">{row.count}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
         </Panel>
-      )}
-    </div>
+
+        <p className="text-[12px] leading-5 text-[#737373]">{headerStripText}</p>
+
+        <Panel className="border border-[#ececec] bg-[#fafafa]">
+          <p className="text-[12px] leading-5 text-[#525252]">
+            This view answers two narrow questions about regime sensitivity. The first exhibit
+            shows the average <em>excess</em> return (model minus market index) inside each
+            equity-vol regime cell, so you can see where each model and prompt actually adds or
+            destroys value relative to the index. The second exhibit shows how each model
+            <em> behaves</em> inside those regimes — how much equity it holds and how
+            concentrated the portfolio is — so you can separate “the model picked the right
+            beta” from “the model picked the right names”. Filters apply to both exhibits.
+          </p>
+        </Panel>
+
+        <SectionHeader>Exhibit 1 — Excess return by regime</SectionHeader>
+        {periodsQuery.isLoading ? (
+          <LoadingState title="Loading regime period rows" />
+        ) : heatmapHasData ? null : (
+          <EmptyState
+            title="No regime cells match these filters"
+            body="Try widening the market, model, or prompt filter — every cell is currently empty."
+          />
+        )}
+        {!periodsQuery.isLoading && heatmapHasData && (
+          <Panel>
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+              <p className="dashboard-label">
+                Mean excess return (pp) — model & prompt × equity / vol regime
+              </p>
+              <FigureExportControls
+                captureRef={heatmapRef}
+                slug="regimes-excess-return-heatmap"
+                caption="Regimes — mean excess return by model, prompt, and regime state"
+                experimentId={data.active_experiment_id}
+                pngDisabled={periodsQuery.isLoading || heatmapCells.length === 0}
+                pngDisabledReason="Heatmap is still loading or has no data."
+              />
+            </div>
+            <div ref={heatmapRef} className="min-w-0 overflow-x-auto">
+              <div className="inline-block min-w-full">
+                <div
+                  className="grid"
+                  style={{
+                    gridTemplateColumns: `220px repeat(${heatmapColumns.length}, minmax(60px, 1fr))`,
+                  }}
+                >
+                  {/* Header row 1: equity regime spans */}
+                  <div className="border-b border-r border-[#ececec] bg-[#fafafa] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">
+                    Model · Prompt
+                  </div>
+                  {REGIMES_EQUITY_LABELS.map((equity) => (
+                    <div
+                      key={`eq-${equity}`}
+                      className="border-b border-r border-[#ececec] bg-[#fafafa] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#737373]"
+                      style={{ gridColumn: "span 3 / span 3" }}
+                    >
+                      {equity}
+                    </div>
+                  ))}
+                  {REGIMES_EQUITY_LABELS.map((equity) => (
+                    <div
+                      key={`eq-overall-${equity}`}
+                      className="border-b border-r border-[#ececec] bg-[#fafafa] px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#737373]"
+                    >
+                      {equity}
+                    </div>
+                  ))}
+
+                  {/* Header row 2: vol labels */}
+                  <div className="border-b border-r border-[#ececec] bg-[#fafafa] px-3 py-1 text-[10px] uppercase tracking-[0.14em] text-[#a3a3a3]">
+                    &nbsp;
+                  </div>
+                  {REGIMES_EQUITY_LABELS.flatMap((equity) =>
+                    REGIMES_VOL_LABELS.map((vol) => (
+                      <div
+                        key={`vol-${equity}-${vol}`}
+                        className="border-b border-r border-[#ececec] bg-[#fafafa] px-1 py-1 text-center text-[10px] text-[#a3a3a3]"
+                      >
+                        {vol}
+                      </div>
+                    ))
+                  )}
+                  {REGIMES_EQUITY_LABELS.map((equity) => (
+                    <div
+                      key={`overall-${equity}`}
+                      className="border-b border-r border-[#ececec] bg-[#fafafa] px-1 py-1 text-center text-[10px] font-semibold text-[#737373]"
+                    >
+                      Overall
+                    </div>
+                  ))}
+
+                  {/* Body rows */}
+                  {heatmapRowsByModelPrompt.map((row) => (
+                    <Fragment key={`${row.model}-${row.prompt}`}>
+                      <div className="flex items-center border-r border-b border-[#ececec] bg-[#fafafa] px-3 py-2 text-[11px] font-medium text-[#404040]">
+                        <span className="truncate">
+                          {row.model} ·{" "}
+                          <span className="text-[#737373]">{row.prompt}</span>
+                        </span>
+                      </div>
+                      {heatmapColumns.map((col) => renderHeatmapCell(row, col))}
+                    </Fragment>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <p className="mt-3 text-[11px] leading-5 text-[#a3a3a3]">
+              Cells show mean (run-level) excess return, in percentage points, vs the per-market,
+              per-period index run. Diverging green/red scale, symmetric, clipped at the 5th/95th
+              percentile. Hatched cells have fewer than 3 distinct (market, period) observations.
+              The right-hand “Overall” column collapses across vol regimes.
+            </p>
+          </Panel>
+        )}
+
+        <SectionHeader>Exhibit 2 — Behavioural response by regime</SectionHeader>
+        {!behaviouralHasData && !tickerAssetClassQuery.isLoading && !holdingsCapabilityUnavailable && (
+          <EmptyState
+            title="No behavioural rows match these filters"
+            body="No (model, prompt, equity-regime) cell currently has enough runs. Try widening the filter set."
+          />
+        )}
+        <Panel>
+          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+            <p className="dashboard-label">
+              Equity share & HHI by equity regime — 3 models × 2 features
+            </p>
+            <FigureExportControls
+              captureRef={behaviouralGridRef}
+              slug="regimes-behavioural-response-grid"
+              caption="Regimes — behavioural response by model and equity regime"
+              experimentId={data.active_experiment_id}
+              pngDisabled={tickerAssetClassQuery.isLoading || behaviouralRows.length === 0}
+              pngDisabledReason="Behavioural grid is still loading or has no data."
+            />
+          </div>
+          <div ref={behaviouralGridRef} className="min-w-0">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <p className="text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">
+                Equity share
+              </p>
+              <p className="text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-[#a3a3a3]">
+                Holdings concentration (HHI)
+              </p>
+              {modelsForGrid.map((model) => (
+                <Fragment key={`grid-${model}`}>
+                  <div className="rounded-none border border-[#ececec] bg-white p-2">
+                    <p className="px-2 pt-1 text-[11px] font-semibold text-[#404040]">{model}</p>
+                    {holdingsCapabilityUnavailable ? (
+                      <div className="flex h-[200px] items-center justify-center px-3 text-center text-[11px] leading-5 text-[#a3a3a3]">
+                        Holdings unavailable on this deployment, so equity share cannot be
+                        computed.
+                      </div>
+                    ) : tickerAssetClassQuery.isLoading ? (
+                      <div className="flex h-[200px] items-center justify-center text-[11px] text-[#a3a3a3]">
+                        Loading holdings…
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart
+                          data={behaviouralBarsForCell(model, "equity_share")}
+                          margin={{ top: 12, right: 12, left: 12, bottom: 8 }}
+                        >
+                          <CartesianGrid
+                            stroke="rgba(220, 213, 206, 0.7)"
+                            vertical={false}
+                            strokeDasharray="3 6"
+                          />
+                          <XAxis
+                            dataKey="equity"
+                            tick={CHART_X_TICK}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            domain={equityShareDomain}
+                            tick={CHART_Y_TICK}
+                            axisLine={false}
+                            tickLine={false}
+                            tickFormatter={(value: number) => `${(value * 100).toFixed(0)}%`}
+                          />
+                          <Tooltip
+                            {...tooltipStyle}
+                            formatter={(value: number | null) =>
+                              value != null ? `${(value * 100).toFixed(1)}%` : "—"
+                            }
+                          />
+                          {(promptFilter === "All" || promptFilter === "simple") && (
+                            <Bar
+                              dataKey="simple"
+                              name="simple"
+                              fill={COLORS.accent}
+                              radius={[2, 2, 0, 0]}
+                            >
+                              <ErrorBar
+                                dataKey="simpleSem"
+                                width={5}
+                                strokeWidth={1.5}
+                                stroke="#7a7068"
+                              />
+                            </Bar>
+                          )}
+                          {(promptFilter === "All" || promptFilter === "advanced") && (
+                            <Bar
+                              dataKey="advanced"
+                              name="advanced"
+                              fill={COLORS.cyan}
+                              radius={[2, 2, 0, 0]}
+                            >
+                              <ErrorBar
+                                dataKey="advancedSem"
+                                width={5}
+                                strokeWidth={1.5}
+                                stroke="#7a7068"
+                              />
+                            </Bar>
+                          )}
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                  <div className="rounded-none border border-[#ececec] bg-white p-2">
+                    <p className="px-2 pt-1 text-[11px] font-semibold text-[#404040]">{model}</p>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart
+                        data={behaviouralBarsForCell(model, "hhi")}
+                        margin={{ top: 12, right: 12, left: 12, bottom: 8 }}
+                      >
+                        <CartesianGrid
+                          stroke="rgba(220, 213, 206, 0.7)"
+                          vertical={false}
+                          strokeDasharray="3 6"
+                        />
+                        <XAxis
+                          dataKey="equity"
+                          tick={CHART_X_TICK}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          domain={hhiDomain}
+                          tick={CHART_Y_TICK}
+                          axisLine={false}
+                          tickLine={false}
+                          tickFormatter={(value: number) => value.toFixed(2)}
+                        />
+                        <Tooltip
+                          {...tooltipStyle}
+                          formatter={(value: number | null) =>
+                            value != null ? value.toFixed(3) : "—"
+                          }
+                        />
+                        {(promptFilter === "All" || promptFilter === "simple") && (
+                          <Bar
+                            dataKey="simple"
+                            name="simple"
+                            fill={COLORS.accent}
+                            radius={[2, 2, 0, 0]}
+                          >
+                            <ErrorBar
+                              dataKey="simpleSem"
+                              width={5}
+                              strokeWidth={1.5}
+                              stroke="#7a7068"
+                            />
+                          </Bar>
+                        )}
+                        {(promptFilter === "All" || promptFilter === "advanced") && (
+                          <Bar
+                            dataKey="advanced"
+                            name="advanced"
+                            fill={COLORS.cyan}
+                            radius={[2, 2, 0, 0]}
+                          >
+                            <ErrorBar
+                              dataKey="advancedSem"
+                              width={5}
+                              strokeWidth={1.5}
+                              stroke="#7a7068"
+                            />
+                          </Bar>
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </Fragment>
+              ))}
+            </div>
+          </div>
+          <p className="mt-3 text-[11px] leading-5 text-[#a3a3a3]">
+            Bars show the mean of each metric across runs in the regime cell, with ±1 SEM error
+            bars. Y-axes are locked across the three model rows so the same regime cell is
+            visually comparable between models. Cells with fewer than 3 distinct (market, period)
+            observations are omitted. Equity share is the sum of portfolio weights on tickers
+            classified as equity in the daily holdings asset-class lookup.
+          </p>
+        </Panel>
+      </div>
+    </UITooltipProvider>
   );
 }
 
