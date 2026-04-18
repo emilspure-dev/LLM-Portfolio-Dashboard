@@ -47,6 +47,7 @@ import {
   apiRouteLikelyMissing,
   computeAutocorrelation,
   collectPathIdsForStrategyMarket,
+  fetchAllRunResults,
   getRunModelFallbackKey,
   getRunModelGroupKey,
   holdingsDataLikelyUnavailable,
@@ -8243,6 +8244,36 @@ const SUBTAB_BUTTON_INACTIVE =
 
 export function PathsTab({ data, runs, health }: BaseTabProps) {
   const [activeSection, setActiveSection] = useState<"equity" | "robustness" | "drawdowns" | "runs">("equity");
+  const sectionNeedsRuns =
+    activeSection === "robustness" || activeSection === "runs";
+  const pathRunsQuery = useQuery({
+    queryKey: ["paths-run-details", data.active_experiment_id],
+    queryFn: () => fetchAllRunResults(data.active_experiment_id),
+    enabled:
+      Boolean(data.active_experiment_id) &&
+      sectionNeedsRuns &&
+      runs.length === 0,
+    staleTime: 30_000,
+    retry: 0,
+  });
+  const effectiveRuns = runs.length > 0 ? runs : pathRunsQuery.data ?? [];
+
+  if (sectionNeedsRuns && effectiveRuns.length === 0 && pathRunsQuery.isLoading) {
+    return <LoadingState title="Loading run-level analytics" />;
+  }
+
+  if (sectionNeedsRuns && effectiveRuns.length === 0 && pathRunsQuery.isError) {
+    return (
+      <EmptyState
+        title="Run-level analytics are taking too long"
+        body={
+          pathRunsQuery.error instanceof Error
+            ? pathRunsQuery.error.message
+            : "Detailed run results could not be loaded for this Paths subview."
+        }
+      />
+    );
+  }
 
   return (
     <div className="space-y-4 pb-1">
@@ -8275,10 +8306,10 @@ export function PathsTab({ data, runs, health }: BaseTabProps) {
         </div>
       </div>
 
-      {activeSection === "equity" && <EquityCurvesTab data={data} runs={runs} />}
-      {activeSection === "robustness" && <RollingRiskTab data={data} runs={runs} />}
-      {activeSection === "drawdowns" && <DrawdownsTab data={data} runs={runs} />}
-      {activeSection === "runs" && <RunExplorerTab data={data} runs={runs} health={health} />}
+      {activeSection === "equity" && <EquityCurvesTab data={data} runs={effectiveRuns} />}
+      {activeSection === "robustness" && <RollingRiskTab data={data} runs={effectiveRuns} />}
+      {activeSection === "drawdowns" && <DrawdownsTab data={data} runs={effectiveRuns} />}
+      {activeSection === "runs" && <RunExplorerTab data={data} runs={effectiveRuns} health={health} />}
     </div>
   );
 }

@@ -34,7 +34,7 @@ const TAB_NAMES = [
   "Diagnostics",
 ] as const;
 
-const RUN_DETAIL_TAB_INDICES = new Set([1, 3, 4, 5, 6, 7, 8]);
+const RUN_DETAIL_TAB_INDICES = new Set([1, 4, 5, 6, 7, 8]);
 const SCOPE_ANIMATION_DURATION_MS = 3400;
 const SCOPE_METRICS = [
   { target: 25_920, decimals: 0, label: "portfolios" },
