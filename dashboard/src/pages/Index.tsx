@@ -35,6 +35,26 @@ const TAB_NAMES = [
 ] as const;
 
 const RUN_DETAIL_TAB_INDICES = new Set([1, 3, 4, 5, 6, 7, 8]);
+const SCOPE_ANIMATION_DURATION_MS = 3400;
+const SCOPE_METRICS = [
+  { target: 25_920, decimals: 0, label: "portfolios" },
+  { target: 4.5, decimals: 1, label: "years" },
+  { target: 3, decimals: 0, label: "markets" },
+  { target: 3, decimals: 0, label: "models" },
+  { target: 2, decimals: 0, label: "prompt types" },
+] as const;
+
+function easeOutQuint(progress: number) {
+  return 1 - (1 - progress) ** 5;
+}
+
+function formatScopeMetricValue(value: number, decimals: number) {
+  if (decimals > 0) {
+    return value.toFixed(decimals);
+  }
+
+  return Math.round(value).toLocaleString();
+}
 
 function LoadingPanel({
   title = "Loading dashboard data",
@@ -106,38 +126,11 @@ function ErrorPanel({
   );
 }
 
-function computeCoverageYears(
-  periods: Array<{ period_start_date: string; period_end_date: string }>
-) {
-  const timestamps = periods
-    .flatMap((period) => {
-      const start = new Date(period.period_start_date);
-      const end = new Date(period.period_end_date);
-      return [
-        Number.isNaN(start.getTime()) ? null : start.getTime(),
-        Number.isNaN(end.getTime()) ? null : end.getTime(),
-      ];
-    })
-    .filter((value): value is number => value != null);
-
-  if (timestamps.length === 0) {
-    return null;
-  }
-
-  const minTime = Math.min(...timestamps);
-  const maxTime = Math.max(...timestamps);
-  const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
-
-  return (maxTime - minTime) / msPerYear;
-}
-
-function formatYears(value: number) {
-  const rounded = Math.round(value * 10) / 10;
-  return Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1);
-}
-
 export default function Index() {
   const [activeTab, setActiveTab] = useState(0);
+  const [animatedScopeValues, setAnimatedScopeValues] = useState<number[]>(() =>
+    SCOPE_METRICS.map(() => 0)
+  );
   const activeTabNeedsRunDetails = RUN_DETAIL_TAB_INDICES.has(activeTab);
 
   const healthQuery = useQuery({
@@ -182,6 +175,38 @@ export default function Index() {
     setActiveTab(0);
   }, [resolvedExperimentId]);
 
+  useEffect(() => {
+    let frameId = 0;
+    const startTime = performance.now();
+
+    const tick = (now: number) => {
+      const progress = Math.min(
+        (now - startTime) / SCOPE_ANIMATION_DURATION_MS,
+        1
+      );
+      const easedProgress = easeOutQuint(progress);
+
+      setAnimatedScopeValues(
+        SCOPE_METRICS.map((metric) => {
+          const precision = 10 ** metric.decimals;
+          const animatedValue =
+            Math.floor(metric.target * easedProgress * precision) / precision;
+          return progress >= 1 ? metric.target : animatedValue;
+        })
+      );
+
+      if (progress < 1) {
+        frameId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
   const data = (dashboardQuery.data ?? null) as EvaluationData | null;
 
   // Summary and runs are always unfiltered (all markets); each tab manages its own market filter.
@@ -222,31 +247,13 @@ export default function Index() {
     !errorMessage &&
     metaQuery.status === "success" &&
     !resolvedExperimentId;
-  const runCount =
-    allRuns.length > 0
-      ? allRuns.length
-      : data?.overview_summary?.valid_runs ?? 0;
-  const periodCount =
-    data?.filters.periods.length ?? metaQuery.data?.available_periods.length ?? 0;
-  const yearCount = useMemo(() => {
-    const coverageYears = computeCoverageYears(data?.periods ?? []);
-    if (coverageYears != null && Number.isFinite(coverageYears) && coverageYears > 0) {
-      return coverageYears;
-    }
-    return periodCount / 2;
-  }, [data?.periods, periodCount]);
-  const marketCount =
-    data?.filters.markets.length ?? metaQuery.data?.available_markets.length ?? 0;
-  const modelCount =
-    data?.filters.models.length ?? metaQuery.data?.available_models.length ?? 0;
-  const promptTypeCount = 2;
-  const scopeItems = [
-    { value: runCount.toLocaleString(), label: "portfolios" },
-    { value: formatYears(yearCount), label: "years" },
-    { value: marketCount.toLocaleString(), label: "markets" },
-    { value: modelCount.toLocaleString(), label: "models" },
-    { value: promptTypeCount.toLocaleString(), label: "prompt types" },
-  ];
+  const scopeItems = SCOPE_METRICS.map((metric, index) => ({
+    value: formatScopeMetricValue(
+      animatedScopeValues[index] ?? 0,
+      metric.decimals
+    ),
+    label: metric.label,
+  }));
 
   const handleRefresh = () => {
     void healthQuery.refetch();
