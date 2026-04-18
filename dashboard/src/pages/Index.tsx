@@ -34,7 +34,15 @@ const TAB_NAMES = [
   "Diagnostics",
 ] as const;
 
-function LoadingPanel() {
+const RUN_DETAIL_TAB_INDICES = new Set([1, 3, 4, 5, 6, 7, 8]);
+
+function LoadingPanel({
+  title = "Loading dashboard data",
+  subtitle = "Pulling the latest experiment from the read-only API.",
+}: {
+  title?: string;
+  subtitle?: string;
+}) {
   return (
     <div className="py-8">
       <div className="dashboard-panel-strong flex min-h-[360px] items-center justify-center rounded-none p-8">
@@ -44,10 +52,10 @@ function LoadingPanel() {
           </div>
           <div>
             <p className="text-[15px] font-medium tracking-[-0.01em] text-[#0a0a0a]">
-              Loading dashboard data
+              {title}
             </p>
             <p className="mt-1 text-[13px] leading-5 text-[#737373]">
-              Pulling the latest experiment from the read-only API.
+              {subtitle}
             </p>
           </div>
         </div>
@@ -57,11 +65,16 @@ function LoadingPanel() {
 }
 
 interface ErrorPanelProps {
+  title?: string;
   message: string;
   onRetry: () => void;
 }
 
-function ErrorPanel({ message, onRetry }: ErrorPanelProps) {
+function ErrorPanel({
+  title = "Unable to load dashboard data",
+  message,
+  onRetry,
+}: ErrorPanelProps) {
   return (
     <div className="py-8">
       <div className="dashboard-panel-strong flex min-h-[360px] items-center justify-center rounded-none p-8">
@@ -71,7 +84,7 @@ function ErrorPanel({ message, onRetry }: ErrorPanelProps) {
           </div>
           <div>
             <p className="text-[15px] font-medium tracking-[-0.01em] text-[#0a0a0a]">
-              Unable to load dashboard data
+              {title}
             </p>
             <p className="mt-1 max-w-xl text-[13px] leading-5 text-[#737373]">
               {message}
@@ -125,6 +138,7 @@ function formatYears(value: number) {
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState(0);
+  const activeTabNeedsRunDetails = RUN_DETAIL_TAB_INDICES.has(activeTab);
 
   const healthQuery = useQuery({
     queryKey: ["api-health"],
@@ -158,9 +172,10 @@ export default function Index() {
     queryFn: () => fetchAllRunResults(resolvedExperimentId!),
     enabled:
       Boolean(resolvedExperimentId && metaQuery.data) &&
-      dashboardQuery.status === "success",
+      dashboardQuery.status === "success" &&
+      activeTabNeedsRunDetails,
     staleTime: 30_000,
-    retry: 1,
+    retry: 0,
   });
 
   useEffect(() => {
@@ -179,7 +194,10 @@ export default function Index() {
     return {
       ...data,
       runs: allRuns,
-      run_details_loading: runsQuery.isLoading || runsQuery.isFetching,
+      run_details_loading:
+        activeTabNeedsRunDetails && (runsQuery.isLoading || runsQuery.isFetching),
+      run_details_error:
+        runsQuery.error instanceof Error ? runsQuery.error.message : null,
       behavior:
         data.behavior.length > 0 ? data.behavior : computeBehavior(allRuns),
       summary: buildStrategySummaryWithRunSharpe(
@@ -188,7 +206,7 @@ export default function Index() {
         allRuns
       ),
     };
-  }, [allRuns, data, runsQuery.isFetching, runsQuery.isLoading]);
+  }, [activeTabNeedsRunDetails, allRuns, data, runsQuery.error, runsQuery.isFetching, runsQuery.isLoading]);
 
   const isLoading =
     healthQuery.isLoading ||
@@ -198,7 +216,6 @@ export default function Index() {
     (healthQuery.error as Error | null)?.message ??
     (metaQuery.error as Error | null)?.message ??
     (dashboardQuery.error as Error | null)?.message ??
-    (runsQuery.error as Error | null)?.message ??
     null;
   const noExperimentAvailable =
     !isLoading &&
@@ -235,7 +252,7 @@ export default function Index() {
     void healthQuery.refetch();
     void metaQuery.refetch();
     void dashboardQuery.refetch();
-    if (resolvedExperimentId) {
+    if (resolvedExperimentId && (activeTabNeedsRunDetails || allRuns.length > 0)) {
       void runsQuery.refetch();
     }
   };
@@ -328,30 +345,48 @@ export default function Index() {
             </div>
 
             <div className="pt-6">
-              {activeTab === 0 && <OverviewTab data={visibleData} runs={allRuns} />}
-              {activeTab === 1 && (
-                <StrategiesTab data={visibleData} runs={allRuns} />
-              )}
-              {activeTab === 2 && (
-                <FactorStyleTab data={visibleData} health={healthQuery.data} />
-              )}
-              {activeTab === 3 && (
-                <PathsTab data={visibleData} runs={allRuns} health={healthQuery.data} />
-              )}
-              {activeTab === 4 && (
-                <PortfoliosTab data={visibleData} runs={allRuns} health={healthQuery.data} />
-              )}
-              {activeTab === 5 && (
-                <ByMarketTab data={visibleData} runs={allRuns} />
-              )}
-              {activeTab === 6 && (
-                <RegimesTab data={visibleData} runs={allRuns} health={healthQuery.data} />
-              )}
-              {activeTab === 7 && (
-                <BehaviorTab data={visibleData} runs={allRuns} health={healthQuery.data} />
-              )}
-              {activeTab === 8 && (
-                <DiagnosticsTab data={visibleData} runs={allRuns} />
+              {activeTabNeedsRunDetails && runsQuery.isLoading && allRuns.length === 0 ? (
+                <LoadingPanel
+                  title="Loading run-level analytics"
+                  subtitle="Fetching detailed run results for the selected tab."
+                />
+              ) : activeTabNeedsRunDetails && runsQuery.isError && allRuns.length === 0 ? (
+                <ErrorPanel
+                  title="Run-level analytics are taking too long"
+                  message={
+                    (runsQuery.error as Error | null)?.message ??
+                    "Detailed run results could not be loaded for this tab."
+                  }
+                  onRetry={handleRefresh}
+                />
+              ) : (
+                <>
+                  {activeTab === 0 && <OverviewTab data={visibleData} runs={allRuns} />}
+                  {activeTab === 1 && (
+                    <StrategiesTab data={visibleData} runs={allRuns} />
+                  )}
+                  {activeTab === 2 && (
+                    <FactorStyleTab data={visibleData} health={healthQuery.data} />
+                  )}
+                  {activeTab === 3 && (
+                    <PathsTab data={visibleData} runs={allRuns} health={healthQuery.data} />
+                  )}
+                  {activeTab === 4 && (
+                    <PortfoliosTab data={visibleData} runs={allRuns} health={healthQuery.data} />
+                  )}
+                  {activeTab === 5 && (
+                    <ByMarketTab data={visibleData} runs={allRuns} />
+                  )}
+                  {activeTab === 6 && (
+                    <RegimesTab data={visibleData} runs={allRuns} health={healthQuery.data} />
+                  )}
+                  {activeTab === 7 && (
+                    <BehaviorTab data={visibleData} runs={allRuns} health={healthQuery.data} />
+                  )}
+                  {activeTab === 8 && (
+                    <DiagnosticsTab data={visibleData} runs={allRuns} />
+                  )}
+                </>
               )}
             </div>
           </>

@@ -76,6 +76,7 @@ export interface EvaluationData {
   holdings: unknown[];
   runs_long: RunRow[];
   run_details_loading?: boolean;
+  run_details_error?: string | null;
 }
 
 export type InsightType = "pos" | "neg" | "warn" | "info";

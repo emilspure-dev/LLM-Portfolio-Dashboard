@@ -1062,7 +1062,7 @@ export async function fetchAllRunResults(experimentId: string): Promise<RunRow[]
   );
   const remainingPages = await mapInBatches(
     remainingPageNumbers,
-    6,
+    2,
     (page) =>
       getRunResults({
         experiment_id: experimentId,
