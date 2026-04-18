@@ -12,6 +12,7 @@ import {
 import type {
   FactorExposureRow,
   FactorStyleSummaryRow,
+  FiltersResponse,
   MetaCurrentResponse,
   StrategyDailyRow,
   StrategySummaryApiRow,
@@ -224,6 +225,34 @@ function normalizeMetaResponse(meta: MetaCurrentResponse): MetaCurrentResponse {
       new Set(meta.available_prompt_types.map((value) => normalizePromptType(value)))
     ).sort(),
   };
+}
+
+function buildFiltersFallbackFromMeta(meta: MetaCurrentResponse): FiltersResponse {
+  return {
+    markets: [...meta.available_markets].sort(),
+    periods: [...meta.available_periods].sort(),
+    strategies: Array.from(
+      new Set(meta.available_strategies.map((row) => row.strategy))
+    ).sort(),
+    strategy_keys: Array.from(
+      new Set(meta.available_strategies.map((row) => normalizeStrategyKey(row.strategy_key)))
+    ).sort(),
+    prompt_types: Array.from(
+      new Set(meta.available_prompt_types.map((value) => normalizePromptType(value)))
+    ).sort(),
+    models: [...meta.available_models].sort(),
+    source_types: Array.from(
+      new Set(meta.available_strategies.map((row) => row.source_type))
+    ).sort(),
+    regime_labels: [],
+    date_min: null,
+    date_max: null,
+  };
+}
+
+function formatRouteError(label: string, error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  return new Error(`${label}: ${message}`);
 }
 
 function normalizeStrategySummaryApiRows(rows: StrategySummaryApiRow[]): StrategySummaryApiRow[] {
@@ -1152,18 +1181,22 @@ export async function fetchEvaluationData({
       if (apiRouteLikelyMissing(error)) {
         return null;
       }
-      throw error;
+      return null;
     }),
-    getFilters({ experiment_id: experimentId }),
-    getStrategySummary({ experiment_id: experimentId }),
+    getFilters({ experiment_id: experimentId }).catch(() =>
+      buildFiltersFallbackFromMeta(meta)
+    ),
+    getStrategySummary({ experiment_id: experimentId }).catch((error) => {
+      throw formatRouteError("Strategy summary request failed", error);
+    }),
     getBehaviorSummary({ experiment_id: experimentId }).catch((error) => {
       if (apiRouteLikelyMissing(error)) {
         return [];
       }
-      throw error;
+      return [];
     }),
-    getRunQuality({ experiment_id: experimentId }),
-    getPeriods({ experiment_id: experimentId }),
+    getRunQuality({ experiment_id: experimentId }).catch(() => []),
+    getPeriods({ experiment_id: experimentId }).catch(() => []),
   ]);
 
   const filters = normalizeFiltersResponse(rawFilters);
